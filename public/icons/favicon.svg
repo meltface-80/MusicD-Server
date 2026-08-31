@@ -1,0 +1,9 @@
+<!-- MusicD Server mark. Drawn rather than shipped as a bitmap so it stays
+     crisp at every size and costs a few hundred bytes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MusicD">
+  <rect width="64" height="64" rx="14" fill="#1d2125"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#4cb7e6" stroke-width="3"/>
+  <circle cx="32" cy="32" r="4.5" fill="#4cb7e6"/>
+  <path d="M40 20v16.5" stroke="#e9eaec" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="36.5" cy="37.5" r="4" fill="#e9eaec"/>
+</svg>

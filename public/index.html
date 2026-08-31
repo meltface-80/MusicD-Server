@@ -1,0 +1,275 @@
+<!doctype html>
+<!--
+  MusicD Server — Copyright (c) 2026 Music Duck.
+  Released under the MIT License. See the LICENSE file for details.
+-->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#1d2125">
+  <title>MusicD</title>
+
+  <!-- DELIBERATELY ABSENT: apple-mobile-web-app-capable, mobile-web-app-capable,
+       apple-mobile-web-app-status-bar-style. Modern iOS already opens a
+       home-screen shortcut as a standalone web app, and viewport-fit=cover
+       fills the display on its own. Adding the legacy apple-mobile-web-app-capable
+       opts back into the OLD web-app path, where the status-bar style governs
+       how the web view is inset, and the app stops reaching the edges — and iOS
+       reads these at ADD-TO-HOME-SCREEN time, so a shortcut made against a bad
+       build keeps the bad window forever. Same rule as MusicD Remote. -->
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar-row">
+      <button id="menu-toggle" class="icon-btn" aria-label="Menu" title="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <button id="topbar-back" class="icon-btn hidden" aria-label="Back to Home" title="Home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+
+      <h1 id="screen-title" class="screen-title">MusicD</h1>
+
+      <div id="topbar-search" class="topbar-search">
+        <button id="search-open" class="icon-btn" type="button" aria-label="Search" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+        <div class="search-row" id="search-row">
+          <div class="search-box">
+            <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="search-input" type="search" inputmode="search" autocomplete="off"
+                   autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
+                   placeholder="Search your library…" aria-label="Search your library">
+            <button id="search-clear" class="search-clear" type="button" aria-label="Clear search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button id="zone-btn" class="icon-btn zone-btn" type="button" aria-label="Choose room" title="Room">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="6" y="2" width="12" height="20" rx="2"/>
+          <circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1.2"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="scan-progress-bar" class="scan-progress-bar hidden" aria-hidden="true">
+      <div id="scan-progress-fill" class="scan-progress-fill"></div>
+    </div>
+  </header>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Side menu                                                        -->
+  <!-- ---------------------------------------------------------------- -->
+  <div id="menu-overlay" class="menu-overlay hidden" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="menu-backdrop" data-close-menu></div>
+    <nav class="menu-panel">
+      <div class="menu-head">
+        <span class="menu-brand">MusicD</span>
+        <button class="icon-btn" type="button" data-close-menu aria-label="Close menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <button class="menu-item" type="button" data-go="home">Home</button>
+      <button class="menu-item" type="button" data-go="row:library">Library</button>
+      <button class="menu-item" type="button" data-go="artists">Artists</button>
+      <button class="menu-item" type="button" data-go="row:added">Recently added</button>
+      <button class="menu-item" type="button" data-go="row:played">Recently played</button>
+      <button class="menu-item" type="button" data-go="row:unplayed">Not played in 6 months</button>
+      <button class="menu-item" type="button" data-go="row:picks">Smart Picks</button>
+
+      <div class="menu-sep"></div>
+
+      <button class="menu-item" type="button" id="menu-rescan">
+        Rescan library
+        <span class="menu-sub" id="rescan-sub"></span>
+      </button>
+      <button class="menu-item" type="button" id="menu-theme">
+        Theme
+        <span class="menu-sub" id="theme-sub"></span>
+      </button>
+
+      <div class="menu-sep"></div>
+      <div class="menu-foot" id="menu-foot"></div>
+    </nav>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Main                                                             -->
+  <!-- ---------------------------------------------------------------- -->
+  <main>
+    <div id="status-banner" class="status-banner hidden"></div>
+
+    <section id="home-view" class="home-view" aria-label="Home">
+      <div id="home-sections"></div>
+    </section>
+
+    <section id="grid-view" class="hidden" aria-label="Albums">
+      <div id="album-grid" class="album-grid" aria-live="polite"></div>
+      <div id="grid-empty" class="grid-empty hidden"></div>
+    </section>
+
+    <section id="search-view" class="hidden" aria-label="Search results">
+      <div id="search-results"></div>
+    </section>
+
+    <section id="artists-view" class="hidden" aria-label="Artists">
+      <div id="artist-list" class="artist-list"></div>
+    </section>
+  </main>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Mini transport                                                   -->
+  <!-- ---------------------------------------------------------------- -->
+  <div id="mini" class="mini-transport hidden">
+    <div class="mt-progress"><div id="mt-fill" class="mt-progress-fill"></div></div>
+    <button id="mt-open" class="mt-info" type="button" aria-label="Open Now playing">
+      <img id="mt-art" class="mt-art" alt="">
+      <span class="mt-text">
+        <span id="mt-title" class="mt-title">—</span>
+        <span id="mt-artist" class="mt-artist"></span>
+      </span>
+    </button>
+    <div class="mt-controls">
+      <button id="mt-prev" class="mt-btn" aria-label="Previous track">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3 6 9 6V6z"/></svg>
+      </button>
+      <button id="mt-playpause" class="mt-btn mt-playpause" aria-label="Play or pause">
+        <svg id="mt-icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="mt-icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      </button>
+      <button id="mt-next" class="mt-btn" aria-label="Next track">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l9-6-9-6z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Album / Now playing panel                                        -->
+  <!-- ---------------------------------------------------------------- -->
+  <div id="album-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel">
+      <button class="modal-close icon-btn" type="button" data-close-modal aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+
+      <div class="modal-body">
+        <!-- Album face -->
+        <div id="album-face">
+          <div class="modal-art"><img id="modal-img" alt=""></div>
+          <div class="modal-info">
+            <h2 id="modal-title">—</h2>
+            <div id="modal-subtitle" class="modal-subtitle"></div>
+            <div id="modal-stats" class="modal-stats"></div>
+            <div class="modal-actions">
+              <button id="btn-play" class="action-btn primary" type="button">Play</button>
+              <button id="btn-queue" class="action-btn" type="button">Queue</button>
+            </div>
+            <div class="section-label" id="tracks-label">Tracks</div>
+            <ol id="track-list" class="track-list"></ol>
+          </div>
+        </div>
+
+        <!-- Now playing face -->
+        <div id="np-screen" class="np-screen hidden">
+          <div class="np-art"><img id="np-img" alt=""></div>
+          <div class="np-track" id="np-track">—</div>
+          <div class="np-artist" id="np-artist"></div>
+          <button class="np-album" id="np-album" type="button"></button>
+
+          <div class="np-progress">
+            <input type="range" id="np-seek" class="np-seek" min="0" max="100" step="1" value="0"
+                   aria-label="Seek">
+            <div class="np-times">
+              <span id="np-cur" class="np-time">0:00</span>
+              <span id="np-tot" class="np-time">0:00</span>
+            </div>
+          </div>
+
+          <div class="np-transport">
+            <button class="np-btn" id="np-prev" aria-label="Previous track">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3 6 9 6V6z"/></svg>
+            </button>
+            <button class="np-btn np-playpause" id="np-playpause" aria-label="Play or pause">
+              <svg id="np-icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="np-icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+            </button>
+            <button class="np-btn" id="np-next" aria-label="Next track">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l9-6-9-6z"/></svg>
+            </button>
+          </div>
+
+          <div class="np-mini-row">
+            <button class="np-mini-btn" id="np-room" type="button" aria-label="Choose room"></button>
+            <div class="np-vol">
+              <button class="np-mini-btn" id="np-mute" type="button" aria-label="Mute">
+                <svg id="np-icon-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 5V4L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+                <svg id="np-icon-mute" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M4 9v6h4l5 5V4L8 9H4zm15 3-2 2-2-2-1.5 1.5 2 2-2 2L15 19l2-2 2 2 1.5-1.5-2-2 2-2z"/></svg>
+              </button>
+              <input type="range" id="np-volume" class="np-volume" min="0" max="100" step="1" value="30"
+                     aria-label="Volume">
+            </div>
+          </div>
+
+          <div class="section-label">Queue</div>
+          <ol id="queue-list" class="queue-list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Room picker                                                      -->
+  <!-- ---------------------------------------------------------------- -->
+  <div id="zone-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Rooms">
+    <div class="sheet-backdrop" data-close-sheet></div>
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <span>Rooms</span>
+        <button class="icon-btn" type="button" id="zone-refresh" aria-label="Look for rooms again" title="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+      </div>
+      <div id="zone-list" class="zone-list"></div>
+      <div id="zone-note" class="zone-note"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

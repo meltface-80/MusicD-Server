@@ -1,0 +1,28 @@
+# Run with:  docker compose up -d
+#
+# Two things here are not optional:
+#   network_mode: host  — SSDP discovery is multicast, and multicast does not
+#     cross Docker's bridge network. Without it the app finds no Sonos rooms.
+#     (Docker Desktop for macOS and Windows has no real host networking, so the
+#     container needs a Linux host.)
+#   TZ — "Not played in 6 months" is a calendar boundary. On UTC it moves.
+
+services:
+  musicd-server:
+    build: .
+    image: musicd-server:latest
+    container_name: musicd-server
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Europe/London
+      MUSIC_DIRS: /music
+      PORT: "3400"
+    volumes:
+      - /path/to/your/music:/music:ro
+      - musicd-server-data:/app/data
+      # The host's own clock, so the container agrees with it about today.
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  musicd-server-data:
