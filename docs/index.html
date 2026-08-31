@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MusicD Server — install &amp; docs</title>
+<meta name="description" content="MusicD Server — a simple local music server for Sonos. Docker install configurator with a music-mount builder, environment reference and first-run guide.">
+<style>
+  :root {
+    --bg:        #1b1d1f;   /* charcoal */
+    --bg-deep:   #141618;
+    --panel:     #232628;
+    --panel-2:   #2a2d30;
+    --line:      #35393d;
+    --text:      #e8e6e3;
+    --muted:     #a8a49e;
+    --copper:    #c47f4a;
+    --copper-hi: #d99a66;
+    --copper-dim:#8a5a35;
+    --good:      #7fb47f;
+    --warn:      #d9a441;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--copper-hi); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+
+  /* ---------- top nav ---------- */
+  nav.topnav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(20,22,24,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.topnav .wrap {
+    display: flex; align-items: center; gap: 18px;
+    height: 52px; overflow-x: auto; white-space: nowrap;
+  }
+  nav.topnav a { color: var(--muted); font-size: 14px; font-weight: 500; }
+  nav.topnav a:hover { color: var(--copper-hi); text-decoration: none; }
+  nav.topnav .brand { color: var(--text); font-weight: 700; letter-spacing: .02em; }
+  nav.topnav .brand span { color: var(--copper); }
+  nav.topnav .gh { margin-left: auto; }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    text-align: center; padding: 48px 20px 40px;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% -10%, rgba(196,127,74,.14), transparent 65%),
+      var(--bg-deep);
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero img.logo {
+    max-width: min(560px, 88vw); width: 100%; height: auto;
+    border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  header.hero .wordmark { display: none; font-size: 44px; font-weight: 800; letter-spacing: .03em; }
+  header.hero .wordmark span { color: var(--copper); }
+  header.hero.noimg img.logo { display: none; }
+  header.hero.noimg .wordmark { display: block; }
+  header.hero h1 { font-size: 30px; margin-top: 26px; font-weight: 700; }
+  header.hero p.tag { color: var(--muted); max-width: 660px; margin: 10px auto 0; font-size: 16px; }
+  .badges { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; font-size: 12.5px; font-weight: 600;
+    padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--copper-dim); color: var(--copper-hi);
+    background: rgba(196,127,74,.08);
+  }
+  .badge.plain { border-color: var(--line); color: var(--muted); background: transparent; }
+
+  /* ---------- sections ---------- */
+  section { padding: 52px 0 8px; scroll-margin-top: 56px; }
+  section > .wrap > h2 {
+    font-size: 24px; font-weight: 700; margin-bottom: 6px;
+    padding-left: 14px; border-left: 3px solid var(--copper);
+  }
+  section > .wrap > p.lead { color: var(--muted); margin-bottom: 26px; max-width: 740px; }
+
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 18px 16px;
+  }
+  .card h3 { font-size: 15.5px; font-weight: 650; margin-bottom: 6px; }
+  .card h3 .em { margin-right: 8px; }
+  .card p { font-size: 13.5px; color: var(--muted); }
+
+  /* ---------- configurator ---------- */
+  .cfg { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .cfg-body { padding: 22px; display: grid; gap: 22px; }
+  @media (min-width: 900px) { .cfg-body { grid-template-columns: 380px 1fr; align-items: start; } }
+
+  .modes { display: grid; gap: 10px; }
+  .mode {
+    display: block; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px;
+    transition: border-color .15s, background .15s;
+  }
+  .mode:hover { border-color: var(--copper-dim); }
+  .mode input { position: absolute; opacity: 0; pointer-events: none; }
+  .mode .m-title { font-weight: 650; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
+  .mode .m-title::before {
+    content: ""; width: 14px; height: 14px; flex: 0 0 14px;
+    border-radius: 50%; border: 2px solid var(--muted);
+  }
+  .mode .m-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; padding-left: 22px; }
+  .mode.sel { border-color: var(--copper); background: rgba(196,127,74,.07); }
+  .mode.sel .m-title::before { border-color: var(--copper); background: radial-gradient(circle at center, var(--copper) 0 45%, transparent 50%); }
+
+  .fields { display: grid; gap: 14px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 5px; letter-spacing: .02em; }
+  .field label .req { color: var(--copper-hi); }
+  .field input[type=text] {
+    width: 100%; padding: 9px 12px; font-size: 14px; font-family: var(--mono);
+    color: var(--text); background: var(--bg-deep);
+    border: 1px solid var(--line); border-radius: 8px; outline: none;
+  }
+  .field input[type=text]:focus { border-color: var(--copper); }
+  .field input.bad { border-color: var(--warn); }
+  .field .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .field .warn { font-size: 12px; color: var(--warn); margin-top: 4px; }
+  .field .warn:empty { display: none; }
+  .field.hidden { display: none; }
+
+  /* ---------- the music mounts ---------- */
+  .mounts { display: grid; gap: 10px; }
+  .mount-row { display: flex; gap: 8px; align-items: flex-start; }
+  .mount-row .field { flex: 1 1 auto; min-width: 0; }
+  .mount-row .drop {
+    flex: 0 0 auto; margin-top: 26px;
+    width: 34px; height: 34px; line-height: 1;
+    font: 700 18px/1 var(--sans); cursor: pointer;
+    color: var(--muted); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .mount-row .drop:hover { color: var(--warn); border-color: var(--warn); }
+  .mount-row .drop[disabled] { opacity: .35; cursor: default; }
+  .mount-row .drop[disabled]:hover { color: var(--muted); border-color: var(--line); }
+  .add-mount {
+    justify-self: start;
+    font: 600 13px var(--sans); cursor: pointer;
+    color: var(--copper-hi); background: rgba(196,127,74,.08);
+    border: 1px solid var(--copper-dim); border-radius: 8px;
+    padding: 7px 14px;
+  }
+  .add-mount:hover { background: rgba(196,127,74,.16); }
+  .mount-map {
+    font: 12px/1.6 var(--mono); color: var(--muted);
+    background: var(--bg-deep); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  .mount-map b { color: var(--copper-hi); font-weight: 600; }
+  .mount-map .arrow { color: var(--copper); }
+
+  .toggle-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; cursor: pointer;
+  }
+  .toggle-row input { accent-color: var(--copper); margin-top: 3px; width: 16px; height: 16px; cursor: pointer; }
+  .toggle-row .t-title { font-weight: 650; font-size: 14px; }
+  .toggle-row .t-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+  .subfields { display: grid; gap: 12px; border-left: 2px solid var(--copper-dim); margin-left: 6px; padding: 10px 0 2px 14px; }
+  .subfields.hidden { display: none; }
+
+  .note {
+    font-size: 13px; color: var(--muted);
+    background: rgba(196,127,74,.06);
+    border: 1px solid var(--copper-dim);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .note b { color: var(--copper-hi); }
+  .note.hidden { display: none; }
+  .note.warn { background: rgba(217,164,65,.07); border-color: var(--warn); }
+  .note.warn b { color: var(--warn); }
+
+  /* ---------- output ---------- */
+  .out { display: grid; gap: 12px; min-width: 0; }
+  /* Grid items default to min-width:auto, so the unwrappable <pre> would force
+     the column — and every sibling — wider than a phone screen. Let them shrink
+     and keep the scrolling inside the code box instead. */
+  .out > * { min-width: 0; }
+  .out-tabs { display: flex; gap: 8px; }
+  .out-tabs button {
+    font: 600 13px var(--sans); cursor: pointer;
+    color: var(--muted); background: transparent;
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px;
+  }
+  .out-tabs button.sel { color: var(--copper-hi); border-color: var(--copper); background: rgba(196,127,74,.08); }
+  .codebox { position: relative; }
+  .codebox pre {
+    background: var(--bg-deep); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px; padding-top: 40px;
+    overflow-x: auto; font: 13px/1.55 var(--mono);
+    color: #d8d4cf; white-space: pre;
+  }
+  .codebox pre .k { color: var(--copper-hi); }
+  .codebox pre .c { color: #77726c; }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    font: 600 12px var(--sans); cursor: pointer;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px;
+  }
+  .copy-btn:hover { border-color: var(--copper); color: var(--copper-hi); }
+  .copy-btn.done { color: var(--good); border-color: var(--good); }
+  .after-note { font-size: 13.5px; color: var(--muted); }
+  .after-note code, p code, li code, td code {
+    font: 12.5px var(--mono); background: var(--bg-deep);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 1.5px 6px; color: var(--copper-hi);
+  }
+
+  /* ---------- rows table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel-2); color: var(--copper-hi); font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: var(--mono); white-space: nowrap; color: var(--text); }
+  td { color: var(--muted); }
+  .tablewrap.prose td:first-child { font-family: var(--sans); font-weight: 650; white-space: normal; }
+
+  /* ---------- first run ---------- */
+  .firstrun { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .firstrun ol { padding-left: 20px; font-size: 14px; display: grid; gap: 9px; color: var(--muted); }
+  .firstrun ol li::marker { color: var(--copper); font-weight: 700; }
+  .firstrun ol li b { color: var(--text); }
+
+  /* ---------- the not-doing list ---------- */
+  .nope { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+  .nope div {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; font-size: 13.5px; color: var(--muted);
+  }
+  .nope div b { color: var(--text); display: block; font-size: 14px; margin-bottom: 2px; }
+
+  @media (max-width: 600px) {
+    header.hero { padding: 32px 16px 30px; }
+    header.hero h1 { font-size: 24px; margin-top: 20px; }
+    header.hero .wordmark { font-size: 34px; }
+    section { padding: 40px 0 6px; }
+    section > .wrap > h2 { font-size: 21px; }
+    .cfg-body { padding: 16px; gap: 18px; }
+    .codebox pre { font-size: 12px; padding: 14px; padding-top: 40px; }
+    th, td { padding: 9px 10px; }
+  }
+
+  footer {
+    margin-top: 64px; padding: 28px 20px 40px;
+    border-top: 1px solid var(--line);
+    text-align: center; font-size: 13px; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a class="brand" href="#top">Music<span>D</span> Server</a>
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+    <a href="#home">Home rows</a>
+    <a href="#env">Environment</a>
+    <a href="#firstrun">First run</a>
+    <a class="gh" href="https://github.com/meltface-80/MusicD-Server">GitHub&nbsp;→</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <img class="logo" src="IMG_8974.jpeg" alt="MusicD"
+       onerror="this.closest('.hero').classList.add('noimg')">
+  <div class="wordmark">Music<span>D</span></div>
+  <h1>MusicD Server</h1>
+  <p class="tag">A simple music server for <b>Sonos</b>. It reads your music folders, shows your
+     albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
+     album identification, no streaming accounts.</p>
+  <div class="badges">
+    <span class="badge" id="ver-badge">v0.1.0</span>
+    <span class="badge plain">Docker</span>
+    <span class="badge plain">MIT licence</span>
+    <span class="badge plain">Your files, your speakers</span>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="lead">An album is a folder. Its title and artist come from the tags in it, and the
+       folder name is the fallback. What the app keeps on top of that is a small database of your
+       listening — because that is what the home screen is built out of.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="em">📁</span>Your library, as it is</h3>
+        <p>Folder-based scanning with cover art taken from the folder or the tags. Nothing is
+           matched against an online release, so nothing is ever renamed behind your back.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🔊</span>Plays to Sonos</h3>
+        <p>Rooms and groups are read from the speakers themselves. Playback goes through the Sonos
+           queue, so tracks run gapless, and the audio streams straight from the server to the
+           speaker with nothing transcoded in between.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">📅</span>Remembers what you play</h3>
+        <p>Date added, date last played and play counts, for albums and tracks separately —
+           counted by watching the speaker, so a queued album you skip past never counts.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">✨</span>Smart Picks, local only</h3>
+        <p>Built from a taste profile of what you actually played in the last 90 days, and every
+           pick tells you why it was chosen. Nothing leaves your network to build it.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🔍</span>Search and browse</h3>
+        <p>Albums, artists and tracks in one box, an artists index, and every home row opens into a
+           full grid that pages as you scroll.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">📱</span>Phone-first interface</h3>
+        <p>The same palette and layout as MusicD Remote, in dark and light, with a mini transport on
+           every screen and a Now Playing view with seek, volume and the live queue.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install with Docker</h2>
+    <p class="lead">Tell it where your music lives and which time zone you are in, then copy the
+       command. <b>The music mount is the one thing it cannot work without</b> — everything else has
+       a sensible default.</p>
+
+    <div class="cfg">
+      <div class="cfg-body">
+        <div>
+          <div class="modes" id="modes">
+            <label class="mode sel" data-mode="host">
+              <input type="radio" name="mode" value="host" checked>
+              <div class="m-title">Linux host — recommended</div>
+              <div class="m-sub">A NAS, a Pi, a home server. Host networking, so the app finds your
+                   Sonos rooms by itself and the speakers can reach it back.</div>
+            </label>
+            <label class="mode" data-mode="ports">
+              <input type="radio" name="mode" value="ports">
+              <div class="m-title">No host networking</div>
+              <div class="m-sub">Docker Desktop, or a host where you would rather publish a port.
+                   Discovery cannot use multicast here, so you name one speaker's address instead.</div>
+            </label>
+          </div>
+
+          <div class="fields" style="margin-top:18px">
+
+            <!-- ---------- the music mount ---------- -->
+            <div>
+              <label style="display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:5px;letter-spacing:.02em">
+                Your music folder on this machine <span class="req">*</span>
+              </label>
+              <div class="mounts" id="mounts"></div>
+              <button class="add-mount" id="add-mount" type="button" style="margin-top:10px">
+                + Add another folder
+              </button>
+              <div class="hint" style="font-size:12px;color:var(--muted);margin-top:8px">
+                The absolute path on the host — the same path you would <code>cd</code> to. It is
+                mounted read-only; the app never writes to your music.
+              </div>
+              <div class="mount-map" id="mount-map" style="margin-top:10px"></div>
+            </div>
+
+            <div class="field">
+              <label for="tz">Time zone <span class="req">*</span></label>
+              <input type="text" id="tz" value="" placeholder="Europe/London" spellcheck="false">
+              <div class="hint">Load-bearing here: “Not played in 6 months” is a calendar boundary
+                   and Smart Picks rebuild once a local day. On UTC both drift.</div>
+              <div class="warn" id="tz-warn"></div>
+            </div>
+
+            <div class="field" id="f-port">
+              <label for="port">Web port</label>
+              <input type="text" id="port" value="3400" spellcheck="false">
+              <div class="hint">What you open in a browser. Change it only if something else on the
+                   host already owns 3400.</div>
+            </div>
+
+            <div class="field hidden" id="f-sonos">
+              <label for="sonoshost">A Sonos player's IP address <span class="req">*</span></label>
+              <input type="text" id="sonoshost" value="" placeholder="192.168.1.60" spellcheck="false">
+              <div class="hint">One is enough — the rest of the household is read from that
+                   player. Find it in the Sonos app under Settings → System → About My System.</div>
+            </div>
+
+            <label class="toggle-row">
+              <input type="checkbox" id="prebuilt">
+              <div>
+                <div class="t-title">Use the prebuilt image</div>
+                <div class="t-sub">Skips the build step and pulls from the GitHub Container
+                     Registry. The package has to have been made public once, under
+                     <i>Packages → musicd-server → Package settings</i> — until then an anonymous
+                     pull is refused with <code>denied</code>. Building from source needs none of
+                     that.</div>
+              </div>
+            </label>
+
+            <label class="toggle-row">
+              <input type="checkbox" id="advanced">
+              <div>
+                <div class="t-title">Advanced options</div>
+                <div class="t-sub">Only show certain rooms, or pin the address the speakers use to
+                     reach this server.</div>
+              </div>
+            </label>
+            <div class="subfields hidden" id="advanced-fields">
+              <div class="field">
+                <label for="serverip">Server IP address the speakers should use</label>
+                <input type="text" id="serverip" value="" placeholder="auto-detected" spellcheck="false">
+                <div class="hint">Only needed on a host with several network interfaces, where the
+                     wrong one might be picked.</div>
+              </div>
+              <div class="field">
+                <label for="include">Show only these rooms</label>
+                <input type="text" id="include" value="" placeholder="Kitchen,Study" spellcheck="false">
+              </div>
+              <div class="field">
+                <label for="exclude">Hide these rooms</label>
+                <input type="text" id="exclude" value="" placeholder="Bathroom,Garage" spellcheck="false">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="out">
+          <div class="note" id="mode-note"></div>
+          <div class="note warn hidden" id="mount-warn"></div>
+          <div class="out-tabs">
+            <button id="tab-run" class="sel" type="button">docker run</button>
+            <button id="tab-compose" type="button">docker compose</button>
+          </div>
+          <div class="codebox">
+            <button class="copy-btn" id="copy" type="button">Copy</button>
+            <pre id="cmd"></pre>
+          </div>
+          <noscript><p class="after-note">JavaScript is off, so the configurator cannot build your
+             command. The standard install is in the
+             <a href="https://github.com/meltface-80/MusicD-Server#install">README</a>.</p></noscript>
+          <p class="after-note" id="after-note"></p>
+          <p class="after-note">If your user is not in the <code>docker</code> group, prefix the
+             <code>docker</code> commands with <code>sudo</code>.</p>
+          <div class="note"><b>Keep the data volume.</b> <code>musicd-server-data</code> holds your
+             play history — when each album arrived, when you last played it, how often. Renaming it
+             silently starts empty, and “Recently played”, “Not played in 6 months” and Smart Picks
+             all go back to nothing. The music mount itself is read-only and holds no state.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="home">
+  <div class="wrap">
+    <h2>The home screen</h2>
+    <p class="lead">Six rows, each a carousel that opens into a full grid when you tap its title.</p>
+    <div class="tablewrap prose">
+      <table>
+        <thead><tr><th>Row</th><th>What is in it</th></tr></thead>
+        <tbody>
+          <tr><td>Library</td><td>Every album, by artist and then by year — the shelf order.</td></tr>
+          <tr><td>Random albums</td><td>A fresh handful every time the screen loads.</td></tr>
+          <tr><td>Recently added</td><td>Newest first, by the date the scan first saw the folder.</td></tr>
+          <tr><td>Recently played</td><td>Most recently played first.</td></tr>
+          <tr><td>Not played in 6 months</td><td>Albums you played longer than six months ago, and
+              albums that have sat in the library that long unplayed. Longest gap first.
+              <b>Empty to begin with, and that is correct</b> — nothing in a library scanned last
+              week can have gone six months unplayed. It fills itself as time passes, which is why
+              the time zone matters.</td></tr>
+          <tr><td>Smart Picks</td><td>What you played in the last 90 days becomes a taste profile —
+              artists, genres and decades, weighted so last week counts for more than March. Every
+              album you have <i>not</i> played in the last 60 days is scored against it, and the
+              best dozen are the picks, never two by the same artist. Each one says why it is
+              there. An album with no connection to the profile is never offered: being unheard is
+              a bonus, not a reason.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="env">
+  <div class="wrap">
+    <h2>Environment</h2>
+    <p class="lead">Everything is optional except your music path.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>MUSIC_DIRS</td><td>/music</td><td>Folders to scan inside the container. Separate several with commas.</td></tr>
+          <tr><td>TZ</td><td>Etc/UTC</td><td>The container's time zone. Set it — the six-month row and the daily Smart Picks rebuild are both local-time boundaries.</td></tr>
+          <tr><td>PORT</td><td>3400</td><td>Web interface, API and audio streaming.</td></tr>
+          <tr><td>DATA_DIR</td><td>/app/data</td><td>Database and cached artwork.</td></tr>
+          <tr><td>SERVER_IP</td><td>auto</td><td>The address given to speakers, for hosts with several interfaces.</td></tr>
+          <tr><td>SONOS_HOSTS</td><td>—</td><td>Player IPs, for when multicast discovery is unreliable. One is enough.</td></tr>
+          <tr><td>INCLUDE_ZONES</td><td>—</td><td>Show only these rooms, e.g. <code>Kitchen,Study</code>.</td></tr>
+          <tr><td>EXCLUDE_ZONES</td><td>—</td><td>Show everything except these rooms.</td></tr>
+          <tr><td>SCAN_ON_START</td><td>true</td><td>Scan when the container starts.</td></tr>
+          <tr><td>SCAN_INTERVAL_HOURS</td><td>6</td><td>Hours between automatic rescans. <code>0</code> turns them off.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="firstrun">
+  <div class="wrap">
+    <h2>First run</h2>
+    <div class="firstrun">
+      <ol>
+        <li>Open <b>http://&lt;host-ip&gt;:3400/</b>. The first scan starts on its own — the home
+            screen fills in as it goes, and a thin progress bar sits under the top bar.</li>
+        <li>Tap the <b>speaker icon</b> in the top right and choose a room. It is remembered, so you
+            are not asked again.</li>
+        <li>Open an album and press <b>Play</b>. Tapping a track plays the album from there.</li>
+        <li><b>Recently played</b> fills as you listen. A track counts once you are half way
+            through it, so skipping past an album never puts it there.</li>
+        <li><b>Smart Picks</b> appear after you have played a few albums, and rebuild once a day.</li>
+        <li><b>Not played in 6 months</b> stays empty until albums have genuinely gone that long.
+            Nothing is wrong.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="notdoing">
+  <div class="wrap">
+    <h2>What it deliberately does not do</h2>
+    <p class="lead">These are decisions, not gaps. Nothing here calls out to the internet, so the
+       library never changes underneath you and there is nothing to sign up for.</p>
+    <div class="nope">
+      <div><b>No metadata fetching</b>Albums are shown as they are on disk.</div>
+      <div><b>No album identification</b>Nothing is matched against an online release.</div>
+      <div><b>No record labels</b>No Discogs, no MusicBrainz, no FanArt.tv.</div>
+      <div><b>No streaming services</b>No Qobuz, no TIDAL.</div>
+      <div><b>No reviews or scores</b>No Pitchfork.</div>
+      <div><b>No wall display</b>This one is a remote and a server, not a screen.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    MusicD Server — MIT licence ·
+    <a href="https://github.com/meltface-80/MusicD-Server">GitHub</a> ·
+    <a href="https://github.com/meltface-80/MusicD-Remote">MusicD Remote</a> ·
+    <a href="https://github.com/meltface-80/UPnP-to-Sonos-UPnP-bridge">Sonos UPnP bridge</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var IMAGE = "musicd-server";
+  var REPO  = "meltface-80/MusicD-Server";
+  var VOLUME = "musicd-server-data";
+  var FALLBACK_VERSION = "0.1.0";
+
+  var els = {
+    modes:     document.getElementById("modes"),
+    mounts:    document.getElementById("mounts"),
+    addMount:  document.getElementById("add-mount"),
+    mountMap:  document.getElementById("mount-map"),
+    mountWarn: document.getElementById("mount-warn"),
+    tz:        document.getElementById("tz"),
+    tzWarn:    document.getElementById("tz-warn"),
+    port:      document.getElementById("port"),
+    sonoshost: document.getElementById("sonoshost"),
+    fSonos:    document.getElementById("f-sonos"),
+    prebuilt:  document.getElementById("prebuilt"),
+    advanced:  document.getElementById("advanced"),
+    advFields: document.getElementById("advanced-fields"),
+    serverip:  document.getElementById("serverip"),
+    include:   document.getElementById("include"),
+    exclude:   document.getElementById("exclude"),
+    cmd:       document.getElementById("cmd"),
+    copy:      document.getElementById("copy"),
+    tabRun:    document.getElementById("tab-run"),
+    tabCompose:document.getElementById("tab-compose"),
+    modeNote:  document.getElementById("mode-note"),
+    afterNote: document.getElementById("after-note"),
+    verBadge:  document.getElementById("ver-badge")
+  };
+
+  var state = { mode: "host", tab: "run", version: FALLBACK_VERSION };
+  var plainCmd = "";
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  /* Quote a value for use inside a double-quoted shell string. A music path can
+     contain spaces, apostrophes and ampersands — "Sigur Rós & Friends" is an
+     ordinary folder name — and an unquoted -v argument splits on the space and
+     mounts something else entirely. */
+  function shq(v) { return '"' + String(v).replace(/(["\\$`])/g, "\\$1") + '"'; }
+  function yq(v)  { return '"' + String(v).replace(/(["\\])/g, "\\$1") + '"'; }
+
+  /* ---------------------------------------------------------------- */
+  /*  The music mounts                                                 */
+  /* ---------------------------------------------------------------- */
+
+  var PLACEHOLDERS = ["/mnt/nas/Music", "/mnt/nas/Classical", "/srv/media/Vinyl Rips"];
+
+  function mountRows() {
+    return Array.prototype.slice.call(els.mounts.querySelectorAll("input"));
+  }
+
+  /* The host paths actually typed in, in order, with duplicates dropped. */
+  function mountPaths() {
+    var seen = {}, out = [];
+    mountRows().forEach(function (input) {
+      var v = input.value.trim().replace(/\/+$/, "");     // a trailing slash is noise
+      if (!v || seen[v]) return;
+      seen[v] = true;
+      out.push(v);
+    });
+    return out;
+  }
+
+  /*
+   * Where each host folder lands inside the container.
+   *
+   * One folder is simply /music, which is the image's own default and means
+   * MUSIC_DIRS never has to be mentioned. Several are numbered rather than
+   * named after their folders: a container path derived from a host folder
+   * would have to be sanitised, deduplicated and then explained, and the
+   * numbering is the thing a person can check at a glance against the -v lines
+   * directly above it.
+   */
+  function mountPlan() {
+    var paths = mountPaths();
+    if (!paths.length) return [];
+    if (paths.length === 1) return [{ host: paths[0], container: "/music" }];
+    return paths.map(function (p, i) {
+      return { host: p, container: "/music/" + (i + 1) };
+    });
+  }
+
+  /* A path Docker will accept: absolute, POSIX. This catches the two mistakes
+     that actually happen — a Windows path pasted in, and a relative one. */
+  function pathProblem(p) {
+    if (/^[A-Za-z]:[\\/]/.test(p) || p.indexOf("\\") !== -1) {
+      return "Windows-style paths do not work here — use the path as the Linux host sees it.";
+    }
+    if (p.charAt(0) !== "/") {
+      return "Docker needs an absolute path, starting with “/”.";
+    }
+    if (p === "/") {
+      return "Mounting the whole filesystem will make the first scan take a very long time.";
+    }
+    return "";
+  }
+
+  function addMountRow(value) {
+    var i = els.mounts.children.length;
+    var row = document.createElement("div");
+    row.className = "mount-row";
+
+    var field = document.createElement("div");
+    field.className = "field";
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.spellcheck = false;
+    input.value = value || "";
+    input.placeholder = PLACEHOLDERS[i] || "/another/music/folder";
+    input.setAttribute("aria-label", "Music folder " + (i + 1));
+
+    var warn = document.createElement("div");
+    warn.className = "warn";
+
+    field.appendChild(input);
+    field.appendChild(warn);
+
+    var drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "drop";
+    drop.textContent = "\u00d7";
+    drop.title = "Remove this folder";
+    drop.setAttribute("aria-label", "Remove this folder");
+
+    row.appendChild(field);
+    row.appendChild(drop);
+    els.mounts.appendChild(row);
+
+    input.addEventListener("input", render);
+    drop.addEventListener("click", function () {
+      row.remove();
+      /* Never leave the list empty: the mount is the one required field, and a
+         form you can delete your way out of has no way back. */
+      if (!els.mounts.children.length) addMountRow("");
+      render();
+    });
+  }
+
+  function renderMounts() {
+    var plan = mountPlan();
+    var rows = mountRows();
+
+    /* The one × is disabled rather than hidden, so the control does not jump
+       about as folders are added and removed. */
+    var dropButtons = els.mounts.querySelectorAll(".drop");
+    for (var i = 0; i < dropButtons.length; i++) {
+      dropButtons[i].disabled = dropButtons.length === 1;
+    }
+
+    var anyProblem = "";
+    rows.forEach(function (input) {
+      var v = input.value.trim();
+      var problem = v ? pathProblem(v) : "";
+      input.classList.toggle("bad", !!problem);
+      input.parentNode.querySelector(".warn").textContent = problem;
+      if (problem && !anyProblem) anyProblem = problem;
+    });
+
+    if (!plan.length) {
+      els.mountMap.innerHTML = '<span style="color:var(--warn)">Enter the folder your music is ' +
+        'in — without it the library will be empty.</span>';
+    } else {
+      els.mountMap.innerHTML = plan.map(function (m) {
+        return esc(m.host) + ' <span class="arrow">→</span> <b>' + esc(m.container) + "</b>";
+      }).join("<br>") + (plan.length > 1
+        ? '<br><span style="color:var(--muted)">MUSIC_DIRS=' +
+          esc(plan.map(function (m) { return m.container; }).join(",")) + "</span>"
+        : "");
+    }
+
+    els.mountWarn.classList.toggle("hidden", !anyProblem);
+    if (anyProblem) els.mountWarn.innerHTML = "<b>Check that path.</b> " + esc(anyProblem);
+
+    return plan;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  The rest of the form                                             */
+  /* ---------------------------------------------------------------- */
+
+  function tzVal() {
+    var v = els.tz.value.trim();
+    return v === "" ? "Etc/UTC" : v;
+  }
+  function portVal() {
+    var v = els.port.value.trim().replace(/[^0-9]/g, "");
+    return v === "" ? "3400" : v;
+  }
+  function sonosVal() {
+    var v = els.sonoshost.value.trim().replace(/[^A-Za-z0-9.\-:,]/g, "");
+    return v === "" ? "<IP_OF_ONE_SONOS_PLAYER>" : v;
+  }
+
+  var NOTES = {
+    host: "<b>Host networking is what finds your speakers.</b> Sonos discovery is multicast, and " +
+          "multicast does not cross Docker's bridge network — it is also the simplest way for the " +
+          "speakers to fetch audio back from this server. Docker Desktop for macOS and Windows has " +
+          "no real host networking, so this mode needs a Linux host.",
+    ports: "<b>No multicast here</b>, so discovery cannot find your rooms on its own — naming one " +
+           "player's address is enough, because the rest of the household is read from that player. " +
+           "The speakers still have to be able to reach this machine on the published port to fetch " +
+           "the audio."
+  };
+
+  /* ---------------------------------------------------------------- */
+  /*  Command builders                                                 */
+  /* ---------------------------------------------------------------- */
+
+  function envPairs(plan) {
+    var env = [];
+    env.push(["TZ", tzVal()]);
+    if (plan.length > 1) {
+      env.push(["MUSIC_DIRS", plan.map(function (m) { return m.container; }).join(",")]);
+    }
+    if (portVal() !== "3400") env.push(["PORT", portVal()]);
+    if (state.mode === "ports") env.push(["SONOS_HOSTS", sonosVal()]);
+    if (els.advanced.checked) {
+      if (els.serverip.value.trim()) env.push(["SERVER_IP", els.serverip.value.trim()]);
+      if (els.include.value.trim()) env.push(["INCLUDE_ZONES", els.include.value.trim()]);
+      if (els.exclude.value.trim()) env.push(["EXCLUDE_ZONES", els.exclude.value.trim()]);
+    }
+    return env;
+  }
+
+  /* The image reference the run command ends on: either the tag built a moment
+     earlier, or the published one. */
+  function imageRef() {
+    return els.prebuilt.checked ? "ghcr.io/" + REPO.toLowerCase() + ":latest" : IMAGE;
+  }
+
+  function buildRun(plan) {
+    var out = [];
+    if (!els.prebuilt.checked) {
+      out.push({ t: "# Build the image straight from GitHub — no download step", c: "c" });
+      out.push({ t: "docker build -t " + IMAGE + " https://github.com/" + REPO + ".git", c: "" });
+      out.push({ t: "", c: "" });
+      out.push({ t: "# Run it", c: "c" });
+    }
+
+    var cmd = ["docker run -d \\"];
+    cmd.push("  --name " + IMAGE + " \\");
+    cmd.push("  --restart unless-stopped \\");
+    if (state.mode === "host") {
+      cmd.push("  --network host \\");
+    } else {
+      cmd.push("  -p " + portVal() + ":" + portVal() + " \\");
+    }
+    envPairs(plan).forEach(function (kv) {
+      cmd.push("  -e " + kv[0] + "=" + shq(kv[1]) + " \\");
+    });
+    (plan.length ? plan : [{ host: "/path/to/your/music", container: "/music" }]).forEach(function (m) {
+      cmd.push("  -v " + shq(m.host + ":" + m.container + ":ro") + " \\");
+    });
+    cmd.push("  -v " + VOLUME + ":/app/data \\");
+    /* The host's own clock, so the container agrees with it about today. */
+    cmd.push("  -v /etc/localtime:/etc/localtime:ro \\");
+    cmd.push("  " + imageRef());
+
+    out.push({ t: cmd.join("\n"), c: "" });
+    return out;
+  }
+
+  function buildCompose(plan) {
+    var y = [];
+    /* Bare YAML pasted into a shell makes bash try to run every line
+       ("services:: command not found"), so the file contents go in a heredoc
+       and the up command is chained onto it — one paste, one result. */
+    y.push("# one paste: writes docker-compose.yml, then builds and starts it");
+    y.push("cat > docker-compose.yml <<'EOF'");
+    y.push("services:");
+    y.push("  " + IMAGE + ":");
+    if (els.prebuilt.checked) {
+      y.push("    image: " + imageRef());
+    } else {
+      y.push("    build: https://github.com/" + REPO + ".git");
+      y.push("    image: " + IMAGE + ":latest");
+    }
+    y.push("    container_name: " + IMAGE);
+    y.push("    restart: unless-stopped");
+    if (state.mode === "host") {
+      y.push("    network_mode: host   # multicast discovery needs it");
+    } else {
+      y.push("    ports:");
+      y.push("      - " + yq(portVal() + ":" + portVal()));
+    }
+    y.push("    environment:");
+    envPairs(plan).forEach(function (kv) {
+      y.push("      " + kv[0] + ": " + yq(kv[1]));
+    });
+    y.push("    volumes:");
+    (plan.length ? plan : [{ host: "/path/to/your/music", container: "/music" }]).forEach(function (m) {
+      y.push("      - " + yq(m.host + ":" + m.container + ":ro"));
+    });
+    y.push("      - " + VOLUME + ":/app/data");
+    y.push("      - /etc/localtime:/etc/localtime:ro");
+    y.push("");
+    y.push("volumes:");
+    y.push("  " + VOLUME + ":");
+    y.push("EOF");
+    y.push("docker compose up -d");
+    return [{ t: y.join("\n"), c: "" }];
+  }
+
+  /* A light highlighter for the code block: comments first, then flags and the
+     environment keys. Flags only at the start of a token, so hyphenated names
+     inside a URL stay plain. */
+  function highlight(text) {
+    return esc(text)
+      .replace(/^(#.*)$/gm, '<span class="c">$1</span>')
+      .replace(/(^|\s)(--?[a-z][a-zA-Z-]*)/g, '$1<span class="k">$2</span>')
+      .replace(/\b(TZ|MUSIC_DIRS|PORT|DATA_DIR|SERVER_IP|SONOS_HOSTS|INCLUDE_ZONES|EXCLUDE_ZONES|SCAN_ON_START|SCAN_INTERVAL_HOURS)([=:])/g,
+               '<span class="k">$1</span>$2');
+  }
+
+  function render() {
+    var plan = renderMounts();
+    var parts = state.tab === "run" ? buildRun(plan) : buildCompose(plan);
+
+    plainCmd = parts.map(function (p) { return p.t; }).join("\n");
+    els.cmd.innerHTML = parts.map(function (p) {
+      return p.c === "c" ? '<span class="c">' + esc(p.t) + "</span>" : highlight(p.t);
+    }).join("\n");
+
+    els.modeNote.innerHTML = NOTES[state.mode];
+    els.tzWarn.textContent = els.tz.value.trim()
+      ? "" : "Left blank this becomes Etc/UTC, and the six-month row moves by up to a day.";
+
+    var where = state.mode === "host"
+      ? "http://&lt;this-machine-IP&gt;:" + esc(portVal())
+      : "http://localhost:" + esc(portVal());
+    els.afterNote.innerHTML = "Then open <code>" + where + "</code>. The first scan starts by " +
+      "itself — a large library takes a few minutes, and the home screen fills as it goes.";
+
+    syncUrl();
+  }
+
+  /* Keep the URL shareable: the form state goes back into the query string, so
+     a configured command can be sent to someone as a link. */
+  function syncUrl() {
+    var p = new URLSearchParams();
+    if (state.mode !== "host") p.set("mode", state.mode);
+    var paths = mountPaths();
+    if (paths.length) p.set("music", paths.join("|"));
+    if (els.prebuilt.checked) p.set("image", "ghcr");
+    if (els.tz.value.trim()) p.set("tz", els.tz.value.trim());
+    if (portVal() !== "3400") p.set("port", portVal());
+    if (els.sonoshost.value.trim()) p.set("sonos", els.sonoshost.value.trim());
+    if (els.serverip.value.trim()) p.set("ip", els.serverip.value.trim());
+    if (els.include.value.trim()) p.set("only", els.include.value.trim());
+    if (els.exclude.value.trim()) p.set("not", els.exclude.value.trim());
+    var qs = p.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    var labels = els.modes.querySelectorAll(".mode");
+    for (var i = 0; i < labels.length; i++) {
+      var sel = labels[i].getAttribute("data-mode") === mode;
+      labels[i].classList.toggle("sel", sel);
+      labels[i].querySelector("input").checked = sel;
+    }
+    els.fSonos.classList.toggle("hidden", mode !== "ports");
+    render();
+  }
+
+  function setTab(tab) {
+    state.tab = tab;
+    els.tabRun.classList.toggle("sel", tab === "run");
+    els.tabCompose.classList.toggle("sel", tab === "compose");
+    render();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Wiring                                                           */
+  /* ---------------------------------------------------------------- */
+
+  els.modes.addEventListener("change", function (e) {
+    if (e.target.name === "mode") setMode(e.target.value);
+  });
+  els.tabRun.addEventListener("click", function () { setTab("run"); });
+  els.tabCompose.addEventListener("click", function () { setTab("compose"); });
+
+  els.addMount.addEventListener("click", function () {
+    addMountRow("");
+    els.mounts.lastChild.querySelector("input").focus();
+    render();
+  });
+
+  els.prebuilt.addEventListener("change", render);
+
+  els.advanced.addEventListener("change", function () {
+    els.advFields.classList.toggle("hidden", !els.advanced.checked);
+    render();
+  });
+
+  ["tz", "port", "sonoshost", "serverip", "include", "exclude"].forEach(function (id) {
+    els[id].addEventListener("input", render);
+  });
+
+  els.copy.addEventListener("click", function () {
+    function done() {
+      els.copy.textContent = "Copied \u2713";
+      els.copy.classList.add("done");
+      setTimeout(function () {
+        els.copy.textContent = "Copy";
+        els.copy.classList.remove("done");
+      }, 1600);
+    }
+    function fallbackCopy() {
+      var ta = document.createElement("textarea");
+      ta.value = plainCmd;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); }
+      catch (e) { /* no clipboard available — the text can still be selected by hand */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(plainCmd).then(done, fallbackCopy);
+    } else fallbackCopy();
+  });
+
+  /* ---------------------------------------------------------------- */
+  /*  Start                                                            */
+  /* ---------------------------------------------------------------- */
+
+  /* Restore a shared link, then fall back to the browser's own time zone —
+     which is right far more often than Etc/UTC, and is the setting people are
+     most likely to skip past. */
+  var q = new URLSearchParams(location.search);
+  (q.get("music") || "").split("|").filter(Boolean).forEach(addMountRow);
+  if (!els.mounts.children.length) addMountRow("");
+
+  els.tz.value = q.get("tz") || (function () {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
+    catch (e) { return ""; }      /* very old browsers have no resolvedOptions */
+  })();
+  if (q.get("image") === "ghcr") els.prebuilt.checked = true;
+  if (q.get("port")) els.port.value = q.get("port");
+  if (q.get("sonos")) els.sonoshost.value = q.get("sonos");
+  if (q.get("ip")) els.serverip.value = q.get("ip");
+  if (q.get("only")) els.include.value = q.get("only");
+  if (q.get("not")) els.exclude.value = q.get("not");
+  if (els.serverip.value || els.include.value || els.exclude.value) {
+    els.advanced.checked = true;
+    els.advFields.classList.remove("hidden");
+  }
+  setMode(q.get("mode") === "ports" ? "ports" : "host");
+
+  /* The published version, when there is one to find. Until the first release
+     the badge keeps the version in package.json. */
+  fetch("https://api.github.com/repos/" + REPO + "/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+    .then(function (data) {
+      var m = String(data.tag_name || "").match(/^v?(\d+\.\d+\.\d+)$/);
+      if (m) { state.version = m[1]; els.verBadge.textContent = "v" + m[1]; }
+    })
+    .catch(function () { /* rate-limited, offline, or no release yet — the fallback stands */ });
+})();
+</script>
+</body>
+</html>
