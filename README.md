@@ -1,4 +1,12 @@
+<div align="center">
+
+<img width="800" alt="MusicD" src="IMG_8974.jpeg" />
+
+</div>
+
 # MusicD Server
+
+Basic music server - under development
 
 A simple music server for Sonos. It reads your music folders, shows your albums
 as they are, and plays them to your speakers.
