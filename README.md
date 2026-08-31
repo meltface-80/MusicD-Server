@@ -4,5 +4,5 @@
 
 </div>
 
-# MusicD-Server
+# MusicD Server
 Basic music server - under development
