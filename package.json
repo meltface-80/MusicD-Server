@@ -1,0 +1,26 @@
+{
+  "name": "musicd-server",
+  "version": "0.1.0",
+  "description": "A simple local music server for Sonos. Scans your folders, shows your albums as they are, and plays them to your speakers.",
+  "license": "MIT",
+  "author": "Lewis Menzies (Music Duck / MusicD)",
+  "homepage": "https://github.com/meltface-80/MusicD-Server",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meltface-80/MusicD-Server.git"
+  },
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "compression": "^1.8.0",
+    "express": "^4.21.2",
+    "music-metadata": "^11.13.0"
+  }
+}
