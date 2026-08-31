@@ -33,8 +33,6 @@ Run it on an always-on Linux machine on the same network as your speakers — a
 NAS, a Raspberry Pi, a home server.
 
 ```bash
-docker build -t musicd-server https://github.com/meltface-80/MusicD-Server.git
-
 docker run -d \
   --name musicd-server \
   --network host \
@@ -43,31 +41,44 @@ docker run -d \
   -v /path/to/your/music:/music:ro \
   -v musicd-server-data:/app/data \
   -v /etc/localtime:/etc/localtime:ro \
-  musicd-server
+  ghcr.io/meltface-80/musicd-server:latest
 ```
 
-Then open `http://<host-ip>:3400/`. The first scan starts on its own; the home
-screen fills as it goes.
+That is the whole installation. Open `http://<host-ip>:3400/` — the first scan
+starts on its own, and the home screen fills as it goes.
 
 Or with compose — copy `docker-compose.yml`, set your music path and time zone,
 and `docker compose up -d`.
 
+Images are published for `amd64`, `arm64` and `arm/v7`, so the same command
+works on an x86 NAS, a 64-bit Raspberry Pi and a 32-bit one alike. Every push to
+`main` rebuilds them; `:latest` follows `main`, and version tags get their own.
+
 <details>
-<summary>Pulling a prebuilt image instead of building</summary>
+<summary>Building it yourself instead</summary>
 
-Every push to `main` publishes multi-architecture images to the GitHub
-Container Registry, so once that workflow has run you can skip the build step
-and use `ghcr.io/meltface-80/musicd-server:latest` in place of `musicd-server`
-above.
+No registry, no published image — Docker clones the repository and builds it on
+the spot:
 
-**A new package is private until you say otherwise.** GitHub publishes it
-private even for a public repository, and an anonymous `docker pull` of a
-private package is refused with `denied` rather than `not found` — which reads
-exactly like a typo. Make it public once, at
-*GitHub → your profile → Packages → musicd-server → Package settings → Change
-visibility*. Building from source needs none of this and always works.
+```bash
+docker build -t musicd-server https://github.com/meltface-80/MusicD-Server.git
+```
+
+Then use `musicd-server` in place of the `ghcr.io/...` reference above. It takes
+a few minutes on a Pi, because `better-sqlite3` compiles from source where there
+is no prebuild for the platform.
 
 </details>
+
+### Updating
+
+```bash
+docker pull ghcr.io/meltface-80/musicd-server:latest
+docker rm -f musicd-server
+```
+
+then run the same `docker run` command again. Your library and play history live
+in the `musicd-server-data` volume and are untouched by this.
 
 > **`--network host` is required.** Finding Sonos players is multicast (SSDP),
 > and multicast does not cross Docker's default bridge network. Host networking
