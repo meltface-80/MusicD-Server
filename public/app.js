@@ -93,7 +93,8 @@ const state = {
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
-  volumeHeld: false,
+  volDragging: false,    // a finger is on the volume slider
+  volPending: null,      // { level, until, zone } — asked for, not yet echoed
   pollTimer: null,
   scanTimer: null,
   progressTimer: null,
@@ -504,6 +505,299 @@ function renderSearch(results, term) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Volume                                                             */
+/* ------------------------------------------------------------------ */
+
+/* The same control in two places: the mini bar's, and Now playing's. Every id
+   is written out rather than built from the prefix, because the suite's check
+   that app.js never reaches for an id the markup lacks reads literals — an id
+   assembled at runtime is exactly the kind it cannot see. */
+const VOL_SHEETS = [
+  { sheet: "mt-vol-sheet", button: "mt-vol",     range: "mt-vol-range",
+    value: "mt-vol-value", minus:  "mt-vol-minus", plus: "mt-vol-plus" },
+  { sheet: "np-vol-sheet", button: "np-volbtn",  range: "np-vol-range",
+    value: "np-vol-value", minus:  "np-vol-minus", plus: "np-vol-plus" }
+];
+
+/* What one tap of − or + moves. Sonos volume is a plain 0-100 integer and the
+   slider steps by one, so the buttons do too: the slider is for getting
+   roughly there, the buttons for the last little bit. */
+const VOL_STEP = 1;
+
+/* One writer for both sheets. They show the same speaker's volume, so a number
+   painted into one and not the other is a bug waiting to be believed — open
+   the other sheet and it would still say what the volume was a minute ago. */
+function syncVolume(level) {
+  const v = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
+  for (const ids of VOL_SHEETS) {
+    const range = $(ids.range);
+    range.value = v;
+    range.style.setProperty("--vol-fill", v + "%");
+    $(ids.value).textContent = v;
+  }
+}
+
+/* Reading the level back off a slider is safe because syncVolume is the only
+   thing that writes one, and the hold below keeps a poll from overwriting it
+   mid-adjustment. */
+function volumeNow() {
+  return Number($(VOL_SHEETS[0].range).value) || 0;
+}
+
+/*
+ * The volume you last ASKED for, held until the speaker says it agrees.
+ *
+ * A tap on + paints 51 and sends it, and the speaker needs a moment. Every
+ * poll in between reports the pre-tap 50, and writing that back is the thumb
+ * sliding away from the button you just pressed — up after −, down after +.
+ * Guarding on the drag alone does not cover it: a tap has no drag.
+ *
+ * Held, not locked. It ends the moment the reading agrees, and lapses on its
+ * own after VOL_ECHO_MS so a change made in the Sonos app or on the speaker
+ * itself still reaches the slider.
+ */
+const VOL_ECHO_MS = 2500;
+
+function holdVolume(level) {
+  state.volPending = {
+    level,
+    until: Date.now() + VOL_ECHO_MS,
+    zone: state.zone ? state.zone.uuid : null
+  };
+}
+
+function volumeHeld() {
+  if (state.volDragging) return true;
+  if (!state.volPending) return false;
+  return Date.now() <= state.volPending.until;
+}
+
+/* Retire a spent hold. Called once per poll, before the reading is painted —
+   a hold belongs to the room it was taken for, so switching rooms inside the
+   window must not leave the new room showing the old room's number. */
+function settleVolumeHold(reported) {
+  const held = state.volPending;
+  if (!held) return;
+  const zone = state.zone ? state.zone.uuid : null;
+  if (held.zone !== zone || Date.now() > held.until || reported === held.level) {
+    state.volPending = null;
+  }
+}
+
+/* The two sheets are the same control in two places, so only ever one is open
+   and closing means closing both. */
+function closeVolSheet() {
+  for (const ids of VOL_SHEETS) {
+    $(ids.sheet).classList.add("hidden");
+    $(ids.button).classList.remove("is-open");
+    $(ids.button).setAttribute("aria-expanded", "false");
+  }
+}
+
+function volSheetOpen() {
+  return VOL_SHEETS.some(ids => !$(ids.sheet).classList.contains("hidden"));
+}
+
+async function sendVolume(level) {
+  holdVolume(level);
+  if (!state.zone) return;
+  try { await post("/api/volume", { zone: state.zone.uuid, level }); }
+  catch (e) { toast(e.message, true); }
+}
+
+/* A step paints first and sends after, so the reading answers the tap even
+   though the speaker takes a moment to catch up. */
+function stepVolume(delta) {
+  const from = volumeNow();
+  const next = Math.max(0, Math.min(100, from + delta * VOL_STEP));
+  if (next === from) return;             // already at an end of the scale
+  syncVolume(next);
+  sendVolume(next);
+}
+
+function renderNow(now) {
+  state.now = now;
+  syncMini();
+
+  if (!now || (!now.track && !now.foreign)) {
+    /* Nothing playing. The bar stays, because it is how a room is chosen — so
+       it says which room it would play to, or asks for one. */
+    $("mt-title").textContent = state.zone ? "Nothing playing" : "Choose a room";
+    $("mt-artist").textContent = state.zone ? state.zone.name : "";
+    $("mt-art").classList.add("hidden");
+    $("mt-fill").style.width = "0";
+    setPlayIcons(false);
+    $("mini").classList.add("is-idle");
+    return;
+  }
+  $("mini").classList.remove("is-idle");
+
+  const title = now.track ? now.track.title : "Playing from another app";
+  const artist = now.track ? (now.track.artist || "") : now.zone.name;
+  const album = now.album ? now.album.title : "";
+  const art = now.album && now.album.art ? now.album.art : "";
+  const playing = now.state === "PLAYING";
+
+  /* Mini bar: the artist line carries the album too, which is the only place
+     the bar has room to say what record this is. */
+  $("mt-title").textContent = title;
+  $("mt-artist").textContent = [artist, album].filter(Boolean).join(" · ");
+  if (art) { $("mt-art").src = art; $("mt-art").classList.remove("hidden"); }
+  else $("mt-art").classList.add("hidden");
+  setPlayIcons(playing);
+
+  /* Now playing face */
+  $("np-track").textContent = title;
+  $("np-artist").textContent = artist;
+  $("np-album").textContent = album;
+  const npImg = $("np-img");
+  if (art) { npImg.src = art; npImg.classList.remove("hidden"); }
+  else { npImg.removeAttribute("src"); npImg.classList.add("hidden"); }
+
+  $("np-seek").max = Math.max(1, Math.round(now.duration || 0));
+  $("np-tot").textContent = mmss(now.duration);
+  /* Anchor the clock the ticker runs off, then let it do the drawing. */
+  state.positionAt = Date.now();
+  paintProgress();
+
+  $("np-room").textContent = now.grouped
+    ? `${now.coordinator.name} + ${now.members.length - 1}`
+    : now.zone.name;
+
+  /* Shuffle and repeat come back from the server already split out of Sonos'
+     single play-mode enum. */
+  $("np-shuffle").classList.toggle("is-on", !!now.shuffle);
+  $("np-shuffle").setAttribute("aria-pressed", now.shuffle ? "true" : "false");
+
+  const repeat = now.repeat || "off";
+  $("np-repeat").classList.toggle("is-on", repeat !== "off");
+  $("np-repeat").setAttribute("aria-pressed", repeat !== "off" ? "true" : "false");
+  $("np-repeat").setAttribute("aria-label",
+    repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off");
+  $("np-repeat-badge").classList.toggle("hidden", repeat !== "one");
+
+  settleVolumeHold(now.volume);
+  if (now.volume !== null && !volumeHeld()) syncVolume(now.volume);
+  for (const [vol, mute] of [["np-icon-vol", "np-icon-mute"], ["mt-icon-vol", "mt-icon-mute"]]) {
+    $(vol).classList.toggle("hidden", !!now.muted);
+    $(mute).classList.toggle("hidden", !now.muted);
+  }
+}
+
+async function pollNow() {
+  if (!state.zone) { renderNow(null); return; }
+  try {
+    const now = await api("/api/now?zone=" + encodeURIComponent(state.zone.uuid));
+    renderNow(now.error ? null : now);
+  } catch {
+    /* A single failed poll is a speaker that was busy answering the app, not a
+       reason to blank the screen. The next poll will correct it. */
+  }
+}
+
+function startPolling() {
+  clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(() => {
+    if (document.hidden) return;      // a backgrounded tab does not need the traffic
+    pollNow();
+  }, 4000);
+  pollNow();
+}
+
+async function openNowPlaying(tab = "np") {
+  if (!state.zone) { await openZoneSheet(); return; }
+  setFace(tab);
+  openModal();
+  await pollNow();
+  if (tab === "queue") loadQueue();
+}
+
+/*
+ * The queue, as its own page.
+ *
+ * Sonos hands back the whole queue with a pointer at the current track, so
+ * what is above that pointer has already been played. It is summarised rather
+ * than listed: a queue that has run through two albums would otherwise open
+ * scrolled past everything you can still act on.
+ */
+async function loadQueue() {
+  const list = $("queue-list");
+  const summary = $("queue-summary");
+  const earlier = $("queue-earlier");
+  const empty = $("queue-empty");
+
+  list.textContent = "";
+  earlier.textContent = "";
+  empty.classList.add("hidden");
+  summary.textContent = "Loading queue…";
+  if (!state.zone) return;
+
+  try {
+    const q = await api("/api/queue?zone=" + encodeURIComponent(state.zone.uuid));
+    const current = Math.max(1, q.index || 1);
+    const upcoming = q.items.filter(i => i.index >= current);
+    const played = q.items.filter(i => i.index < current);
+
+    if (!q.items.length) {
+      summary.textContent = "";
+      empty.classList.remove("hidden");
+      return;
+    }
+
+    const remaining = upcoming.reduce((total, i) => total + (i.duration || 0), 0);
+    summary.textContent = upcoming.length
+      ? `${upcoming.length} track${upcoming.length === 1 ? "" : "s"} · ${mmss(remaining)} remaining`
+      : "Nothing more queued";
+    earlier.textContent = played.length
+      ? `· ${played.length} played earlier`
+      : "";
+
+    for (const item of upcoming) {
+      if (item.index === current) {
+        const divider = el("li", "q-divider");
+        divider.setAttribute("aria-hidden", "true");
+        divider.append(el("span", "q-divider-line"),
+                       el("span", "q-divider-label", "Now playing"),
+                       el("span", "q-divider-line"));
+        list.appendChild(divider);
+      }
+      list.appendChild(queueRow(item, item.index === current));
+    }
+  } catch (e) {
+    summary.textContent = "";
+    empty.textContent = e.message;
+    empty.classList.remove("hidden");
+  }
+}
+
+function queueRow(item, isNow) {
+  const li = el("li");
+  if (isNow) li.classList.add("is-now");
+
+  const img = el("img", "q-art");
+  img.alt = ""; img.loading = "lazy";
+  if (item.art) img.src = item.art; else img.style.visibility = "hidden";
+
+  const text = el("div", "q-text");
+  text.append(el("div", "q-title", item.title),
+              el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" · ")));
+
+  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
+  /* The track already playing is not a jump target. */
+  if (!isNow) li.addEventListener("click", () => jumpTo(item));
+  return li;
+}
+
+async function jumpTo(item) {
+  try {
+    await post("/api/transport", { zone: state.zone.uuid, action: "seek_track", value: item.index });
+    setTimeout(() => { pollNow(); loadQueue(); }, 700);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Album modal                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -524,6 +818,12 @@ function setFace(face) {
   state.face = face;
   const onNp = face === "np" || face === "queue";
   if (onNp) state.npTab = face;
+
+  /* The volume sheet belongs to the bar that opened it, and moving between
+     screens can take that bar away — the mini bar is hidden on Now playing.
+     A sheet left floating over a bar that is no longer there is the same
+     mistake as the sheet being in flow, seen from the other side. */
+  closeVolSheet();
 
   /* The panel carries which face it is showing, because the Now playing
      layout is a different SHAPE, not just different contents — it fills the
@@ -574,19 +874,11 @@ function openModal() {
 /* The actual close, called only by the navigation stack. */
 function hideModal() {
   $("album-modal").classList.add("hidden");
-  $("np-vol-sheet").classList.add("hidden");
-  $("np-volbtn").classList.remove("is-open");
-  $("np-volbtn").setAttribute("aria-expanded", "false");
+  closeVolSheet();
   state.face = "album";
   syncMini();
 }
 function closeModal() { navBack(); }
-
-function closeVolSheet() {
-  $("np-vol-sheet").classList.add("hidden");
-  $("np-volbtn").classList.remove("is-open");
-  $("np-volbtn").setAttribute("aria-expanded", "false");
-}
 
 async function openAlbum(id) {
   try {
@@ -755,191 +1047,6 @@ function fillRange(input, value, max) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   input.style.setProperty("--fill",
     `linear-gradient(90deg, var(--accent) 0 ${pct}%, var(--border) ${pct}% 100%)`);
-}
-
-function renderNow(now) {
-  state.now = now;
-  syncMini();
-
-  if (!now || (!now.track && !now.foreign)) {
-    /* Nothing playing. The bar stays, because it is how a room is chosen — so
-       it says which room it would play to, or asks for one. */
-    $("mt-title").textContent = state.zone ? "Nothing playing" : "Choose a room";
-    $("mt-artist").textContent = state.zone ? state.zone.name : "";
-    $("mt-art").classList.add("hidden");
-    $("mt-fill").style.width = "0";
-    setPlayIcons(false);
-    $("mini").classList.add("is-idle");
-    return;
-  }
-  $("mini").classList.remove("is-idle");
-
-  const title = now.track ? now.track.title : "Playing from another app";
-  const artist = now.track ? (now.track.artist || "") : now.zone.name;
-  const album = now.album ? now.album.title : "";
-  const art = now.album && now.album.art ? now.album.art : "";
-  const playing = now.state === "PLAYING";
-
-  /* Mini bar: the artist line carries the album too, which is the only place
-     the bar has room to say what record this is. */
-  $("mt-title").textContent = title;
-  $("mt-artist").textContent = [artist, album].filter(Boolean).join(" · ");
-  if (art) { $("mt-art").src = art; $("mt-art").classList.remove("hidden"); }
-  else $("mt-art").classList.add("hidden");
-  setPlayIcons(playing);
-
-  /* Now playing face */
-  $("np-track").textContent = title;
-  $("np-artist").textContent = artist;
-  $("np-album").textContent = album;
-  const npImg = $("np-img");
-  if (art) { npImg.src = art; npImg.classList.remove("hidden"); }
-  else { npImg.removeAttribute("src"); npImg.classList.add("hidden"); }
-
-  $("np-seek").max = Math.max(1, Math.round(now.duration || 0));
-  $("np-tot").textContent = mmss(now.duration);
-  /* Anchor the clock the ticker runs off, then let it do the drawing. */
-  state.positionAt = Date.now();
-  paintProgress();
-
-  $("np-room").textContent = now.grouped
-    ? `${now.coordinator.name} + ${now.members.length - 1}`
-    : now.zone.name;
-
-  /* Shuffle and repeat come back from the server already split out of Sonos'
-     single play-mode enum. */
-  $("np-shuffle").classList.toggle("is-on", !!now.shuffle);
-  $("np-shuffle").setAttribute("aria-pressed", now.shuffle ? "true" : "false");
-
-  const repeat = now.repeat || "off";
-  $("np-repeat").classList.toggle("is-on", repeat !== "off");
-  $("np-repeat").setAttribute("aria-pressed", repeat !== "off" ? "true" : "false");
-  $("np-repeat").setAttribute("aria-label",
-    repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off");
-  $("np-repeat-badge").classList.toggle("hidden", repeat !== "one");
-
-  if (now.volume !== null && !state.volumeHeld) {
-    $("np-volume").value = now.volume;
-    $("np-vol-value").textContent = now.volume;
-    fillRange($("np-volume"), now.volume, 100);
-  }
-  for (const [vol, mute] of [["np-icon-vol", "np-icon-mute"], ["mt-icon-vol", "mt-icon-mute"]]) {
-    $(vol).classList.toggle("hidden", !!now.muted);
-    $(mute).classList.toggle("hidden", !now.muted);
-  }
-}
-
-async function pollNow() {
-  if (!state.zone) { renderNow(null); return; }
-  try {
-    const now = await api("/api/now?zone=" + encodeURIComponent(state.zone.uuid));
-    renderNow(now.error ? null : now);
-  } catch {
-    /* A single failed poll is a speaker that was busy answering the app, not a
-       reason to blank the screen. The next poll will correct it. */
-  }
-}
-
-function startPolling() {
-  clearInterval(state.pollTimer);
-  state.pollTimer = setInterval(() => {
-    if (document.hidden) return;      // a backgrounded tab does not need the traffic
-    pollNow();
-  }, 4000);
-  pollNow();
-}
-
-async function openNowPlaying(tab = "np") {
-  if (!state.zone) { await openZoneSheet(); return; }
-  setFace(tab);
-  openModal();
-  await pollNow();
-  if (tab === "queue") loadQueue();
-}
-
-/*
- * The queue, as its own page.
- *
- * Sonos hands back the whole queue with a pointer at the current track, so
- * what is above that pointer has already been played. It is summarised rather
- * than listed: a queue that has run through two albums would otherwise open
- * scrolled past everything you can still act on.
- */
-async function loadQueue() {
-  const list = $("queue-list");
-  const summary = $("queue-summary");
-  const earlier = $("queue-earlier");
-  const empty = $("queue-empty");
-
-  list.textContent = "";
-  earlier.textContent = "";
-  empty.classList.add("hidden");
-  summary.textContent = "Loading queue…";
-  if (!state.zone) return;
-
-  try {
-    const q = await api("/api/queue?zone=" + encodeURIComponent(state.zone.uuid));
-    const current = Math.max(1, q.index || 1);
-    const upcoming = q.items.filter(i => i.index >= current);
-    const played = q.items.filter(i => i.index < current);
-
-    if (!q.items.length) {
-      summary.textContent = "";
-      empty.classList.remove("hidden");
-      return;
-    }
-
-    const remaining = upcoming.reduce((total, i) => total + (i.duration || 0), 0);
-    summary.textContent = upcoming.length
-      ? `${upcoming.length} track${upcoming.length === 1 ? "" : "s"} · ${mmss(remaining)} remaining`
-      : "Nothing more queued";
-    earlier.textContent = played.length
-      ? `· ${played.length} played earlier`
-      : "";
-
-    for (const item of upcoming) {
-      if (item.index === current) {
-        const divider = el("li", "q-divider");
-        divider.setAttribute("aria-hidden", "true");
-        divider.append(el("span", "q-divider-line"),
-                       el("span", "q-divider-label", "Now playing"),
-                       el("span", "q-divider-line"));
-        list.appendChild(divider);
-      }
-      list.appendChild(queueRow(item, item.index === current));
-    }
-  } catch (e) {
-    summary.textContent = "";
-    empty.textContent = e.message;
-    empty.classList.remove("hidden");
-  }
-}
-
-function queueRow(item, isNow) {
-  const li = el("li");
-  if (isNow) li.classList.add("is-now");
-
-  const img = el("img", "q-art");
-  img.alt = ""; img.loading = "lazy";
-  if (item.art) img.src = item.art; else img.style.visibility = "hidden";
-
-  const text = el("div", "q-text");
-  text.append(el("div", "q-title", item.title),
-              el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" · ")));
-
-  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
-  /* The track already playing is not a jump target. */
-  if (!isNow) li.addEventListener("click", () => jumpTo(item));
-  return li;
-}
-
-async function jumpTo(item) {
-  try {
-    await post("/api/transport", { zone: state.zone.uuid, action: "seek_track", value: item.index });
-    setTimeout(() => { pollNow(); loadQueue(); }, 700);
-  } catch (e) {
-    toast(e.message, true);
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1505,32 +1612,39 @@ function wire() {
     transport("seek", Number(seek.value));
   });
 
-  const vol = $("np-volume");
-  vol.addEventListener("pointerdown", () => { state.volumeHeld = true; });
-  vol.addEventListener("input", () => {
-    fillRange(vol, Number(vol.value), 100);
-    $("np-vol-value").textContent = vol.value;
-  });
-  vol.addEventListener("change", async () => {
-    state.volumeHeld = false;
-    if (!state.zone) return;
-    try { await post("/api/volume", { zone: state.zone.uuid, level: Number(vol.value) }); }
-    catch (e) { toast(e.message, true); }
-  });
-
-  /* One speaker button, two jobs: it opens the slider, and a long press mutes.
-     Keeping mute off the tap means the volume you were reaching for is never a
-     mistap away from silence. */
-  for (const id of ["np-volbtn", "mt-vol"]) {
-    $(id).addEventListener("click", () => {
-      const sheet = $("np-vol-sheet");
-      const opening = sheet.classList.contains("hidden");
-      if (id === "mt-vol" && opening) openNowPlaying("np");
-      sheet.classList.toggle("hidden", !opening);
-      $("np-volbtn").classList.toggle("is-open", opening);
-      $("np-volbtn").setAttribute("aria-expanded", opening ? "true" : "false");
+  /* Each speaker button opens the sheet belonging to its own bar. The mini
+     bar's used to open Now playing and show that screen's slider, which took
+     you off the screen you were on to change the volume on it. */
+  for (const ids of VOL_SHEETS) {
+    $(ids.button).addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opening = $(ids.sheet).classList.contains("hidden");
+      closeVolSheet();
+      if (!opening) return;
+      $(ids.sheet).classList.remove("hidden");
+      $(ids.button).classList.add("is-open");
+      $(ids.button).setAttribute("aria-expanded", "true");
     });
+
+    const range = $(ids.range);
+    range.addEventListener("pointerdown", () => { state.volDragging = true; });
+    range.addEventListener("input", () => syncVolume(Number(range.value)));
+    range.addEventListener("change", () => {
+      state.volDragging = false;
+      sendVolume(Number(range.value));
+    });
+
+    $(ids.minus).addEventListener("click", () => stepVolume(-1));
+    $(ids.plus).addEventListener("click", () => stepVolume(+1));
   }
+
+  /* A tap anywhere else puts the sheet away, the way the room sheet's backdrop
+     does. The buttons stop their own clicks above, so opening never closes. */
+  document.addEventListener("click", (e) => {
+    if (!volSheetOpen()) return;
+    if (e.target.closest(".vol-sheet")) return;
+    closeVolSheet();
+  });
 
   /* The room picker, from either bar. */
   $("np-device").addEventListener("click", () => openZoneSheet());
@@ -1551,7 +1665,7 @@ function wire() {
     if (!$("menu-overlay").classList.contains("hidden")) {
       return $("menu-overlay").classList.add("hidden");
     }
-    if (!$("np-vol-sheet").classList.contains("hidden")) return closeVolSheet();
+    if (volSheetOpen()) return closeVolSheet();
     navBack();
   });
 
