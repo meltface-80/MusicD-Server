@@ -248,7 +248,18 @@
           <button class="modal-tab is-active" type="button" data-tab="np">Now playing</button>
           <button class="modal-tab" type="button" data-tab="queue">Queue</button>
         </div>
-        <button class="icon-btn" id="modal-share" type="button" aria-label="Share card" title="Share card">
+        <!-- The album face gets the heart, Now playing keeps the share card.
+             One corner, two jobs, and which one is showing follows the face. -->
+        <button class="icon-btn" id="modal-fave" type="button"
+                aria-label="Favourite" aria-pressed="false" title="Favourite">
+          <!-- Hollow until it is one: stroked, no fill. The fill and the colour
+               both arrive with .is-on. -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.8 5.6a5.1 5.1 0 0 0-7.2 0L12 7.2l-1.6-1.6a5.1 5.1 0 0 0-7.2 7.2l1.6 1.6L12 21.6l7.2-7.2 1.6-1.6a5.1 5.1 0 0 0 0-7.2z"/>
+          </svg>
+        </button>
+        <button class="icon-btn hidden" id="modal-share" type="button" aria-label="Share card" title="Share card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
@@ -295,9 +306,12 @@
           </div>
 
           <div class="np-transport">
-            <button class="np-btn np-mode-btn" id="np-shuffle" type="button" aria-label="Shuffle" aria-pressed="false">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17 3l4 4-4 4V8h-2.2l-2.5 3.2 2.5 3.2H17V12l4 4-4 4v-3h-3.2l-3-3.9-3 3.9H3v-2h3.8l3.4-4.4L6.8 6H3V4h4.8l3 3.9 3-3.9H17z"/></svg>
-            </button>
+            <!-- DELIBERATELY ABSENT: shuffle and repeat. Removed on request —
+                 an album is listened to in the order it was sequenced, and the
+                 two controls that undo that were taking the outside positions
+                 in a row of three that does the actual work. The play modes
+                 are still read and reported by the server; nothing here sets
+                 them, so a mode set in the Sonos app is left alone. -->
             <button class="np-btn" id="np-prev" type="button" aria-label="Previous track">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3 6 9 6V6z"/></svg>
             </button>
@@ -307,10 +321,6 @@
             </button>
             <button class="np-btn" id="np-next" type="button" aria-label="Next track">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l9-6-9-6z"/></svg>
-            </button>
-            <button class="np-btn np-mode-btn" id="np-repeat" type="button" aria-label="Repeat off" aria-pressed="false">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z"/></svg>
-              <span class="np-mode-badge hidden" id="np-repeat-badge" aria-hidden="true">1</span>
             </button>
           </div>
 

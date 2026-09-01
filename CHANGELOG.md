@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.4.2
+
+### Favourites
+- **A heart on the album screen**, where the share button used to be. Hollow
+  until you tap it, red once you have. Tap it again to take it off.
+- **A Favourites row at the top of the home screen**, most recently marked
+  first — the one you just marked is the one you were thinking about. The row
+  is absent rather than empty until there is something in it: a heading over
+  the words "nothing here yet" is an instruction to go and use a feature, and
+  every other row on that screen describes your library.
+- The share card is still there, on Now playing. One corner, two jobs, and
+  which one is showing follows the screen.
+
+### Artists
+- **Every artist named on an album is a link** to their own screen, which now
+  has two parts: the records they made, and the ones they only turn up on — a
+  compilation, a soundtrack, a guest verse. The second appears only when there
+  is something in it.
+- An album credited to several artists becomes several links. The split is on a
+  semicolon or a spaced slash and nothing else: an ampersand and a comma both
+  live inside real names, so splitting on those would turn Earth, Wind & Fire
+  into three artists who have never recorded anything, and AC/DC into two.
+
+### Now playing
+- **Shuffle and repeat are gone**, on request. An album is listened to in the
+  order it was sequenced, and the two controls that undo that were taking the
+  outside positions in a row of three that does the actual work. Nothing sets a
+  play mode any more, so one set in the Sonos app is left exactly as it is
+  rather than being silently corrected by a screen with no control for it.
+
+### The album screen
+- Play and Queue are bigger, and the same size as each other. "Play" is a
+  shorter word than "Queue", so padding alone had made the primary action the
+  smaller button.
+
+### Your library survives an update
+- The favourite is the only thing in the database you typed rather than the
+  files, so it is the only thing a rescan could destroy — and does not, for the
+  same reason the date an album arrived is left alone.
+- Both ways of updating leave the database where it is: it lives in a Docker
+  volume the container's lifetime does not touch, and the in-app updater is not
+  allowed to write there. Opening an older database adds what is missing and
+  changes nothing else, which is now covered by a test that builds a database
+  in the original 0.1.0 shape and checks every row, play and count comes
+  through.
+
 ## 0.4.1
 
 ### Release dates
