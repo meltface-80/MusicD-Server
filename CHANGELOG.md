@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.4
+
+### Fixed
+- **Tapping an artist on the album screen went to the home screen instead of
+  their albums.** The navigation stack unwinds by closing every layer past the
+  one being returned to, and it re-read the stack between closes — so a layer
+  PUSHED BY a close was seen as one more thing to unwind. Closing the album
+  panel opens the artist's screen, and the same loop then closed that too. It
+  only happened when the panel was the only layer on the stack, which is what
+  opening an album straight from the home screen does; coming from the library
+  grid or a search hid it, which is why it survived being tested. The layers
+  are taken off first and closed second, so anything opened along the way is
+  left alone.
+- **The − and + on the volume bar sit on the centre of their circles.** They
+  were text, and flexbox centres the line box rather than the glyph: where the
+  ink lands depends on which font the platform resolves, measured at about a
+  pixel out here and different again on iOS. They are drawn now, two lines
+  through the middle of a 24×24 box, which is centred everywhere.
+
+### Now playing
+- **The artist's name opens their screen**, the way the album name beside it
+  already opens the album. Both screens build their names through one function,
+  so they cannot drift about what counts as one artist.
+
 ## 0.4.3
 
 ### A long press no longer selects the app

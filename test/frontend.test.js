@@ -447,7 +447,25 @@ test("Back is one path: nothing closes itself", () => {
 test("popstate unwinds to the depth it was given, not one layer per event", () => {
   /* A held Back, or a jump of several entries, arrives as ONE popstate. */
   const handler = js.slice(js.indexOf('addEventListener("popstate"'));
-  assert.match(handler.slice(0, 600), /while \(nav\.length > depth\)/);
+  const body = handler.slice(0, handler.indexOf("\n});"));
+  assert.match(body, /musicdDepth/, "the depth comes off the entry, not a counter");
+  assert.match(body, /nav\.splice\(depth\)/, "and every layer past it comes off at once");
+});
+
+test("a layer opened while the stack unwinds is not unwound with it", () => {
+  /* The layers to close are decided BEFORE any of them is closed. A loop that
+     re-read nav.length between closes saw a layer PUSHED BY a close callback
+     as one more thing to unwind: tapping an artist on the album panel closes
+     the panel, the close opens that artist's screen, and the same loop then
+     closed that too — so the screen appeared and was replaced by Home. It only
+     showed up when the panel was the only layer on the stack, which is what
+     opening an album straight from the home screen does. */
+  const handler = js.slice(js.indexOf('addEventListener("popstate"'));
+  const body = handler.slice(0, handler.indexOf("\n});"));
+  assert.ok(!/while \(nav\.length/.test(body),
+    "the stack must not be re-read between closes");
+  assert.ok(body.indexOf("nav.splice(depth)") < body.indexOf("layer.close()"),
+    "it comes off the stack first, and is closed second");
 });
 
 test("every overlay registers itself with the navigation stack", () => {
@@ -783,6 +801,41 @@ test("an artist link waits for the panel to close before it navigates", () => {
   const hide = js.slice(js.indexOf("function hideModal("));
   const hideBody = hide.slice(0, hide.indexOf("\n}"));
   assert.match(hideBody, /state\.afterModal = null/, "and the close runs it exactly once");
+});
+
+test("the artist is tappable on Now playing as well as on the album", () => {
+  /* Tapping the album name there already opens the album; the artist beside it
+     did nothing. Both screens build their names through the same function, so
+     they cannot drift about what counts as one artist. */
+  const build = /function renderArtistLinks\([\s\S]*?\n\}/.exec(js);
+  assert.ok(build, "there is one builder");
+  assert.match(build[0], /openArtist\(name\)/);
+  assert.match(js, /renderArtistLinks\(\$\("np-artist"\)/, "Now playing uses it");
+  assert.match(js, /renderArtistLinks\(subtitle/, "and so does the album screen");
+  /* And nothing writes over it with plain text afterwards. */
+  assert.ok(!/\$\("np-artist"\)\.textContent =/.test(js),
+    "nothing replaces those links with a flat string");
+});
+
+test("the volume steps are drawn, not typed", () => {
+  /* As text the - and + sat off the centre of their circles, and by how much
+     depended on which font the platform resolved: flexbox centres the LINE
+     BOX, and a glyph's ink sits wherever that font's metrics put it relative
+     to the baseline. Two lines through the middle of a 24x24 box are centred
+     everywhere. */
+  for (const id of ["mt-vol-minus", "mt-vol-plus", "np-vol-minus", "np-vol-plus"]) {
+    const at = html.indexOf(`id="${id}"`);
+    assert.ok(at > -1, id + " exists");
+    const markup = html.slice(at, html.indexOf("</button>", at));
+    assert.match(markup, /<svg/, id + " is drawn");
+    assert.match(markup, /<line x1="6" y1="12" x2="18" y2="12"/,
+      id + " draws its bar across the exact middle");
+    assert.ok(!/&#8722;|&plus;|>\s*[+\u2212-]\s*</.test(markup), id + " is not a glyph");
+  }
+  /* The plus is the bar plus an upright, both centred on 12. */
+  const plus = html.slice(html.indexOf('id="mt-vol-plus"'));
+  assert.match(plus.slice(0, plus.indexOf("</button>")), /<line x1="12" y1="6" x2="12" y2="18"/);
+  assert.ok(!/\.vol-step \{[^}]*font:/s.test(css), "and the button no longer sets a font");
 });
 
 test("the artist screen separates their records from their appearances", () => {
