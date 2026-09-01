@@ -436,6 +436,76 @@ test("a folded album takes the cover from wherever one is actually named", async
   ws.cleanup();
 });
 
+/* ------------------------------------------------------------------ */
+/*  Release dates                                                      */
+/* ------------------------------------------------------------------ */
+
+test("a release date is kept only as precisely as the tag gives it", () => {
+  const { isoDate } = scanner;
+  assert.strictEqual(isoDate("2025-09-23"), "2025-09-23");
+  assert.strictEqual(isoDate("2025-9-3"), "2025-09-03", "single digits are padded");
+  assert.strictEqual(isoDate("2025/09/23"), "2025-09-23", "slashes are a date too");
+  assert.strictEqual(isoDate("2025-09"), "2025-09", "a month with no day stays a month");
+  assert.strictEqual(isoDate("2025"), "2025", "and a year stays a year");
+  assert.strictEqual(isoDate(2025), "2025", "a number is a year");
+});
+
+test("a date that is not one is no date, rather than a guess", () => {
+  const { isoDate } = scanner;
+  /* Tags are typed by hand as often as written by a ripper. */
+  for (const bad of ["", null, undefined, "unknown", "199", "20255", "n/a", "Sept 2025"]) {
+    assert.strictEqual(isoDate(bad), "", JSON.stringify(bad) + " is not a date");
+  }
+  /* A day or month out of range is dropped back to what IS known, never
+     rolled over into the next month. A day of 00 means "no day" to some
+     taggers and would otherwise become the last of the month before. */
+  assert.strictEqual(isoDate("2025-09-00"), "2025-09");
+  assert.strictEqual(isoDate("2025-09-31"), "2025-09", "September has 30 days");
+  assert.strictEqual(isoDate("2024-02-29"), "2024-02-29", "but a leap day is real");
+  assert.strictEqual(isoDate("2025-02-29"), "2025-02", "and is not in 2025");
+  assert.strictEqual(isoDate("2025-13-01"), "2025", "there is no thirteenth month");
+});
+
+test("the album's date is the one all its files agree on", () => {
+  const { deriveReleaseDate } = scanner;
+  const rows = (...dates) => dates.map(releaseDate => ({ releaseDate }));
+  assert.strictEqual(
+    deriveReleaseDate(rows("2025-09-23", "2025-09-23", "2025-09-23"), 2025), "2025-09-23");
+  /* A compilation whose tracks each carry their own original release date has
+     no one date, and the year is all it gets. */
+  assert.strictEqual(deriveReleaseDate(rows("1966-03-01", "1966-08-19"), 1966), "");
+  /* A file that says nothing is not a file that disagrees. One untagged track
+     in an otherwise consistent rip is ordinary, and it should not cost the
+     album a date every other file on it states. */
+  assert.strictEqual(deriveReleaseDate(rows("2025-09-23", "", ""), 2025), "2025-09-23");
+  assert.strictEqual(deriveReleaseDate(rows(), 2025), "", "no dates, no date");
+  /* The year is worked out from the tags AND the folder name, so a date that
+     contradicts it is not the album's date. */
+  assert.strictEqual(deriveReleaseDate(rows("2019-04-01", "2019-04-01"), 2021), "");
+});
+
+test("a scan records the release date, and a rescan still has it", async () => {
+  const ws = workspace();
+  const dir = path.join(ws.music, "Daphni", "Butterfly");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "01 Butterfly.wav"),
+    wav({ title: "Butterfly", artist: "Daphni", album: "Butterfly", date: "2026-04-17" }));
+
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  const first = db.prepare("SELECT year, release_date FROM albums WHERE title = 'Butterfly'").get();
+  assert.strictEqual(first.release_date, "2026-04-17");
+  assert.strictEqual(first.year, 2026, "the year still comes out of it");
+
+  /* The second pass reuses the row rather than re-reading the file, and the
+     reused row has to carry the date with it — the exact shape of the bug
+     that blanked album artists in 0.3.2. */
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  const second = db.prepare("SELECT release_date FROM albums WHERE title = 'Butterfly'").get();
+  assert.strictEqual(second.release_date, "2026-04-17", "a rescan does not lose it");
+  ws.cleanup();
+});
+
 test("folding discs together keeps the history they had apart", async () => {
   /* Before folding, each disc was an album with its own counts. Changing the
      album's identity must not strand real listening. */

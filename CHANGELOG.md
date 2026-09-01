@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.1
+
+### Release dates
+- **The share card says when the album came out**, in full where the files say
+  so: *23rd September 2025*. A tag that only gives a year — or a month with no
+  day, which would mean inventing one — says *Released 2025* instead.
+- The date is read from the files on the next scan, and is the one every file
+  that carries a date agrees on. A compilation whose tracks each carry their
+  own original release date has no single date, and gets the year.
+- **The next scan re-reads every file once.** That is how a new tag gets a
+  value at all: a file whose size and modification time have not changed is
+  otherwise never opened again. A large library will take a few minutes that
+  one time.
+
+### The share card
+- The MusicD mark is a third smaller. It was signing the card at a size that
+  competed with the album on it.
+- The date line is larger than the year it replaced, and never larger than the
+  artist line beneath it — a long artist name steps that line down, and the
+  date now steps down with it.
+
+### Now playing
+- **The cover is shown whole.** It used to fill the screen and crop, which took
+  the sides off every square sleeve on a tall phone — and a sleeve is a designed
+  object, so the half that got cut was usually the half with the artist's name
+  on it. The whole cover is now fitted to the space, at its own proportions,
+  whatever shape it is.
+
+### The album screen
+- **The top bar reaches the top of the screen, and the artwork no longer shows
+  above it.** A sticky element cannot rise above its containing block, so while
+  the panel reserved the phone's safe area the bar stuck *below* it — leaving a
+  band at the very top with nothing in front of it, through which the cover
+  scrolled past in full view.
+- That bar is translucent now, like the app's own top bar and the transport
+  pill: over an unscrolled screen it is indistinguishable from the ground, and
+  once the screen moves the cover passing underneath tints it rather than
+  disappearing under a hard edge.
+
 ## 0.4.0
 
 ### The app installs its own updates

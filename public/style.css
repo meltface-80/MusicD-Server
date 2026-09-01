@@ -435,8 +435,7 @@ main {
   position: absolute; inset: 0;
   background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: calc(env(safe-area-inset-top) + 8px) 16px
-           calc(var(--mini-h) + 28px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(var(--mini-h) + 28px + env(safe-area-inset-bottom));
 }
 @media (min-width: 720px) {
   .modal-panel {
@@ -444,19 +443,37 @@ main {
     width: min(760px, 92vw); max-height: 88vh;
     border-radius: 16px; border: 1px solid var(--border);
     box-shadow: var(--shadow-modal);
-    padding: 10px 28px 28px;
+    padding: 0 28px 28px;
   }
 }
 /* The panel's own header: a control on the left, the tabs centred, and a
    spacer holding the right-hand third so the tabs stay centred on every face —
    including the album one, which has nothing to put there. */
+/*
+ * The head reaches the TOP of the panel, safe area included, and carries that
+ * inset as its own padding rather than the panel reserving it.
+ *
+ * A sticky element cannot rise above its containing block's content box, so
+ * while the panel held the inset the head stuck BELOW it — leaving a band at
+ * the top of the screen with nothing in front of it, through which the artwork
+ * scrolled past in full view. Moving the inset onto the head closes the band.
+ *
+ * Translucent, like the app's own top bar and the transport pill: over an
+ * unscrolled screen --bg-veil composites to exactly --bg and there is no step,
+ * and once the screen moves the cover passing underneath tints it rather than
+ * disappearing under a hard edge.
+ */
 .modal-head {
   position: sticky; top: 0; z-index: 3;
   display: grid; grid-template-columns: var(--tap-min) 1fr var(--tap-min);
   align-items: center; gap: 8px;
-  margin: 0 0 8px;
-  background: var(--bg);
+  /* Full width: cancel the panel's gutter so nothing shows down either side. */
+  margin: 0 -16px 8px;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+  background: var(--bg-veil);
+  border-bottom: 1px solid transparent;
 }
+@media (min-width: 720px) { .modal-head { margin: 0 -28px 8px; padding-inline: 28px; } }
 
 /* Each control is placed in its own column. Left to auto-placement, the album
    face — where Home and the tabs are display:none and so occupy no cell — put
@@ -591,7 +608,7 @@ main {
     inset: 0; transform: none;
     width: 100%; max-height: 100%;
     border-radius: 0; border: 0;
-    padding: calc(env(safe-area-inset-top) + 8px) 16px calc(var(--np-pad-b) + env(safe-area-inset-bottom));
+    padding: 0 16px calc(var(--np-pad-b) + env(safe-area-inset-bottom));
   }
 }
 
@@ -601,21 +618,41 @@ main {
   /* The flexible piece: every pixel the controls do not take. */
   flex: 1 1 0; min-height: 0;
   align-self: stretch;
-  /* Full-bleed — cancels the panel's 16px gutter. The cover IS the screen
-     here, not a framed picture sitting on it. */
-  margin: 0 -16px 4px;
+  margin: 0 0 8px;
   display: flex; align-items: center; justify-content: center;
   background: transparent; border: 0; border-radius: 0; box-shadow: none;
   overflow: hidden;
 }
+/*
+ * THE WHOLE COVER, NEVER CROPPED.
+ *
+ * This used to fill the box and crop, full-bleed to both screen edges — the
+ * cover as the screen rather than a picture on it, which is what MusicD Remote
+ * does on this screen. It cost the sides of every square sleeve on a tall
+ * phone, and a sleeve is a designed object: the half of it that gets cut is
+ * usually the half with the artist's name on it.
+ *
+ * The element FILLS the box and `contain` fits the picture inside it, which is
+ * right for every shape a sleeve comes in and also grows a small file to the
+ * screen. Sizing the element itself instead — auto width and height under both
+ * caps, so the box shrink-wraps the cover — hugs the art exactly but can only
+ * ever SHRINK an image, so a low-resolution cover would sit small in the
+ * middle of a large screen.
+ *
+ * The cost of filling is that the box is not the picture's shape, so there is
+ * nothing here for a radius or a shadow to hug: they would outline the box and
+ * float in the empty band above and below a wide sleeve. The art carries no
+ * frame, and the band is the page ground, which is invisible.
+ */
 .np-art img {
-  height: 100%; width: 100%; object-fit: cover; display: block;
-  /* No radius and no shadow: both are how a floating card reads, and this is
-     not floating. The bottom fades into the ground so the title sits in the
-     tail of the image rather than under a hard edge. */
+  width: 100%; height: 100%;
+  object-fit: contain; display: block;
   border-radius: 0;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0 62%, rgba(0,0,0,.7) 82%, transparent 100%);
-          mask-image: linear-gradient(to bottom, #000 0 62%, rgba(0,0,0,.7) 82%, transparent 100%);
+  box-shadow: none;
+  /* No fade: it existed to dissolve a cropped edge into the ground, and there
+     is no cropped edge left to dissolve. */
+  -webkit-mask-image: none;
+          mask-image: none;
 }
 /* No artwork to fade into: without the frame the placeholder would be an
    invisible hole, so it keeps one. */
