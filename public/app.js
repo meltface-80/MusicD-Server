@@ -522,6 +522,14 @@ function setFace(face) {
   const onNp = face === "np" || face === "queue";
   if (onNp) state.npTab = face;
 
+  /* The panel carries which face it is showing, because the Now playing
+     layout is a different SHAPE, not just different contents — it fills the
+     screen and never scrolls, and only CSS can express that. */
+  const panel = $("album-modal");
+  panel.classList.toggle("face-album", face === "album");
+  panel.classList.toggle("face-np", face === "np");
+  panel.classList.toggle("face-queue", face === "queue");
+
   $("album-face").classList.toggle("hidden", face !== "album");
   $("np-screen").classList.toggle("hidden", face !== "np");
   $("queue-pane").classList.toggle("hidden", face !== "queue");

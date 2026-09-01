@@ -345,3 +345,50 @@ test("a page older than the server announces itself", () => {
      can itself be answered from the entry that is the problem. */
   assert.match(js, /location\.pathname \+ "\?r=" \+ Date\.now\(\)/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  The Now playing layout contract                                    */
+/* ------------------------------------------------------------------ */
+
+test("Now playing never scrolls — the artwork absorbs the leftover height", () => {
+  /* This is the whole layout. Everything else takes its natural height and the
+     art takes what is left, which is why a tall phone has no dead space at the
+     bottom and a short one has no clipped controls. A fixed art size cannot do
+     both: it leaves a gap on one and overflows the other, which is exactly what
+     `width: min(300px, 66vw)` did. */
+  assert.match(css, /\.modal\.face-np \.modal-panel \{[^}]*overflow: hidden/s);
+  assert.match(css, /\.np-art \{[^}]*flex: 1 1 0;\s*min-height: 0;/s);
+  assert.ok(!/\.np-art \{[^}]*width: min\(/s.test(css),
+    "the art has no fixed size to fight the available height");
+});
+
+test("the artwork is full-bleed and fades into the controls", () => {
+  /* The cover is the screen here, not a framed picture on it — so no radius,
+     no shadow, and the bottom fades so the title sits in the tail of the image
+     rather than under a hard edge. */
+  const art = css.slice(css.indexOf(".np-art img {"));
+  const block = art.slice(0, art.indexOf("}"));
+  assert.match(block, /object-fit: cover/);
+  assert.match(block, /border-radius: 0/);
+  assert.match(block, /mask-image: linear-gradient/);
+  assert.match(css, /\.np-art \{[^}]*margin: 0 -16px/s, "it cancels the panel gutter");
+});
+
+test("the panel knows which face it is showing", () => {
+  /* Now playing is a different SHAPE, not just different contents, and only
+     CSS can express that. */
+  assert.match(js, /classList\.toggle\("face-np", face === "np"\)/);
+  assert.match(js, /classList\.toggle\("face-queue", face === "queue"\)/);
+  assert.match(js, /classList\.toggle\("face-album", face === "album"\)/);
+});
+
+test("a short window scrolls rather than putting the transport out of reach", () => {
+  assert.match(css, /@media \(max-height: 520px\) \{[^@]*\.modal\.face-np \.modal-panel \{ overflow-y: auto/s);
+});
+
+test("Now playing is a screen at every width, never a floating dialog", () => {
+  /* At >=720px the panel is otherwise a centred auto-height box, which gives
+     height-driven artwork nothing to size against — it collapses to nothing
+     and takes the view with it. */
+  assert.match(css, /@media \(min-width: 720px\) \{\s*\.modal\.face-np \.modal-panel \{[^}]*height: 100%/s);
+});

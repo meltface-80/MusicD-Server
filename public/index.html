@@ -241,6 +241,11 @@
         <!-- ---------------- Now playing ---------------- -->
         <div id="np-screen" class="np-screen hidden">
           <div class="np-art"><img id="np-img" alt=""></div>
+
+          <!-- Everything that is not the artwork. In the phone's single column
+               this is display:contents and changes nothing; on a landscape
+               screen it becomes the second column beside the art. -->
+          <div class="np-info">
           <div class="np-track" id="np-track">—</div>
           <div class="np-artist" id="np-artist"></div>
           <button class="np-album" id="np-album" type="button"></button>
@@ -292,6 +297,7 @@
             <span class="np-vol-value" id="np-vol-value">0</span>
             <input type="range" id="np-volume" class="np-volume" min="0" max="100" step="1" value="30" aria-label="Volume">
           </div>
+          </div><!-- /.np-info -->
         </div>
 
         <!-- ---------------- Queue ---------------- -->

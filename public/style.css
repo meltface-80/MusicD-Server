@@ -523,14 +523,120 @@ main {
 /*  Now playing                                                        */
 /* ------------------------------------------------------------------ */
 
-.np-screen { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.np-art {
-  width: min(300px, 66vw); aspect-ratio: 1 / 1;
-  border-radius: 12px; overflow: hidden; margin-bottom: 22px;
-  background: var(--bg-elev); border: 1px solid var(--border);
-  box-shadow: var(--shadow-card);
+/*
+ * Now playing NEVER scrolls.
+ *
+ * Everything except the artwork takes its natural height — the tabs, the
+ * title block, the seek row, the transport, the room and volume row — and the
+ * ARTWORK absorbs whatever is left. That is the whole layout, and it is why
+ * this screen has no dead space at the bottom on a tall phone and no clipped
+ * controls on a short one. A fixed art size cannot do both: it leaves a gap on
+ * one and overflows the other.
+ *
+ * It follows that any padding added to this column comes straight out of the
+ * artwork, and on a short viewport out of the transport controls. Add height
+ * here only on purpose.
+ */
+.modal.face-np .modal-panel {
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  /* The mini bar is hidden on this face, so the room it reserves goes too. */
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
 }
-.np-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.modal.face-np .modal-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.modal.face-np #np-screen { flex: 1 1 auto; min-height: 0; }
+
+/* Now playing is a SCREEN, not a dialog. At ≥720px the panel is otherwise a
+   centred auto-height box, which gives height-driven artwork nothing to size
+   against — it would collapse to nothing and take the view with it. */
+@media (min-width: 720px) {
+  .modal.face-np .modal-panel {
+    inset: 0; transform: none;
+    width: 100%; max-height: 100%;
+    border-radius: 0; border: 0;
+    padding: calc(env(safe-area-inset-top) + 8px) 16px calc(14px + env(safe-area-inset-bottom));
+  }
+}
+
+.np-screen { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+.np-art {
+  /* The flexible piece: every pixel the controls do not take. */
+  flex: 1 1 0; min-height: 0;
+  align-self: stretch;
+  /* Full-bleed — cancels the panel's 16px gutter. The cover IS the screen
+     here, not a framed picture sitting on it. */
+  margin: 0 -16px 4px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  overflow: hidden;
+}
+.np-art img {
+  height: 100%; width: 100%; object-fit: cover; display: block;
+  /* No radius and no shadow: both are how a floating card reads, and this is
+     not floating. The bottom fades into the ground so the title sits in the
+     tail of the image rather than under a hard edge. */
+  border-radius: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0 62%, rgba(0,0,0,.7) 82%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0 62%, rgba(0,0,0,.7) 82%, transparent 100%);
+}
+/* No artwork to fade into: without the frame the placeholder would be an
+   invisible hole, so it keeps one. */
+.np-art img:not([src]) { display: none; }
+.np-art:has(img:not([src])) {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-elev); margin-inline: 0;
+}
+
+/* A short window — a small desktop one; phone landscape is a different layout
+   below — scrolls rather than clipping the transport out of reach. */
+@media (max-height: 520px) {
+  .modal.face-np .modal-panel { overflow-y: auto; }
+  .np-art { flex: 0 0 auto; height: 34vh; }
+}
+
+/* Landscape tablets and desktops: art on the left, the controls on the right,
+   instead of the phone's single column. */
+@media (min-width: 720px) and (orientation: landscape) and (min-height: 521px) {
+  /* The body is capped at 640px for reading a track list; a two-column screen
+     with artwork in one of them needs the width back. */
+  .modal.face-np .modal-body { max-width: none; }
+  .np-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 46%) minmax(280px, 460px);
+    grid-template-areas: "art info";
+    align-items: center; justify-content: center;
+    column-gap: 48px;
+    height: 100%;
+  }
+  /* width:100% is load-bearing. .np-art is a flex centring box, so leaving it
+     auto-width makes the image's max-width:100% resolve against a box that is
+     itself sized by the image — the circular case, which collapses the column
+     to a single pixel. Filling the grid column gives the percentages something
+     definite to resolve against. */
+  .np-art { grid-area: art; margin: 0; width: 100%; height: 100%; }
+  .np-art img {
+    /* The framed card comes back: nothing bleeds off a screen edge in this
+       layout, so a hard-edged crop would read as a mistake. The box
+       shrink-wraps the cover at its own ratio, so the shadow hugs the art
+       rather than a letterboxed frame around it. */
+    /* Driven from the HEIGHT, so the cover GROWS to fill the column rather
+       than sitting at whatever size it happens to be stored at — height:auto
+       only ever shrinks an image, which left a small file rendering small on a
+       large screen. Width follows the ratio, capped by the column. */
+    height: calc(100% - 16px); width: auto;
+    max-width: 100%; max-height: calc(100% - 16px);
+    object-fit: contain;
+    border-radius: 8px; box-shadow: var(--shadow-card);
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .np-info { grid-area: info; justify-self: start; min-width: 0; width: 100%; }
+}
+
+.np-info { display: contents; }
+@media (min-width: 720px) and (orientation: landscape) and (min-height: 521px) {
+  .np-info { display: block; text-align: center; }
+}
 
 .np-track {
   font-size: 27px; font-weight: 700; line-height: 1.15;

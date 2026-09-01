@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.3
+
+- **Now playing is laid out the way MusicD Remote lays it out.** The screen
+  never scrolls: the tabs, title block, seek row, transport and room row take
+  their natural height and the ARTWORK absorbs whatever is left. The cover is
+  full-bleed — edge to edge, cropping rather than letterboxing, with its bottom
+  fading into the ground so the title sits in the tail of the image instead of
+  under a hard edge.
+
+  It replaces a fixed `min(300px, 66vw)` card, which could only be right at one
+  screen height: on a tall phone it left a third of the screen empty below the
+  controls, and it had no way to shrink on a short one. Landscape tablets and
+  desktops put the art beside the controls in two columns, where the framed card
+  comes back because nothing bleeds off a screen edge there.
+
 ## 0.2.2
 
 - **The page now says when it is out of date.** `index.html` is built by the
