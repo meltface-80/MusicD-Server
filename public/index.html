@@ -116,6 +116,11 @@
         <span class="menu-sub" id="theme-sub"></span>
       </button>
 
+      <button class="menu-item" type="button" id="menu-version">
+        Version
+        <span class="menu-sub" id="version-sub"></span>
+      </button>
+
       <div class="menu-sep"></div>
       <div class="menu-foot" id="menu-foot"></div>
     </nav>
@@ -125,6 +130,11 @@
   <!--  Main                                                             -->
   <!-- ---------------------------------------------------------------- -->
   <main>
+    <div id="update-banner" class="update-banner hidden" role="status">
+      <span class="update-text" id="update-text"></span>
+      <a class="update-link" id="update-link" target="_blank" rel="noopener">Release notes</a>
+      <button class="update-dismiss" id="update-dismiss" type="button" aria-label="Dismiss">Got it</button>
+    </div>
     <div id="status-banner" class="status-banner hidden"></div>
 
     <section id="home-view" class="home-view" aria-label="Home">

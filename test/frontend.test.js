@@ -260,3 +260,77 @@ test("Home unwinds the whole stack rather than stepping back one screen", () => 
   assert.match(js, /history\.go\(-nav\.length\)/);
   assert.match(js, /\$\("modal-home"\)\.addEventListener\("click", navReset\)/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  Versions and updating                                              */
+/* ------------------------------------------------------------------ */
+
+/* The comparison is pulled out of the shipped file and run, rather than
+   re-implemented here — a copy in the test would pass while the real one was
+   wrong. */
+function loadIsNewer() {
+  const start = js.indexOf("function isNewer(");
+  assert.ok(start > -1, "isNewer is in app.js");
+  const end = js.indexOf("\n}", start) + 2;
+  // eslint-disable-next-line no-new-func
+  return new Function(js.slice(start, end) + "\nreturn isNewer;")();
+}
+
+test("a newer version is compared numerically, not as text", () => {
+  const isNewer = loadIsNewer();
+  assert.strictEqual(isNewer("0.3.0", "0.2.0"), true);
+  assert.strictEqual(isNewer("0.2.0", "0.2.0"), false, "the same version is not an update");
+  assert.strictEqual(isNewer("0.1.9", "0.2.0"), false, "nor is an older one");
+  /* The one a string comparison gets backwards. */
+  assert.strictEqual(isNewer("0.10.0", "0.9.0"), true, "0.10 is newer than 0.9");
+  assert.strictEqual(isNewer("0.9.0", "0.10.0"), false);
+  assert.strictEqual(isNewer("1.0.0", "0.99.99"), true);
+  assert.strictEqual(isNewer("v0.3.0", "0.2.0"), true, "a leading v is tolerated");
+  assert.strictEqual(isNewer("", "0.2.0"), false, "and nonsense is never an update");
+});
+
+test("the update check runs in the browser and never blocks the app", () => {
+  /* The server has no business reaching the internet on its own, and the app
+     has to work with GitHub unreachable. */
+  assert.ok(!/api\.github\.com/.test(fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8")),
+    "the server makes no call to GitHub");
+  const check = js.slice(js.indexOf("async function checkForUpdate"));
+  assert.match(check.slice(0, 1400), /api\.github\.com/);
+  assert.match(check.slice(0, 1600), /catch \{/, "a failed check is silent");
+});
+
+test("the running build is identifiable from the menu", () => {
+  assert.ok(htmlIds.has("version-sub"), "the menu has a version line");
+  assert.match(js, /function describeBuild\(build\)/);
+  assert.match(js, /build\.commit/);
+  assert.match(js, /build\.date/);
+});
+
+test("the version is the same everywhere it is written down", () => {
+  const version = require("../package.json").version;
+  const readme = fs.readFileSync(path.join(__dirname, "..", "README.md"), "utf8");
+  const site = fs.readFileSync(path.join(__dirname, "..", "docs", "index.html"), "utf8");
+  const changelog = fs.readFileSync(path.join(__dirname, "..", "CHANGELOG.md"), "utf8");
+
+  assert.match(site, new RegExp('FALLBACK_VERSION = "' + version.replace(/\./g, "\\.") + '"'),
+    "the install site names this version");
+  assert.ok(changelog.includes("\n## " + version + "\n"),
+    "the changelog has a section for it — the release notes are cut from there");
+  assert.ok(readme.includes(":" + version + "`"),
+    "the README's tag table names it");
+});
+
+test("every documented run command pulls", () => {
+  /* `docker run` reuses a cached tag without asking the registry, so a command
+     without this reads as an update and ships nothing. */
+  const readme = fs.readFileSync(path.join(__dirname, "..", "README.md"), "utf8");
+  const compose = fs.readFileSync(path.join(__dirname, "..", "docker-compose.yml"), "utf8");
+  const site = fs.readFileSync(path.join(__dirname, "..", "docs", "index.html"), "utf8");
+
+  for (const block of readme.match(/```bash\n[\s\S]*?```/g) || []) {
+    if (!/docker run/.test(block) || !/ghcr\.io/.test(block)) continue;
+    assert.match(block, /--pull always/, "a README run command that pulls the image");
+  }
+  assert.match(compose, /pull_policy: always/);
+  assert.match(site, /--pull always/, "and the command the install site builds");
+});

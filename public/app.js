@@ -95,7 +95,8 @@ const state = {
   seeking: false,
   volumeHeld: false,
   pollTimer: null,
-  scanTimer: null
+  scanTimer: null,
+  checkedForUpdate: false
 };
 
 const ROW_TITLES = {
@@ -1135,12 +1136,82 @@ async function refreshStatus() {
       }
     }
 
+    $("version-sub").textContent = describeBuild(status.build);
     $("menu-foot").textContent =
-      `MusicD Server v${status.version} · ${status.stats.albums} albums, ` +
-      `${status.stats.tracks} tracks · ${status.sonos.rooms} Sonos room` +
-      `${status.sonos.rooms === 1 ? "" : "s"} · ${status.time.zone}`;
+      `${status.stats.albums} albums, ${status.stats.tracks} tracks · ` +
+      `${status.sonos.rooms} Sonos room${status.sonos.rooms === 1 ? "" : "s"} · ` +
+      `${status.time.zone}`;
+
+    /* Once per load, on the first status that comes back. */
+    if (!state.checkedForUpdate) {
+      state.checkedForUpdate = true;
+      checkForUpdate(status.build);
+    }
   } catch (e) {
     banner("Cannot reach the server: " + e.message, true);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Which build this is, and whether there is a newer one               */
+/* ------------------------------------------------------------------ */
+
+const REPO = "meltface-80/MusicD-Server";
+
+/* Compare two dotted versions numerically. "0.10.0" is newer than "0.9.0",
+   which a string comparison gets backwards. */
+function isNewer(candidate, running) {
+  const parse = (v) => String(v || "").replace(/^v/, "").split(".").map(n => parseInt(n, 10) || 0);
+  const a = parse(candidate), b = parse(running);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) > (b[i] || 0)) return true;
+    if ((a[i] || 0) < (b[i] || 0)) return false;
+  }
+  return false;
+}
+
+function describeBuild(build) {
+  if (!build) return "";
+  const parts = ["v" + build.version];
+  if (build.commit) parts.push(build.commit);
+  if (build.date) parts.push("built " + String(build.date).slice(0, 10));
+  return parts.join(" · ");
+}
+
+/*
+ * Ask GitHub whether there is a newer release.
+ *
+ * From the BROWSER, not the server: this is the app's own updater, and the
+ * server has no business reaching the internet on its own. It runs once per
+ * load, fails silently when offline, and remembers a dismissal per version so
+ * it does not become a nag.
+ */
+async function checkForUpdate(build) {
+  if (!build || !build.version) return;
+  let dismissed = "";
+  try { dismissed = localStorage.getItem("musicd.dismissedUpdate") || ""; }
+  catch { /* storage off — the notice simply reappears next load */ }
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { cache: "no-store" });
+    if (!res.ok) return;
+    const release = await res.json();
+    const latest = String(release.tag_name || "").replace(/^v/, "");
+    if (!/^\d+\.\d+\.\d+$/.test(latest)) return;
+    if (!isNewer(latest, build.version) || dismissed === latest) return;
+
+    $("update-text").textContent =
+      `Version ${latest} is out — you are running ${build.version}.`;
+    $("update-link").href = release.html_url || `https://github.com/${REPO}/releases`;
+    $("update-banner").classList.remove("hidden");
+    $("update-dismiss").onclick = () => {
+      $("update-banner").classList.add("hidden");
+      try { localStorage.setItem("musicd.dismissedUpdate", latest); }
+      catch { /* storage off — dismissing lasts for this visit only */ }
+    };
+  } catch {
+    /* Offline, rate-limited, or no release yet. The app does not depend on
+       this answer, so there is nothing to report. */
   }
 }
 
@@ -1179,6 +1250,19 @@ function wire() {
       toast(r.already ? "A scan is already running." : "Scanning your library…");
       refreshStatus();
     } catch (e) { toast(e.message, true); }
+  });
+
+  $("menu-version").addEventListener("click", () => {
+    const text = $("version-sub").textContent;
+    if (!text) return;
+    /* The one thing anybody wants from a version line is to paste it into a
+       message about something not working. */
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText("MusicD Server " + text)
+        .then(() => toast("Version copied."), () => toast(text));
+    } else {
+      toast(text);
+    }
   });
 
   $("menu-theme").addEventListener("click", () => {

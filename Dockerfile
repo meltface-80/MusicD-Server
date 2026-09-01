@@ -35,6 +35,18 @@ ENV PORT=3400 \
     MUSIC_DIRS=/music \
     DATA_DIR=/app/data
 
+# Which build this is. Baked in at build time so a running container can say
+# exactly what it is — "same version, no changes" is impossible to diagnose
+# when every build calls itself the same thing. The workflow fills these in;
+# a local `docker build` leaves them empty and the app falls back to the
+# version in package.json.
+ARG BUILD_COMMIT=""
+ARG BUILD_DATE=""
+ARG BUILD_REF=""
+ENV BUILD_COMMIT=$BUILD_COMMIT \
+    BUILD_DATE=$BUILD_DATE \
+    BUILD_REF=$BUILD_REF
+
 EXPOSE 3400
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s --retries=3 \

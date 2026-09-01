@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.2.0
+
+### Interface — parity with MusicD Remote
+- Now playing and Queue as two tabs of one screen, matching MusicD Remote: a
+  Home control on the left, the tabs centred, and five transport buttons —
+  shuffle, previous, play/pause, next, repeat.
+- Shuffle and repeat drive Sonos' single play-mode enum, read before it is
+  written so that toggling one never clears the other. Repeat cycles
+  off → all → one.
+- The queue page summarises what is left to play, counts what was played
+  earlier rather than listing it, and marks the current track with a divider.
+  Tapping a later track jumps to it.
+- Search puts artists first, as chips above the album grid, and the search
+  field takes the whole top bar rather than sharing it with the screen title.
+- Mini transport with play/pause leading, then what is playing, then room and
+  volume. It sits above the album and queue screens and steps aside for Now
+  playing, which already has the full transport.
+- Share card: a 1200x600 PNG of any album, drawn in the browser from the album
+  row alone — the cover softened as the ground, a glass pane over it holding
+  the sharp cover, the year, the title, the artist and the length. Copy,
+  system share and download are each offered only where the browser can
+  actually perform them. From Now playing it uses the track playing at the
+  moment you tap, not the album the panel was opened with.
+- Back — the phone gesture as much as the on-screen control — closes the
+  innermost thing that is open, one layer at a time, and leaves the app only
+  from the library.
+
+### Updating and versions
+- The image carries the version, the commit it was built from and the date it
+  was built. All three are reported by `/api/status` and shown in the side
+  menu, so what is running can be identified without guessing.
+- The app checks GitHub for a newer release once per load, from the browser
+  rather than the server, and says so quietly when there is one. It fails
+  silently offline and can be dismissed.
+- Every push to `main` now publishes `:latest`, `:<version>`, `:<major.minor>`
+  and `:sha-<commit>`, so a version can be pinned or rolled back to.
+- A release is tagged and published automatically when the version in
+  `package.json` changes on `main`.
+- **The documented install and update commands now pull.** `docker run` reuses
+  a cached tag without checking the registry, so stopping the container,
+  removing it and running the same command again gave you the image you
+  already had — which looked exactly like an update that shipped nothing.
+
 ## 0.1.0
 
 First version. A local music server that plays to Sonos.
@@ -57,27 +100,9 @@ First version. A local music server that plays to Sonos.
 ### Interface
 - MusicD Remote's palette, control sizing and section rhythm, in dark and light.
 - Album view with track list, play-from-any-track, and the album's own stats.
-- Now playing and Queue as two tabs of one screen, matching MusicD Remote: a
-  Home control on the left, the tabs centred, and five transport buttons —
-  shuffle, previous, play/pause, next, repeat.
-- Shuffle and repeat drive Sonos' single play-mode enum, read before it is
-  written so that toggling one never clears the other. Repeat cycles
-  off → all → one.
-- The queue page summarises what is left to play, counts what was played
-  earlier rather than listing it, and marks the current track with a divider.
-  Tapping a later track jumps to it.
-- Search puts artists first, as chips above the album grid, and the search
-  field takes the whole top bar rather than sharing it with the screen title.
-- Mini transport with play/pause leading, then what is playing, then room and
-  volume. It sits above the album and queue screens and steps aside for Now
-  playing, which already has the full transport.
-- Share card: a 1200x600 PNG of any album, drawn in the browser from the album
-  row alone — the cover softened as the ground, a glass pane over it holding
-  the sharp cover, the year, the title, the artist and the length. Copy,
-  system share and download are each offered only where the browser can
-  actually perform them. From Now playing it uses the track playing at the
-  moment you tap, not the album the panel was opened with.
-- Back — the phone gesture as much as the on-screen control — closes the
+- Now playing with seek, volume, room switching and the queue.
+- Search across albums, artists and tracks; an artists index.
+- Mini transport across the bottom of every screen.
   innermost thing that is open, one layer at a time, and leaves the app only
   from the library.
 

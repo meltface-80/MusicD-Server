@@ -118,6 +118,21 @@ function api(handler) {
 /*  Library                                                            */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Which build this is.
+ *
+ * The version comes from package.json; the commit and date are baked into the
+ * image by the publish workflow. A container that cannot say what it is makes
+ * "I updated and nothing changed" impossible to tell apart from "the update
+ * did not reach me", which is exactly the case this exists for.
+ */
+const BUILD = {
+  version: require("./package.json").version,
+  commit: (process.env.BUILD_COMMIT || "").slice(0, 7),
+  date: process.env.BUILD_DATE || "",
+  ref: process.env.BUILD_REF || ""
+};
+
 app.get("/api/status", api((req, res) => {
   /* Deliberately NOT awaited. Discovery against a network with no players
      takes seconds, and this endpoint is what the container's health check and
@@ -128,7 +143,8 @@ app.get("/api/status", api((req, res) => {
     /* The reason is already kept on household.lastError and reported below. */
   });
   res.json({
-    version: require("./package.json").version,
+    version: BUILD.version,
+    build: BUILD,
     musicDirs: MUSIC_DIRS,
     stats: library.stats(db),
     scan: {
@@ -379,7 +395,8 @@ app.get("*", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
 function start() {
   const server = app.listen(PORT, () => {
-    console.log(`MusicD Server v${require("./package.json").version}`);
+    console.log(`MusicD Server v${BUILD.version}` +
+                (BUILD.commit ? ` (${BUILD.commit}${BUILD.date ? ", built " + BUILD.date : ""})` : ""));
     console.log(`  library : ${MUSIC_DIRS.join(", ")}`);
     console.log(`  data    : ${DATA_DIR}`);
     console.log(`  web     : http://${localAddress(process.env.SERVER_IP)}:${PORT}/`);

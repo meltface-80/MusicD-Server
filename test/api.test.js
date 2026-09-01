@@ -341,3 +341,16 @@ test("an artist whose name contains a percent sign is reachable", async () => {
   const { status } = await json("/api/artist/" + encodeURIComponent("50% Off"));
   assert.strictEqual(status, 200);
 });
+
+test("status names the build, not just the version", async () => {
+  /* "I updated and nothing changed" cannot be told apart from "the update did
+     not reach me" unless a container can say exactly what it is. */
+  const { body } = await json("/api/status");
+  assert.strictEqual(body.version, require("../package.json").version);
+  assert.ok(body.build, "a build block is reported");
+  assert.strictEqual(body.build.version, body.version);
+  for (const key of ["commit", "date", "ref"]) {
+    assert.strictEqual(typeof body.build[key], "string",
+      key + " is always present, empty on a local build");
+  }
+});
