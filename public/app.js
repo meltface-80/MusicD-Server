@@ -101,10 +101,13 @@ const state = {
   updateTimer: null,     // the poll watching an update through its restart
   positionAt: 0,
   build: null,
+  homeStale: false,      // a favourite changed while Home sat behind the panel
+  afterModal: null,      // a screen to open once the panel has closed itself
   checkedForUpdate: false
 };
 
 const ROW_TITLES = {
+  favourites: "Favourites",
   library: "Library",
   random: "Random albums",
   added: "Recently added",
@@ -117,6 +120,7 @@ const ROW_TITLES = {
    skips Home, so the copy cannot live only in the Home payload — an empty
    grid with no explanation reads as a fault, and neither of these is one. */
 const ROW_EMPTY = {
+  favourites: "No favourites yet. Tap the heart on an album to keep it here.",
   library: "No albums scanned yet. Check your music folder is mounted, then rescan.",
   random: "No albums scanned yet.",
   added: "No albums scanned yet.",
@@ -259,6 +263,7 @@ function showView(view, title) {
 
 /* Called by the navigation stack when a browse view is popped. */
 function goHomeView() {
+  state.homeStale = false;          // loadHome() below is the refresh it wanted
   $("search-input").value = "";
   $("topbar-search").classList.remove("is-open");
   document.querySelector(".topbar-row").classList.remove("searching");
@@ -337,6 +342,7 @@ async function openRow(key) {
   const grid = $("album-grid");
   const empty = $("grid-empty");
   grid.textContent = "";
+  grid.classList.remove("is-sectioned");
   empty.classList.add("hidden");
   for (let i = 0; i < 18; i++) grid.appendChild(skeletonCard());
 
@@ -390,7 +396,33 @@ function onScroll() {
   if (remaining < window.innerHeight) loadGridPage();
 }
 
-async function openArtist(name) {
+/*
+ * One artist's screen: the records they made, then the ones they turn up on.
+ *
+ * Two sections rather than one list, because they answer different questions —
+ * "what did they make" and "where else will I hear them". The second is empty
+ * far more often than not, and an empty heading is worse than no heading, so
+ * it appears only when there is something under it.
+ */
+/*
+ * Opening an artist from inside the album panel is a two-step move.
+ *
+ * The panel closes through the navigation stack, and that runs on popstate —
+ * `history.back()` returns immediately and the layer is not gone until the
+ * browser gets round to it. Closing and navigating in the same tick therefore
+ * loses the race every time: the new screen paints, then the late pop unwinds
+ * the layer under it and lands on Home. So the close does the opening.
+ */
+function openArtist(name) {
+  if (!$("album-modal").classList.contains("hidden")) {
+    state.afterModal = () => showArtist(name);
+    closeModal();
+    return;
+  }
+  showArtist(name);
+}
+
+async function showArtist(name) {
   showView("grid", name);
   /* An artist's albums arrive in one go, so there is no pager here — and a
      pager left over from the row the user came from would append that row's
@@ -398,10 +430,30 @@ async function openArtist(name) {
   state.grid = null;
   const grid = $("album-grid");
   grid.textContent = "";
+  grid.classList.remove("is-sectioned");
   $("grid-empty").classList.add("hidden");
   try {
     const data = await api("/api/artist/" + encodeURIComponent(name));
-    for (const album of data.albums) grid.appendChild(albumCard(album));
+    const sections = [
+      ["Albums", data.albums || []],
+      ["Appears on", data.appearsOn || []]
+    ].filter(([, albums]) => albums.length);
+
+    if (!sections.length) {
+      $("grid-empty").textContent = "Nothing by this artist in the library.";
+      $("grid-empty").classList.remove("hidden");
+      return;
+    }
+    grid.classList.add("is-sectioned");
+    for (const [title, albums] of sections) {
+      /* The heading is skipped when there is only one section: a lone "Albums"
+         over the only thing on the screen says nothing the title bar has not
+         already said. */
+      if (sections.length > 1) grid.appendChild(el("div", "grid-section", title));
+      const row = el("div", "album-grid-inner");
+      for (const album of albums) row.appendChild(albumCard(album));
+      grid.appendChild(row);
+    }
   } catch (e) {
     toast(e.message, true);
   }
@@ -665,17 +717,11 @@ function renderNow(now) {
     ? `${now.coordinator.name} + ${now.members.length - 1}`
     : now.zone.name;
 
-  /* Shuffle and repeat come back from the server already split out of Sonos'
-     single play-mode enum. */
-  $("np-shuffle").classList.toggle("is-on", !!now.shuffle);
-  $("np-shuffle").setAttribute("aria-pressed", now.shuffle ? "true" : "false");
-
-  const repeat = now.repeat || "off";
-  $("np-repeat").classList.toggle("is-on", repeat !== "off");
-  $("np-repeat").setAttribute("aria-pressed", repeat !== "off" ? "true" : "false");
-  $("np-repeat").setAttribute("aria-label",
-    repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off");
-  $("np-repeat-badge").classList.toggle("hidden", repeat !== "one");
+  /* PLAY MODES ARE NOT SHOWN. Shuffle and repeat were removed from this screen
+     on request: an album is listened to in the order it was sequenced. The
+     server still reads and reports both, and nothing here sets them — a mode
+     set in the Sonos app is left exactly as it was rather than being silently
+     corrected by a screen with no control for it. */
 
   settleVolumeHold(now.volume);
   if (now.volume !== null && !volumeHeld()) syncVolume(now.volume);
@@ -841,6 +887,10 @@ function setFace(face) {
   $("modal-tabs").classList.toggle("hidden", !onNp);
   $("modal-back").classList.toggle("hidden", onNp);
   $("modal-home").classList.toggle("hidden", !onNp);
+  /* One corner, two jobs: the heart belongs to an album, the share card to
+     what is playing. */
+  $("modal-fave").classList.toggle("hidden", onNp);
+  $("modal-share").classList.toggle("hidden", !onNp);
 
   for (const tab of document.querySelectorAll(".modal-tab")) {
     tab.classList.toggle("is-active", tab.getAttribute("data-tab") === face);
@@ -878,6 +928,19 @@ function hideModal() {
   closeVolSheet();
   state.face = "album";
   syncMini();
+
+  /* Something asked to be opened once the panel was out of the way — an artist
+     link, which cannot navigate while the panel is still on the stack. It takes
+     over from here, so the Home refresh below is left to whenever Home is
+     actually returned to. */
+  const next = state.afterModal;
+  state.afterModal = null;
+  if (next) return next();
+
+  if (state.homeStale && state.view === "home") {
+    state.homeStale = false;
+    loadHome();
+  }
 }
 function closeModal() { navBack(); }
 
@@ -893,13 +956,83 @@ async function openAlbum(id) {
   }
 }
 
+/*
+ * The artists named on one album line.
+ *
+ * Split on the separators tags actually use for a list — a semicolon, or a
+ * slash with space around it. NOT on "&" and NOT on a comma: those live inside
+ * real names, and splitting on them turns Earth, Wind & Fire into three
+ * artists who have never recorded anything, and Simon & Garfunkel into two.
+ * The cost of being conservative is a joined name occasionally left as one
+ * link, which is a link that works; the cost of being greedy is links to
+ * artists who do not exist.
+ */
+function splitArtists(artist) {
+  return String(artist || "")
+    .split(/\s*;\s*|\s+\/\s+/)
+    .map(name => name.trim())
+    .filter(Boolean);
+}
+
+/* ---- Favourites -------------------------------------------------- */
+
+function setFave(on) {
+  const button = $("modal-fave");
+  button.classList.toggle("is-on", !!on);
+  button.setAttribute("aria-pressed", on ? "true" : "false");
+  button.setAttribute("aria-label", on ? "Remove from favourites" : "Add to favourites");
+  button.title = on ? "In favourites" : "Favourite";
+}
+
+/*
+ * Marked here first, then on the server.
+ *
+ * A heart that waits for a round trip before it fills feels broken on a phone,
+ * so the paint leads and the request follows; if the request fails the heart
+ * goes back to what the server still thinks, which is the truth. The album
+ * object is updated too, so leaving the screen and coming back does not show
+ * the state the tap replaced.
+ */
+async function toggleFave(album) {
+  const next = !album.favourite;
+  album.favourite = next;
+  setFave(next);
+  try {
+    await post("/api/favourite", { album: b64url(album.id), favourite: next });
+    /* Favourites is a row on Home, and Home may be sitting behind this panel
+       with the old row still painted on it. Leaving a browse screen already
+       reloads Home; closing the panel does not, so it is told to. */
+    state.homeStale = true;
+  } catch (e) {
+    album.favourite = !next;
+    setFave(!next);
+    toast(e.message, true);
+  }
+}
+
 function renderAlbum(album) {
   const img = $("modal-img");
   if (album.art) { img.src = album.art; img.classList.remove("hidden"); }
   else { img.removeAttribute("src"); img.classList.add("hidden"); }
 
   $("modal-title").textContent = album.title;
-  $("modal-subtitle").textContent = [album.artist, album.year].filter(Boolean).join(" · ");
+
+  const subtitle = $("modal-subtitle");
+  subtitle.textContent = "";
+  const names = splitArtists(album.artist);
+  names.forEach((name, i) => {
+    if (i) subtitle.appendChild(document.createTextNode(", "));
+    const link = el("button", "artist-link", name);
+    link.type = "button";
+    link.addEventListener("click", () => openArtist(name));
+    subtitle.appendChild(link);
+  });
+  if (album.year) {
+    subtitle.appendChild(document.createTextNode((names.length ? " · " : "") + album.year));
+  }
+
+  setFave(album.favourite);
+  $("modal-fave").onclick = () => toggleFave(album);
 
   const bits = [
     `${album.trackCount} track${album.trackCount === 1 ? "" : "s"}`,
@@ -1752,11 +1885,6 @@ function wire() {
     });
   }
 
-  /* Shuffle toggles; repeat cycles off → all → one. Both are decided on the
-     server, which reads the player's current mode before writing the new one —
-     the two live in a single Sonos enum and would otherwise clear each other. */
-  $("np-shuffle").addEventListener("click", () => transport("shuffle"));
-  $("np-repeat").addEventListener("click", () => transport("repeat"));
 
   /* Tabs, and the two controls that replace Back on the Now playing face. */
   for (const tab of document.querySelectorAll(".modal-tab")) {

@@ -437,6 +437,111 @@ test("a folded album takes the cover from wherever one is actually named", async
 });
 
 /* ------------------------------------------------------------------ */
+/*  Favourites                                                         */
+/* ------------------------------------------------------------------ */
+
+test("an album can be marked a favourite, and unmarked", async () => {
+  const { ws, db } = await scannedLibrary();
+  const album = db.prepare("SELECT id FROM albums ORDER BY title LIMIT 1").get().id;
+
+  assert.strictEqual(library.favourites(db).length, 0, "nothing is one to begin with");
+  assert.deepStrictEqual(library.setFavourite(db, album, true), { id: album, favourite: true });
+  assert.deepStrictEqual(library.favourites(db).map(a => a.id), [album]);
+  assert.strictEqual(library.favouriteCount(db), 1);
+
+  library.setFavourite(db, album, false);
+  assert.strictEqual(library.favourites(db).length, 0);
+  assert.strictEqual(library.favouriteCount(db), 0);
+  ws.cleanup();
+});
+
+test("marking an album that is not there says so rather than inventing one", () => {
+  const ws = workspace();
+  const db = dbLib.open(ws.data);
+  assert.strictEqual(library.setFavourite(db, "a:No/Such", true), null);
+  ws.cleanup();
+});
+
+test("favourites come back most recently marked first", async () => {
+  /* The one just marked is the one being thought about. The column holds WHEN
+     it was marked rather than a flag, which is what makes that possible. */
+  const { ws, db } = await scannedLibrary();
+  const ids = db.prepare("SELECT id FROM albums ORDER BY title LIMIT 3").all().map(r => r.id);
+  library.setFavourite(db, ids[0], true, 1000);
+  library.setFavourite(db, ids[1], true, 3000);
+  library.setFavourite(db, ids[2], true, 2000);
+  assert.deepStrictEqual(library.favourites(db).map(a => a.id), [ids[1], ids[2], ids[0]]);
+  ws.cleanup();
+});
+
+test("a rescan never disturbs a favourite", async () => {
+  /* The only thing in the library a person typed rather than the files, so it
+     is the only thing a rescan could destroy — the same reason added_at is
+     left alone by the upserts. */
+  const { ws, db } = await scannedLibrary();
+  const album = db.prepare("SELECT id FROM albums ORDER BY title LIMIT 1").get().id;
+  library.setFavourite(db, album, true, 4242);
+
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  assert.strictEqual(
+    db.prepare("SELECT favourite FROM albums WHERE id = ?").get(album).favourite, 4242,
+    "the mark, and the moment it was made, both survive");
+  ws.cleanup();
+});
+
+test("an album says whether it is a favourite; a grid card does not carry it", async () => {
+  const { ws, db } = await scannedLibrary();
+  const id = db.prepare("SELECT id FROM albums ORDER BY title LIMIT 1").get().id;
+
+  assert.strictEqual(library.album(db, id).favourite, false);
+  library.setFavourite(db, id, true);
+  assert.strictEqual(library.album(db, id).favourite, true, "a flag on the way out");
+  /* The home screen carries six rows of cards; a field only the album screen
+     reads does not belong on one. */
+  assert.ok(!("favourite" in library.library(db, 5)[0]), "the card stays lean");
+  ws.cleanup();
+});
+
+/* ------------------------------------------------------------------ */
+/*  An artist's two lists                                              */
+/* ------------------------------------------------------------------ */
+
+test("an artist's records and the ones they appear on are separate lists", async () => {
+  const ws = workspace();
+  const mk = (dir, albumArtist, tracks) => {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    tracks.forEach(([title, artist], i) =>
+      fs.writeFileSync(path.join(full, `0${i + 1} ${title}.wav`),
+        wav({ title, artist, albumArtist, album: path.basename(dir), year: 1980 + i })));
+  };
+  mk("Bowie/Low", "David Bowie", [["Speed of Life", "David Bowie"]]);
+  mk("Bowie/Heroes", "David Bowie", [["Beauty and the Beast", "David Bowie"]]);
+  /* A compilation: the album is Various Artists, one track is his. */
+  mk("Various/Nineteen Seventy Seven", "Various Artists",
+     [["Sound and Vision", "David Bowie"], ["Peaches", "The Stranglers"]]);
+
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  const { albums, appearsOn } = library.byArtist(db, "David Bowie");
+
+  assert.deepStrictEqual(albums.map(a => a.title).sort(), ["Heroes", "Low"],
+    "the records they made");
+  assert.deepStrictEqual(appearsOn.map(a => a.title), ["Nineteen Seventy Seven"],
+    "and the one they turn up on");
+  /* Nothing is offered twice: an album already in the first list is taken out
+     of the second even though his name is on its tracks. */
+  const both = albums.filter(a => appearsOn.some(b => b.id === a.id));
+  assert.deepStrictEqual(both, []);
+
+  /* Somebody with nothing of their own still has their appearances. */
+  const stranglers = library.byArtist(db, "The Stranglers");
+  assert.deepStrictEqual(stranglers.albums, []);
+  assert.deepStrictEqual(stranglers.appearsOn.map(a => a.title), ["Nineteen Seventy Seven"]);
+  ws.cleanup();
+});
+
+/* ------------------------------------------------------------------ */
 /*  Release dates                                                      */
 /* ------------------------------------------------------------------ */
 

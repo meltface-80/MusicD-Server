@@ -102,7 +102,8 @@ test("the light theme redefines every token the dark one declares", () => {
 
   /* Sizing tokens are deliberately shared; only the colours have to be paired. */
   const shared = new Set(["--font-sans", "--ctl-h", "--ctl-h-sm", "--tap-min",
-                          "--ctl-radius", "--topbar-h", "--mini-h", "--np-pad-b"]);
+                          "--ctl-radius", "--topbar-h", "--mini-h", "--np-pad-b",
+                          "--ctl-h-lg"]);
   const missing = [...tokensIn(dark)].filter(t => !shared.has(t) && !tokensIn(light).has(t));
   assert.deepStrictEqual(missing, [], "these colours would stay dark in the light theme");
 });
@@ -152,10 +153,22 @@ test("search puts artists above albums", () => {
   assert.ok(artists < albums, "the Artists section is built before the Albums one");
 });
 
-test("the Now playing face carries five transport controls", () => {
+test("the Now playing face carries three transport controls, and no play modes", () => {
+  /* Shuffle and repeat were removed on request: an album is listened to in the
+     order it was sequenced, and the two controls that undo that were taking
+     the outside positions in a row of three that does the actual work. */
   const row = html.slice(html.indexOf('class="np-transport"'));
   const ids = [...row.slice(0, row.indexOf("</div>")).matchAll(/id="(np-[a-z]+)"/g)].map(m => m[1]);
-  assert.deepStrictEqual(ids, ["np-shuffle", "np-prev", "np-playpause", "np-next", "np-repeat"]);
+  assert.deepStrictEqual(ids, ["np-prev", "np-playpause", "np-next"]);
+  /* And nothing left behind that would set one. The server still READS the
+     mode — it is in the now-playing payload — so a mode set in the Sonos app
+     survives rather than being silently corrected by a screen with no control
+     for it. */
+  const code = stripComments(js, "js");
+  assert.ok(!/transport\("shuffle"\)|transport\("repeat"\)/.test(code),
+    "nothing sends a play-mode command any more");
+  assert.ok(!htmlIds.has("np-shuffle") && !htmlIds.has("np-repeat"),
+    "and the buttons are gone from the markup");
 });
 
 test("Now playing and Queue are tabs of one screen, each with a pane", () => {
@@ -748,12 +761,89 @@ test("the side menu carries the real mark", () => {
 /* ------------------------------------------------------------------ */
 
 test("the panel header places each control in its own column", () => {
-  /* Auto-placement put Share in the middle column on the album face, where
-     Home and the tabs are display:none and take no cell — so it landed next to
-     Back instead of in the far corner. */
-  assert.match(css, /\.modal-head > #modal-share \{ grid-column: 3; grid-row: 1; justify-self: end; \}/);
+  /* Auto-placement put the right-hand control in the middle column on the album
+     face, where Home and the tabs are display:none and take no cell — so it
+     landed next to Back instead of in the far corner. */
+  assert.match(css, /\.modal-head > #modal-share,\s*\n\.modal-head > #modal-fave \{ grid-column: 3; grid-row: 1; justify-self: end; \}/);
   assert.match(css, /\.modal-head > #modal-back,\s*\n\.modal-head > #modal-home \{ grid-column: 1/);
   assert.match(css, /\.modal-head > \.modal-tabs \{ grid-column: 2/);
+});
+
+test("an artist link waits for the panel to close before it navigates", () => {
+  /* The panel closes through the navigation stack, which runs on popstate:
+     history.back() returns immediately and the layer is not gone until the
+     browser gets round to it. Closing and navigating in the same tick loses
+     that race every time — the artist screen paints, then the late pop unwinds
+     the layer under it and lands on Home. */
+  const open = js.slice(js.indexOf("function openArtist("));
+  const body = open.slice(0, open.indexOf("\n}"));
+  assert.match(body, /state\.afterModal/, "it hands the navigation to the close");
+  assert.ok(!/showView\(/.test(body), "and does not navigate itself while the panel is up");
+
+  const hide = js.slice(js.indexOf("function hideModal("));
+  const hideBody = hide.slice(0, hide.indexOf("\n}"));
+  assert.match(hideBody, /state\.afterModal = null/, "and the close runs it exactly once");
+});
+
+test("the artist screen separates their records from their appearances", () => {
+  /* Two sections answer two questions — what did they make, and where else
+     will I hear them. An empty heading is worse than no heading. */
+  assert.match(js, /\["Appears on", data\.appearsOn/, "the second list is read");
+  assert.match(js, /filter\(\(\[, albums\]\) => albums\.length\)/,
+    "and a section with nothing in it is dropped");
+  /* The grid is a CSS grid whose children are cards, so a stack of headed
+     grids needs its own layout or each section becomes one cell. */
+  assert.match(css, /\.album-grid\.is-sectioned \{ display: block; \}/);
+  assert.match(css, /\.album-grid\.is-sectioned \.album-grid-inner \{[^}]*grid-template-columns: inherit/s,
+    "the sections inherit the columns rather than restating the breakpoints");
+});
+
+test("artist names split on what a tag list uses, and nothing else", () => {
+  const body = /function splitArtists\([\s\S]*?\n\}/.exec(js);
+  assert.ok(body, "splitArtists exists");
+  // eslint-disable-next-line no-new-func
+  const split = new Function("return " + body[0] + "; splitArtists")();
+
+  assert.deepStrictEqual(split("David Bowie; Queen"), ["David Bowie", "Queen"]);
+  assert.deepStrictEqual(split("A / B"), ["A", "B"], "a slash with space around it");
+  /* And NOT on these. Splitting an ampersand or a comma turns real acts into
+     artists who have never recorded anything. */
+  assert.deepStrictEqual(split("Simon & Garfunkel"), ["Simon & Garfunkel"]);
+  assert.deepStrictEqual(split("Earth, Wind & Fire"), ["Earth, Wind & Fire"]);
+  assert.deepStrictEqual(split("Crosby, Stills, Nash & Young"), ["Crosby, Stills, Nash & Young"]);
+  assert.deepStrictEqual(split("AC/DC"), ["AC/DC"], "no space, no split");
+  assert.deepStrictEqual(split(""), []);
+  assert.deepStrictEqual(split(null), []);
+});
+
+test("the corner is the heart on an album and the share card on Now playing", () => {
+  /* Both live in the same cell, so exactly one of them shows at a time and
+     which one follows the face. */
+  assert.ok(htmlIds.has("modal-fave") && htmlIds.has("modal-share"));
+  const face = js.slice(js.indexOf("function setFace("));
+  const body = face.slice(0, face.indexOf("\n}"));
+  assert.match(body, /\$\("modal-fave"\)\.classList\.toggle\("hidden", onNp\)/);
+  assert.match(body, /\$\("modal-share"\)\.classList\.toggle\("hidden", !onNp\)/);
+});
+
+test("the heart is hollow until it is one", () => {
+  /* Stroked with no fill by default; the fill and the colour both arrive with
+     .is-on, so an unmarked album never shows a filled shape. */
+  const button = html.slice(html.indexOf('id="modal-fave"'));
+  const markup = button.slice(0, button.indexOf("</button>"));
+  assert.match(markup, /fill="none"/, "hollow by default");
+  assert.match(markup, /stroke="currentColor"/);
+  assert.match(css, /#modal-fave\.is-on svg \{ fill: var\(--fave\); \}/, "filled when marked");
+  assert.match(css, /#modal-fave\.is-on \{ color: var\(--fave\); \}/, "and red");
+});
+
+test("the Play and Queue buttons are one control in two halves", () => {
+  /* "Play" is shorter than "Queue", so padding alone made the primary action
+     the smaller button. */
+  const block = css.slice(css.indexOf(".action-btn {"));
+  const body = block.slice(0, block.indexOf("}"));
+  assert.match(body, /min-width: \d+px/, "they are the same width whatever is on them");
+  assert.match(body, /min-height: var\(--ctl-h-lg\)/, "and taller than the ordinary control");
 });
 
 test("a track row has the same inset on both sides", () => {

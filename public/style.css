@@ -36,12 +36,14 @@
   --glass-edge:   rgba(255,255,255,.10);
   --danger:       #e06464;
   --danger-soft:  rgba(224,100,100,.14);
+  --fave:         #f2555f;
   --panel-hairline: rgba(255,255,255,.07);
   --shadow-card:  0 2px 6px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.35);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.6);
 
   --ctl-h: 40px;
   --ctl-h-sm: 36px;
+  --ctl-h-lg: 46px;
   --tap-min: 44px;
   --ctl-radius: 999px;
 
@@ -72,6 +74,7 @@
   --panel-hairline: rgba(26,39,64,.12);
   --danger:       #c0392b;
   --danger-soft:  rgba(192,57,43,.10);
+  --fave:         #e0323f;
   --shadow-card:  0 1px 2px rgba(0,0,0,.06), 0 6px 16px rgba(0,0,0,.08);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.18);
 }
@@ -328,6 +331,25 @@ main {
 @media (min-width: 1200px) { .album-grid { grid-template-columns: repeat(8, 1fr); gap: 18px; } }
 @media (max-width: 380px) { .album-grid { grid-template-columns: repeat(2, 1fr); } }
 
+/*
+ * An artist's screen puts the records they made above the ones they turn up
+ * on, so the grid becomes a stack of headed grids. The columns are declared
+ * once and inherited by each section, rather than the breakpoints being
+ * written out a second time for the inner grids to get them wrong later.
+ */
+.album-grid.is-sectioned { display: block; }
+.album-grid.is-sectioned .album-grid-inner {
+  display: grid;
+  grid-template-columns: inherit;
+  gap: inherit;
+}
+.grid-section {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint); text-align: left;
+  margin: 26px 0 10px;
+}
+.grid-section:first-child { margin-top: 0; }
+
 .album {
   display: flex; flex-direction: column; min-width: 0;
   background: none; border: 0; padding: 0; margin: 0;
@@ -481,7 +503,16 @@ main {
 .modal-head > #modal-back,
 .modal-head > #modal-home { grid-column: 1; grid-row: 1; }
 .modal-head > .modal-tabs { grid-column: 2; grid-row: 1; }
-.modal-head > #modal-share { grid-column: 3; grid-row: 1; justify-self: end; }
+.modal-head > #modal-share,
+.modal-head > #modal-fave { grid-column: 3; grid-row: 1; justify-self: end; }
+
+/* Hollow until it is one, then filled and red. The colour is its own token
+   rather than --danger: this is affection, not a warning, and the two want to
+   move independently. */
+#modal-fave.is-on { color: var(--fave); }
+#modal-fave.is-on svg { fill: var(--fave); }
+#modal-fave:active { transform: scale(.88); }
+#modal-fave { transition: color .15s ease, transform .12s ease; }
 
 .modal-tabs { display: flex; gap: 22px; justify-content: center; }
 .modal-tab {
@@ -511,11 +542,25 @@ main {
   line-height: 1.2; word-break: break-word;
 }
 .modal-subtitle { font-size: 15px; color: var(--text-dim); margin-top: 6px; }
+/* Each artist on the line is a way to the rest of their records. Underlined on
+   hover rather than always: a subtitle of permanently underlined names reads as
+   a page of links rather than a line about this album. */
+.artist-link {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+  text-decoration: none; border-bottom: 1px solid transparent;
+}
+.artist-link:hover, .artist-link:focus-visible {
+  color: var(--text); border-bottom-color: currentColor;
+}
 .modal-stats { font-size: 12px; color: var(--text-faint); margin-top: 8px; line-height: 1.6; }
 
-.modal-actions { display: flex; gap: 10px; justify-content: center; margin: 18px 0 6px; }
+.modal-actions { display: flex; gap: 12px; justify-content: center; margin: 18px 0 6px; }
 .action-btn {
-  min-height: var(--ctl-h); padding: 0 20px;
+  /* The pair is one control in two halves, so they are the same size whatever
+     is written on them — "Play" is shorter than "Queue" and padding alone made
+     the primary action the smaller button. */
+  min-width: 132px; min-height: var(--ctl-h-lg); padding: 0 22px;
   border-radius: var(--ctl-radius); border: 1px solid var(--border);
   background: var(--bg-elev); color: var(--text);
   font-size: 14px; font-weight: 600; cursor: pointer;

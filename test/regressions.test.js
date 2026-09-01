@@ -339,6 +339,113 @@ test("a caller arriving during the first discovery waits for its answer", async 
 /*  The API                                                          */
 /* ---------------------------------------------------------------- */
 
+/* ------------------------------------------------------------------ */
+/*  Surviving an update                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The library and the listening in it are the one thing here that cannot be
+ * fetched again, and an update has two ways to reach them: the in-app updater
+ * rewriting the install, and a person removing the container and running the
+ * image again. Both leave DATA_DIR alone — it is a Docker volume, and it is on
+ * the updater's keep list. What is left is the database's own shape, which is
+ * what this covers: opening an OLDER database with today's code has to add
+ * what is missing and change nothing else.
+ */
+test("an older database opens, migrates, and keeps every row it had", () => {
+  const ws = workspace();
+  const Database = require("better-sqlite3");
+  const file = path.join(ws.data, "musicd.db");
+  fs.mkdirSync(ws.data, { recursive: true });
+
+  /* The 0.1.0 shape: no per-track tag columns, no release date, no favourite.
+     Written by hand rather than by checking out the old code, so this keeps
+     working when that code is long gone. */
+  const old = new Database(file);
+  old.exec(`
+    CREATE TABLE albums (
+      id TEXT PRIMARY KEY, dir TEXT NOT NULL, title TEXT NOT NULL,
+      artist TEXT NOT NULL DEFAULT '', sort_title TEXT NOT NULL DEFAULT '',
+      sort_artist TEXT NOT NULL DEFAULT '', year INTEGER,
+      genre TEXT NOT NULL DEFAULT '', track_count INTEGER NOT NULL DEFAULT 0,
+      duration REAL NOT NULL DEFAULT 0, art TEXT NOT NULL DEFAULT '',
+      added_at INTEGER NOT NULL, last_played_at INTEGER,
+      play_count INTEGER NOT NULL DEFAULT 0, present INTEGER NOT NULL DEFAULT 1,
+      seen_at INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE tracks (
+      id TEXT PRIMARY KEY, album_id TEXT NOT NULL, path TEXT NOT NULL,
+      rel TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
+      artist TEXT NOT NULL DEFAULT '', disc INTEGER NOT NULL DEFAULT 1,
+      no INTEGER NOT NULL DEFAULT 0, duration REAL NOT NULL DEFAULT 0,
+      mime TEXT NOT NULL DEFAULT '', bitdepth INTEGER, samplerate INTEGER,
+      size INTEGER NOT NULL DEFAULT 0, mtime INTEGER NOT NULL DEFAULT 0,
+      added_at INTEGER NOT NULL, last_played_at INTEGER,
+      play_count INTEGER NOT NULL DEFAULT 0, present INTEGER NOT NULL DEFAULT 1,
+      seen_at INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE plays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT NOT NULL,
+      album_id TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL);
+  `);
+  old.prepare(`INSERT INTO albums (id, dir, title, artist, added_at, play_count, last_played_at)
+               VALUES ('a:Talk Talk/Spirit of Eden', '/music/x', 'Spirit of Eden',
+                       'Talk Talk', 111, 7, 222)`).run();
+  old.prepare(`INSERT INTO tracks (id, album_id, path, rel, title, added_at, play_count)
+               VALUES ('t:x', 'a:Talk Talk/Spirit of Eden', '/music/x/1.flac', 'x/1.flac',
+                       'The Rainbow', 111, 3)`).run();
+  old.prepare("INSERT INTO plays (kind, ref, album_id, ts) VALUES ('album', 'a:x', 'a:x', 333)").run();
+  old.close();
+
+  const db = dbLib.open(ws.data);
+  try {
+    const album = db.prepare("SELECT * FROM albums").get();
+    assert.strictEqual(album.title, "Spirit of Eden", "the row is still there");
+    assert.strictEqual(album.play_count, 7, "with its plays");
+    assert.strictEqual(album.last_played_at, 222, "and when it was last played");
+    assert.strictEqual(album.added_at, 111, "and when it arrived");
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM plays").get().n, 1,
+      "the history is untouched");
+    assert.strictEqual(db.prepare("SELECT play_count FROM tracks").get().play_count, 3);
+
+    /* Everything added since, present and empty rather than absent. */
+    for (const [col, expected] of [["favourite", 0], ["release_date", ""]]) {
+      assert.strictEqual(album[col], expected, `albums.${col} was added`);
+    }
+    const track = db.prepare("SELECT * FROM tracks").get();
+    for (const col of ["albumartist", "album_tag", "genre", "year", "release_date", "tags_read"]) {
+      assert.ok(col in track, `tracks.${col} was added`);
+    }
+    assert.strictEqual(track.tags_read, 0,
+      "and the old rows are marked as needing a re-read, which is what fills them");
+
+    /* Usable, not merely intact: the new column takes a value straight away. */
+    library.setFavourite(db, album.id, true);
+    assert.deepStrictEqual(library.favourites(db).map(a => a.title), ["Spirit of Eden"]);
+  } finally {
+    db.close();
+  }
+  ws.cleanup();
+});
+
+test("opening the same database twice changes nothing the second time", () => {
+  /* Every restart re-runs the migration. It has to be a no-op on a database
+     that is already current, or an update would be a slow corruption. */
+  const ws = workspace();
+  const first = dbLib.open(ws.data);
+  first.prepare(`INSERT INTO albums (id, dir, title, added_at, favourite)
+                 VALUES ('a:x', '/x', 'X', 1, 999)`).run();
+  first.close();
+
+  const second = dbLib.open(ws.data);
+  try {
+    const row = second.prepare("SELECT * FROM albums").get();
+    assert.strictEqual(row.favourite, 999, "the mark survives the reopen");
+    assert.strictEqual(row.title, "X");
+  } finally {
+    second.close();
+  }
+  ws.cleanup();
+});
+
 test("an artist whose name contains a percent sign has a working page", async () => {
   const ws = workspace();
   const dir = path.join(ws.music, "50% Off", "Discount");
@@ -349,8 +456,10 @@ test("an artist whose name contains a percent sign has a working page", async ()
   const db = await scanned(ws);
   const express = require("express");
   const app = express();
+  /* The same shape as the real route in index.js — this file mounts its own
+     because the point is the route parameter, not the whole server. */
   app.get("/api/artist/:name", (req, res) =>
-    res.json({ artist: req.params.name, albums: library.byArtist(db, req.params.name) }));
+    res.json({ artist: req.params.name, ...library.byArtist(db, req.params.name) }));
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise(done => server.on("listening", done));

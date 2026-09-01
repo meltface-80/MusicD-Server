@@ -118,7 +118,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.1` | that exact version, for pinning |
+| `:0.4.2` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -142,10 +142,12 @@ changes on `main`, so the release notes and the images always agree.
 
 ## The home screen
 
-Six rows, each one a carousel that opens into a full grid when you tap its title.
+Six rows, each one a carousel that opens into a full grid when you tap its title
+— seven once you have marked a favourite.
 
 | Row | What is in it |
 | --- | --- |
+| **Favourites** | Albums you marked with the heart, most recently marked first. Absent, not empty, until there is one. |
 | **Library** | Every album, by artist and then by year — the shelf order. |
 | **Random albums** | A fresh handful every time the screen loads. |
 | **Recently added** | Newest first, by the date the scan first saw the folder. |
@@ -181,6 +183,15 @@ Play nothing and the row says so rather than sitting there empty.
 | Date added to the library | yes | yes |
 | Date last played | yes | yes |
 | Number of plays | yes | yes |
+| Marked a favourite | yes | — |
+
+A favourite is the one thing in the library you typed rather than the files, so
+it is the one thing a rescan could destroy — and does not: nothing in the scan's
+upserts mentions it, the same way the date an album arrived is left alone. It
+survives an update too, by both routes. The database lives in `DATA_DIR`, which
+is a Docker volume the container's own lifetime does not touch and which the
+in-app updater is not allowed to write to; and opening an older database adds
+what is missing and changes nothing else.
 
 A play is recorded when a track has actually been played — half way through, or
 four minutes in, whichever comes first. Skipping past a track does not count it,
@@ -235,6 +246,12 @@ every file tagged disc 1. Words that only begin the same way — `Discovery`,
   2025*, because a month with no day would mean inventing one. A compilation
   whose tracks each carry their own original release date has no single date,
   and gets the year.
+  Each artist named on an album is a link to their own screen: the records they
+  made, and then the ones they only turn up on — a compilation, a soundtrack, a
+  guest verse. A line naming several artists becomes several links, split on a
+  semicolon or a spaced slash and nothing else: an ampersand and a comma both
+  live inside real names, and splitting on them turns Earth, Wind & Fire into
+  three artists who have never recorded anything.
 - **Artist** is worked out down a ladder: the album-artist tag when the folder
   agrees about it, the one most tracks carry when a few disagree, then the track
   artist, then Various Artists when they genuinely differ — and finally the

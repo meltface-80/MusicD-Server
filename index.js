@@ -207,11 +207,21 @@ function bounded(value, fallback, max) {
   return Math.min(n, max);
 }
 
+/* Favourites sit above everything else when there are any, and are ABSENT
+   rather than empty when there are none — a row headed "Favourites" over the
+   words "nothing here yet" is an instruction to go and use a feature, which is
+   not what a home screen is for. Every other row describes the library and is
+   worth a place even while empty. */
+function favouriteRow(n) {
+  const albums = library.favourites(db, n);
+  return albums.length ? [{ key: "favourites", title: "Favourites", albums }] : [];
+}
+
 app.get("/api/home", api((req, res) => {
   const n = bounded(req.query.limit, 24, 60);
   const p = picks.get();
   res.json({
-    rows: [
+    rows: favouriteRow(n).concat([
       { key: "library",  title: "Library",                albums: library.library(db, n) },
       { key: "random",   title: "Random albums",          albums: library.random(db, n) },
       { key: "added",    title: "Recently added",         albums: library.recentlyAdded(db, n) },
@@ -219,12 +229,13 @@ app.get("/api/home", api((req, res) => {
       { key: "unplayed", title: "Not played in 6 months", albums: library.notPlayedIn6Months(db, n),
         empty: "Nothing yet — this row fills once albums have gone six months unplayed." },
       { key: "picks",    title: "Smart Picks",            albums: p.picks, empty: p.note }
-    ],
+    ]),
     stats: library.stats(db)
   });
 }));
 
 const ROWS = {
+  favourites: (n, o) => library.favourites(db, n, o),
   library:  (n, o) => library.library(db, n, o),
   random:   (n)    => library.random(db, n),
   added:    (n, o) => library.recentlyAdded(db, n, o),
@@ -251,13 +262,29 @@ app.get("/api/album/:id", api((req, res) => {
 
 app.get("/api/search", api((req, res) => res.json(library.search(db, req.query.q))));
 app.get("/api/artists", api((req, res) => res.json({ artists: library.artists(db) })));
+/*
+ * Marking an album a favourite.
+ *
+ * The only thing in the library the user types rather than the files, so it is
+ * the only thing a rescan could destroy and does not — nothing in the scan's
+ * upserts mentions the column, the same way added_at is left alone.
+ */
+app.post("/api/favourite", api((req, res) => {
+  const { album, favourite } = req.body || {};
+  const id = decodeId(album);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  const result = library.setFavourite(db, id, !!favourite);
+  if (!result) return res.status(404).json({ error: "No such album." });
+  res.json({ ...result, count: library.favouriteCount(db) });
+}));
+
 app.get("/api/artist/:name", api((req, res) => {
   /* Express has already decoded the route parameter. Decoding it a second time
      turns an artist with a percent sign in their name — "50% Off", or a folder
      name that literally contains "%20" — into a URIError and a 500, which put
      that artist's page permanently out of reach. */
   const name = req.params.name;
-  res.json({ artist: name, albums: library.byArtist(db, name) });
+  res.json({ artist: name, ...library.byArtist(db, name) });
 }));
 app.get("/api/picks", api((req, res) => res.json(picks.get())));
 
