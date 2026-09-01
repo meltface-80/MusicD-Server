@@ -341,6 +341,55 @@ test("the card is a fixed 1200x600, and says so once", () => {
   assert.match(css, /\.share-frame \{[^}]*aspect-ratio: 2 \/ 1/s);
 });
 
+test("a full release date is said in full, and anything less says the year", () => {
+  const { ShareCard } = require(path.join(PUBLIC, "sharecard.js"));
+  const line = (d, y) => ShareCard.releaseLine(d, y);
+
+  assert.strictEqual(line("2025-09-23", 2025), "23rd September 2025");
+  assert.strictEqual(line("1988-09-16", 1988), "16th September 1988");
+  /* A month with no day is not a date. Saying it in full would mean inventing
+     a day, so it falls back with the word in front — a bare number on its own
+     line reads as part of the title. */
+  assert.strictEqual(line("2025-09", 2025), "Released 2025");
+  assert.strictEqual(line("2026", 2026), "Released 2026");
+  assert.strictEqual(line("", 2026), "Released 2026");
+  assert.strictEqual(line("", null), "", "and an album with no year says nothing");
+  /* The date alone is enough — an album row is not required to have both. */
+  assert.strictEqual(line("2019-04-01", null), "1st April 2019");
+  assert.strictEqual(line("2019", null), "Released 2019");
+});
+
+test("the ordinal is right on the days that catch people out", () => {
+  const { ShareCard } = require(path.join(PUBLIC, "sharecard.js"));
+  const day = (n) => ShareCard.releaseLine(`2025-01-${String(n).padStart(2, "0")}`, 2025).split(" ")[0];
+  assert.strictEqual(day(1), "1st");
+  assert.strictEqual(day(2), "2nd");
+  assert.strictEqual(day(3), "3rd");
+  assert.strictEqual(day(4), "4th");
+  assert.strictEqual(day(5), "5th", "and every plain day in between");
+  /* The three a naive rule gets wrong: eleventh, twelfth, thirteenth. */
+  assert.strictEqual(day(11), "11th");
+  assert.strictEqual(day(12), "12th");
+  assert.strictEqual(day(13), "13th");
+  assert.strictEqual(day(21), "21st");
+  assert.strictEqual(day(22), "22nd");
+  assert.strictEqual(day(23), "23rd");
+  assert.strictEqual(day(31), "31st");
+});
+
+test("the date line never outgrows the artist line under it", () => {
+  /* A long artist name steps that line down. The date following it down is
+     what keeps the two reading as a heading and its subject rather than the
+     other way round. */
+  const target = Number(/const DATE_SIZE = (\d+);/.exec(sharecard)[1]);
+  const artistSizes = JSON.parse(/const ARTIST_SIZES = (\[[^\]]+\])/.exec(sharecard)[1]);
+  assert.ok(target > 26, "it is bigger than the 26 it was — was " + target);
+  assert.ok(target <= artistSizes[0],
+    `${target} is larger than the artist line ever gets (${artistSizes[0]})`);
+  assert.match(sharecard, /Math\.min\(DATE_SIZE, artist\.size\)/,
+    "and it is capped at the size the artist line actually chose");
+});
+
 test("the share overlay has every part the controller writes into", () => {
   for (const id of ["share-overlay", "share-frame", "share-actions", "share-hint", "share-err"]) {
     assert.ok(htmlIds.has(id), id + " is in the markup");
@@ -501,16 +550,54 @@ test("Now playing never scrolls — the artwork absorbs the leftover height", ()
     "the art has no fixed size to fight the available height");
 });
 
-test("the artwork is full-bleed and fades into the controls", () => {
-  /* The cover is the screen here, not a framed picture on it — so no radius,
-     no shadow, and the bottom fades so the title sits in the tail of the image
-     rather than under a hard edge. */
+test("Now playing shows the whole cover, never a cropped one", () => {
+  /* It used to fill the box and crop, full-bleed to both screen edges. That
+     cost the sides of every square sleeve on a tall phone — and a sleeve is a
+     designed object, so the half that got cut was usually the half with the
+     artist's name on it. */
   const art = css.slice(css.indexOf(".np-art img {"));
   const block = art.slice(0, art.indexOf("}"));
-  assert.match(block, /object-fit: cover/);
+  assert.match(block, /object-fit: contain/, "the cover fits rather than fills");
+  assert.ok(!/object-fit: cover/.test(block), "nothing crops it");
+  /* The element fills the box and the picture fits inside it, which is right
+     for every shape a sleeve comes in and also GROWS a small file to the
+     screen — sizing the element itself would hug the art exactly but can only
+     ever shrink an image. */
+  assert.match(block, /width: 100%; height: 100%/, "it fills, and contain fits");
+  assert.match(block, /mask-image: none/, "and the fade goes with the crop it hid");
+  /* Nothing for a frame to hug: the box is not the picture's shape, so a
+     radius or a shadow would outline the box and float in the empty band. */
   assert.match(block, /border-radius: 0/);
-  assert.match(block, /mask-image: linear-gradient/);
-  assert.match(css, /\.np-art \{[^}]*margin: 0 -16px/s, "it cancels the panel gutter");
+  assert.match(block, /box-shadow: none/);
+  assert.ok(!/\.np-art \{[^}]*margin: 0 -16px/s.test(css), "and the bleed goes too");
+});
+
+test("the panel's top bar reaches the top, and nothing scrolls above it", () => {
+  /* A sticky element cannot rise above its containing block's content box. While
+     the panel held the safe-area inset as padding, the head stuck BELOW it and
+     left a band at the top of the screen with nothing in front of it — the
+     artwork scrolled past in full view up there. The inset belongs to the head. */
+  const head = css.slice(css.indexOf(".modal-head {"));
+  const block = head.slice(0, head.indexOf("}"));
+  assert.match(block, /position: sticky; top: 0/);
+  assert.match(block, /padding: calc\(env\(safe-area-inset-top\)/,
+    "the head carries the inset");
+  const panel = css.slice(css.indexOf(".modal-panel {"));
+  const panelBlock = panel.slice(0, panel.indexOf("}"));
+  assert.ok(!/padding: calc\(env\(safe-area-inset-top\)/.test(panelBlock),
+    "and the panel no longer does");
+  /* Full width, or the cover shows down either side of it. */
+  assert.match(block, /margin: 0 -16px/);
+});
+
+test("the panel's top bar is translucent, like the app's own", () => {
+  /* Over an unscrolled screen --bg-veil composites to exactly --bg and there is
+     no step; once the screen moves, the cover passing underneath tints it
+     rather than vanishing under a hard edge. */
+  const head = css.slice(css.indexOf(".modal-head {"));
+  const block = head.slice(0, head.indexOf("}"));
+  assert.match(block, /background: var\(--bg-veil\)/);
+  assert.ok(!/background: var\(--bg\)/.test(block), "not the opaque ground");
 });
 
 test("the panel knows which face it is showing", () => {
@@ -536,7 +623,6 @@ test("Now playing is a screen at every width, never a floating dialog", () => {
 test("the card's type is MusicD Remote's, not a second scale", () => {
   /* Sizes and spacing lifted from the reference so a card from either app is
      recognisably the same object. */
-  assert.match(sharecard, /const YEAR_SIZE = 26;/);
   assert.match(sharecard, /const TITLE_SIZES = \[56, 48, 42, 36, 31, 27\];/);
   assert.match(sharecard, /const ARTIST_SIZES = \[37, 32, 28, 24, 21\];/);
   assert.match(sharecard, /const TITLE_LH = 68 \/ 56;/);
@@ -558,9 +644,11 @@ test("the wordmark is the real mark, drawn from the traced SVG", () => {
   assert.match(svg, /<path fill="#ffffff"/, "white by default");
   assert.ok(!/<rect[^>]*fill="#0|background/.test(svg), "and carries no background of its own");
   assert.match(sharecard, /WORDMARK_URL = "\/icons\/wordmark\.svg"/);
-  /* Bigger than the reference's 110px: this mark carries the waveform too. */
+  /* Still larger than the reference's 110px — this mark carries the waveform
+     too — but a third smaller than it first shipped at, where it dominated the
+     card it was supposed to sign. */
   const width = Number(/WORDMARK_W = (\d+)/.exec(sharecard)[1]);
-  assert.ok(width >= 200, "the mark is drawn large — was " + width);
+  assert.ok(width > 110 && width < 200, "the mark signs the card — was " + width);
 });
 
 test("the text knows the wordmark is under it", () => {

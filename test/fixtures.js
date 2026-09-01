@@ -31,7 +31,7 @@ function infoField(id, value) {
    block carrying the tags. Small enough that a whole fixture library is a few
    kilobytes, real enough that music-metadata parses it like any other file. */
 function wav({ seconds = 2, title = "", artist = "", album = "", albumArtist = "",
-               year = "", genre = "", track = "" } = {}) {
+               year = "", date = "", genre = "", track = "" } = {}) {
   const rate = 8000;
   const data = Buffer.alloc(rate * seconds, 128);      // 8-bit silence is 0x80
 
@@ -48,7 +48,9 @@ function wav({ seconds = 2, title = "", artist = "", album = "", albumArtist = "
   if (artist)      info.push(infoField("IART", artist));
   if (album)       info.push(infoField("IPRD", album));
   if (albumArtist) info.push(infoField("IAAR", albumArtist));
-  if (year)        info.push(infoField("ICRD", String(year)));
+  /* ICRD is the creation date, which is where a full release date goes; a
+     year on its own is the same field with less in it. */
+  if (date || year) info.push(infoField("ICRD", String(date || year)));
   if (genre)       info.push(infoField("IGNR", genre));
   if (track)       info.push(infoField("ITRK", String(track)));
 

@@ -118,7 +118,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.0` | that exact version, for pinning |
+| `:0.4.1` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -229,6 +229,12 @@ every file tagged disc 1. Words that only begin the same way — `Discovery`,
   is no tag at all, the folder's own name is used — with a leading `01 - ` index
   stripped, and a trailing year read as the year rather than left in the title,
   so `Deceiver (2021)` is *Deceiver*, from 2021.
+- **Released** is the date tag when every file that carries one says the same
+  thing, kept only as precisely as the tag gives it. A full date is said in full
+  on the share card — *23rd September 2025* — and anything less says *Released
+  2025*, because a month with no day would mean inventing one. A compilation
+  whose tracks each carry their own original release date has no single date,
+  and gets the year.
 - **Artist** is worked out down a ladder: the album-artist tag when the folder
   agrees about it, the one most tracks carry when a few disagree, then the track
   artist, then Various Artists when they genuinely differ — and finally the

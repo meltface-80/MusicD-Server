@@ -8,7 +8,7 @@
  *   +--------------------------------------------------------+
  *   |  the cover again, blown up and softened, as the ground  |
  *   |    +------------------------------------------------+  |
- *   |    | +--------+   1988                              |  |
+ *   |    | +--------+   16TH SEPTEMBER 1988                |  |
  *   |    | | cover  |   Spirit of Eden                    |  |
  *   |    | | 424px  |   by Talk Talk                      |  |
  *   |    | +--------+                       [ MusicD ]    |  |
@@ -57,9 +57,11 @@ const ShareCard = (() => {
      recognisably the same object. Title and artist step DOWN through their
      lists until the text fits rather than being ellipsed at one size — a long
      album name gets smaller before it gets cut. */
-  const YEAR_SIZE = 26;
-  const YEAR_H = YEAR_SIZE + 4;
-  const YEAR_GAP = 24;
+  /* The date line. Bigger than it was, and never bigger than the artist line
+     under it — which steps down for a long name, so the cap is applied at the
+     size actually chosen rather than once here. */
+  const DATE_SIZE = 30;
+  const DATE_GAP = 24;
   const TITLE_SIZES = [56, 48, 42, 36, 31, 27];
   const TITLE_LH = 68 / 56;
   const ARTIST_SIZES = [37, 32, 28, 24, 21];
@@ -67,8 +69,38 @@ const ShareCard = (() => {
   const BLOCK_GAP = 18;
 
   const WORDMARK_URL = "/icons/wordmark.svg";
-  const WORDMARK_W = 230;                 // the mark carries the waveform too
+  const WORDMARK_W = 161;                 // the mark carries the waveform too
   const WORDMARK_PAD = 34;
+
+  const MONTHS = ["January", "February", "March", "April", "May", "June",
+                 "July", "August", "September", "October", "November", "December"];
+
+  /* 1st, 2nd, 3rd, 4th — and 11th, 12th, 13th, which are the ones a naive
+     rule gets wrong. */
+  function ordinal(day) {
+    const teen = day % 100;
+    if (teen >= 11 && teen <= 13) return day + "th";
+    return day + (["th", "st", "nd", "rd"][day % 10] || "th");
+  }
+
+  /*
+   * What the card says about when the album came out.
+   *
+   * A full date is worth saying in full — "23rd September 2025" reads like a
+   * record sleeve. Anything less precise is not a date, and pretending it is
+   * would mean inventing a day; those get the year, with the word in front so
+   * a bare number is never left to be read as part of the title.
+   */
+  function releaseLine(releaseDate, year) {
+    const iso = String(releaseDate || "");
+    const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (full) {
+      const [, y, m, d] = full;
+      return `${ordinal(Number(d))} ${MONTHS[Number(m) - 1]} ${y}`;
+    }
+    const known = year || (/^(\d{4})/.exec(iso) || [])[1];
+    return known ? "Released " + known : "";
+  }
 
   /* roundRect() is still missing in enough shipping browsers to be worth not
      depending on. */
@@ -144,6 +176,16 @@ const ShareCard = (() => {
     }
     ctx.font = `${weight} ${size}px ${FONT}`;
     return { lines, size, lh: Math.round(size * lhRatio) };
+  }
+
+  /* The date is one line and is never wrapped or cut: it steps down until it
+     fits the column, and stops at a floor rather than shrinking away. */
+  function fitDate(ctx, text, cap) {
+    for (let size = cap; size >= 18; size -= 2) {
+      ctx.font = `600 ${size}px ${FONT}`;
+      if (ctx.measureText(text.toUpperCase()).width <= TEXT_W) return size;
+    }
+    return 18;
   }
 
   function drawCover(ctx, img, dx, dy, dw, dh) {
@@ -245,7 +287,7 @@ const ShareCard = (() => {
     ctx.restore();
 
     /* --- The text column --- */
-    const yearText = data.year ? String(data.year) : "";
+    const dateText = releaseLine(data.releaseDate, data.year);
     const artistText = data.artist ? "by " + data.artist : "";
 
     /* The wordmark sits at the bottom of this same column, so the text has to
@@ -260,12 +302,19 @@ const ShareCard = (() => {
     /* Step title and artist DOWN TOGETHER, so their relative scale holds, until
        the block fits the height it has. The smallest pair is used if even that
        overflows — at which point wrap() has already ellipsed the last line. */
-    let title = null, artist = null, blockH = 0;
+    let title = null, artist = null, dateSize = 0, dateH = 0, blockH = 0;
     for (let step = 0; step < TITLE_SIZES.length; step++) {
       title = fitText(ctx, data.title || "", TEXT_W, 4, 700, [TITLE_SIZES[step]], TITLE_LH);
       artist = fitText(ctx, artistText, TEXT_W, 4, 400,
                        [ARTIST_SIZES[Math.min(step, ARTIST_SIZES.length - 1)]], ARTIST_LH);
-      blockH = (yearText ? YEAR_H + YEAR_GAP : 0) +
+      /* Never larger than the artist line beneath it — a long artist name
+         steps that line down, and the date following it down is what keeps
+         the two reading as a heading and its subject rather than the other
+         way round. A long date ("23rd September 2025") is stepped down again
+         if it will not fit the column. */
+      dateSize = dateText ? fitDate(ctx, dateText, Math.min(DATE_SIZE, artist.size)) : 0;
+      dateH = dateSize ? dateSize + 4 : 0;
+      blockH = (dateH ? dateH + DATE_GAP : 0) +
                title.lines.length * title.lh +
                (artist.lines.length ? BLOCK_GAP + artist.lines.length * artist.lh : 0);
       if (blockH <= availH) break;
@@ -277,14 +326,14 @@ const ShareCard = (() => {
        sits a little above the mathematical one. */
     let y = availTop + Math.max(0, Math.round((availH - blockH) / 2) - 6);
 
-    if (yearText) {
-      ctx.font = `600 ${YEAR_SIZE}px ${FONT}`;
+    if (dateH) {
+      ctx.font = `600 ${dateSize}px ${FONT}`;
       /* Solved against the worst case the pane can present: a white sleeve
          under the scrim and the pane, which flattens to about rgb(83,85,88).
          A dimmer grey fails even the large-text contrast floor there. */
       ctx.fillStyle = "#c2cad3";
-      ctx.fillText(yearText.toUpperCase(), TEXT_X, y);
-      y += YEAR_H + YEAR_GAP;
+      ctx.fillText(dateText.toUpperCase(), TEXT_X, y);
+      y += dateH + DATE_GAP;
     }
 
     ctx.font = `700 ${title.size}px ${FONT}`;
@@ -309,7 +358,10 @@ const ShareCard = (() => {
     });
   }
 
-  return { render, CARD_W, CARD_H, WORDMARK_URL };
+  /* releaseLine is exported for the suite: it is the one piece of this file
+     that is pure arithmetic on a string, and it is the piece most likely to be
+     wrong on a date nobody thought to try. */
+  return { render, releaseLine, CARD_W, CARD_H, WORDMARK_URL };
 })();
 
 /* Node's test runner loads this file to check the layout arithmetic; a browser

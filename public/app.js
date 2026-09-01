@@ -1108,7 +1108,8 @@ async function openShareCard() {
       coverUrl: album.art || "",
       title: album.title,
       artist: album.artist,
-      year: album.year
+      year: album.year,
+      releaseDate: album.releaseDate
     });
     const dataUrl = await blobToDataUrl(blob);
     const img = el("img");
