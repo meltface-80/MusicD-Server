@@ -182,3 +182,81 @@ test("the screen title gives way to the search field rather than sharing the row
   assert.match(css, /\.topbar-row\.searching \.screen-title \{ display: none; \}/);
   assert.match(js, /classList\.add\("searching"\)/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  Share card                                                         */
+/* ------------------------------------------------------------------ */
+
+const sharecard = fs.readFileSync(path.join(PUBLIC, "sharecard.js"), "utf8");
+
+test("the share card renderer is loaded before the app that calls it", () => {
+  const card = html.indexOf('src="/sharecard.js"');
+  const app = html.indexOf('src="/app.js"');
+  assert.ok(card > -1 && app > -1, "both scripts are on the page");
+  assert.ok(card < app, "ShareCard has to exist by the time app.js runs");
+});
+
+test("the card is a fixed 1200x600, and says so once", () => {
+  const { ShareCard } = require(path.join(PUBLIC, "sharecard.js"));
+  assert.strictEqual(ShareCard.CARD_W, 1200);
+  assert.strictEqual(ShareCard.CARD_H, 600);
+  /* The frame in the panel holds that shape while the render is in flight, so
+     the dialog does not jump when the image lands. */
+  assert.match(css, /\.share-frame \{[^}]*aspect-ratio: 2 \/ 1/s);
+});
+
+test("the share overlay has every part the controller writes into", () => {
+  for (const id of ["share-overlay", "share-frame", "share-actions", "share-hint", "share-err"]) {
+    assert.ok(htmlIds.has(id), id + " is in the markup");
+  }
+  assert.ok(htmlIds.has("modal-share"), "and the button that opens it");
+});
+
+test("the card is drawn from the album row alone", () => {
+  /* No lookup, no review, no label — the same rule the rest of the app
+     follows, and what lets the card be drawn with the network down. */
+  const render = sharecard.slice(sharecard.indexOf("async function render"));
+  for (const field of ["data.coverUrl", "data.title", "data.artist", "data.year", "data.meta"]) {
+    assert.ok(render.includes(field), field + " is used");
+  }
+  assert.ok(!/fetch\(/.test(sharecard), "the renderer makes no requests of its own");
+});
+
+test("share actions are offered only where the browser can perform them", () => {
+  /* navigator.share with files and ClipboardItem are both patchy; a button
+     that throws when tapped is worse than one that was never drawn. */
+  assert.match(js, /navigator\.canShare\(\{ files:/);
+  assert.match(js, /typeof window\.ClipboardItem !== "undefined"/);
+  assert.match(js, /download\.download = fileName/, "Download is always available");
+});
+
+/* ------------------------------------------------------------------ */
+/*  Navigation                                                         */
+/* ------------------------------------------------------------------ */
+
+test("Back is one path: nothing closes itself", () => {
+  /* Every layer is closed by the popstate handler, so the phone's Back gesture
+     and the on-screen control cannot drift apart. */
+  assert.match(js, /window\.addEventListener\("popstate"/);
+  assert.match(js, /function navOpen\(name, close\)/);
+  assert.match(js, /function navBack\(\)/);
+  assert.match(js, /history\.pushState\(\{ musicdDepth: nav\.length \}/);
+});
+
+test("popstate unwinds to the depth it was given, not one layer per event", () => {
+  /* A held Back, or a jump of several entries, arrives as ONE popstate. */
+  const handler = js.slice(js.indexOf('addEventListener("popstate"'));
+  assert.match(handler.slice(0, 600), /while \(nav\.length > depth\)/);
+});
+
+test("every overlay registers itself with the navigation stack", () => {
+  for (const layer of ['navOpen("modal"', 'navOpen("sheet"', 'navOpen("share"', 'navOpen("view"']) {
+    assert.ok(js.includes(layer), layer + ") is on the stack");
+  }
+});
+
+test("Home unwinds the whole stack rather than stepping back one screen", () => {
+  assert.match(js, /function navReset\(\)/);
+  assert.match(js, /history\.go\(-nav\.length\)/);
+  assert.match(js, /\$\("modal-home"\)\.addEventListener\("click", navReset\)/);
+});

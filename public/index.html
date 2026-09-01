@@ -202,8 +202,13 @@
           <button class="modal-tab is-active" type="button" data-tab="np">Now playing</button>
           <button class="modal-tab" type="button" data-tab="queue">Queue</button>
         </div>
-        <!-- Keeps the tabs centred; the album face has nothing to put here. -->
-        <span class="modal-head-spacer" aria-hidden="true"></span>
+        <button class="icon-btn" id="modal-share" type="button" aria-label="Share card" title="Share card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+          </svg>
+        </button>
       </div>
 
       <div class="modal-body">
@@ -310,9 +315,29 @@
     </div>
   </div>
 
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Share card                                                       -->
+  <!-- ---------------------------------------------------------------- -->
+  <div id="share-overlay" class="share-overlay hidden" role="dialog" aria-modal="true" aria-label="Share card">
+    <div class="share-backdrop" data-share-close></div>
+    <div class="share-panel">
+      <button class="share-close icon-btn" type="button" data-share-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="share-frame" id="share-frame">
+        <div class="share-placeholder"><div class="share-spinner"></div><div>Generating card…</div></div>
+      </div>
+      <div class="share-actions" id="share-actions"></div>
+      <p class="share-hint" id="share-hint"></p>
+      <p class="share-err" id="share-err"></p>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>
 
+<script src="/sharecard.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
