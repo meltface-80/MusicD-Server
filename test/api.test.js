@@ -354,3 +354,32 @@ test("status names the build, not just the version", async () => {
       key + " is always present, empty on a local build");
   }
 });
+
+test("the app shell is revalidated, never served blind from cache", async () => {
+  /* A flat max-age here meant that for an hour after an update the browser
+     kept using the OLD index.html and app.js without asking — a container that
+     had genuinely updated showed the previous interface, and the only symptom
+     was "I updated and nothing changed". */
+  for (const file of ["/", "/app.js", "/style.css", "/sharecard.js"]) {
+    const res = await request(file);
+    assert.strictEqual(res.status, 200, file);
+    assert.strictEqual(res.headers["cache-control"], "no-cache", file + " must revalidate");
+    assert.ok(res.headers.etag, file + " carries an ETag, so revalidating costs a 304");
+  }
+  /* The deep-link fallback is the same document and follows the same rule. */
+  const deep = await request("/album/anything");
+  assert.strictEqual(deep.headers["cache-control"], "no-cache");
+});
+
+test("an unchanged shell file revalidates to a 304, not a re-download", async () => {
+  const first = await request("/app.js");
+  const again = await request("/app.js", { headers: { "If-None-Match": first.headers.etag } });
+  assert.strictEqual(again.status, 304, "so no-cache costs a round trip, not a payload");
+  assert.strictEqual(again.body.length, 0);
+});
+
+test("icons keep a long cache — they are what does not change between versions", async () => {
+  const res = await request("/icons/favicon.svg");
+  assert.strictEqual(res.status, 200);
+  assert.match(res.headers["cache-control"], /max-age=\d{5,}/);
+});

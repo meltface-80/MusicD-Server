@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+- **The app shell is no longer cached for an hour.** `index.html`, `app.js` and
+  `style.css` were served with `max-age=3600`, so for an hour after updating the
+  container the browser kept using the previous interface without ever asking
+  the server — an update that had genuinely arrived looked like one that had
+  shipped nothing, and a home-screen shortcut made it worse. They now revalidate
+  on every load; the ETag makes an unchanged file a 304 with no body. Icons keep
+  a long cache, being the one thing that does not change between versions.
+
 ## 0.2.0
 
 ### Interface — parity with MusicD Remote

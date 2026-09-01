@@ -380,14 +380,43 @@ app.get("/art/:token", (req, res) => {
     .pipe(res);
 });
 
-app.use(express.static(PUBLIC_DIR, { maxAge: "1h", index: "index.html" }));
+/*
+ * The app shell is never cached without revalidating.
+ *
+ * This used to be a flat `maxAge: "1h"`, which meant that for an hour after an
+ * update the browser kept serving the OLD index.html, app.js and style.css
+ * without ever asking the server — so a container that had genuinely been
+ * updated showed the previous interface, and the only symptom was "I updated
+ * and nothing changed". On a home-screen shortcut it is worse, because the
+ * shortcut holds its own cache.
+ *
+ * `no-cache` does not mean "do not store": it means "ask before reusing".
+ * express.static still sends an ETag, so an unchanged file costs a 304 with no
+ * body — nothing on a LAN, and correctness in exchange.
+ *
+ * Icons keep a long life. They are the one thing here that does not change
+ * between versions, and they are fetched on every cold start.
+ */
+const SHELL = /\.(html|js|css)$/i;
+
+app.use(express.static(PUBLIC_DIR, {
+  index: "index.html",
+  etag: true,
+  setHeaders(res, filePath) {
+    res.setHeader("Cache-Control", SHELL.test(filePath) ? "no-cache" : "public, max-age=604800");
+  }
+}));
 
 /* An unknown /api path is a mistake in a caller, and answering it with the web
    app means the caller gets HTML, a 200, and a JSON parse error somewhere far
    from the cause. Everything else falls through to the app, which is what makes
    a deep link work. */
 app.use("/api", (req, res) => res.status(404).json({ error: "No such endpoint: " + req.path }));
-app.get("*", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("*", (req, res) => {
+  /* Same rule for the deep-link fallback — it is the same document. */
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
 
 /* ------------------------------------------------------------------ */
 /*  Start                                                              */
