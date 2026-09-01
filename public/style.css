@@ -120,7 +120,6 @@ button, input { font-family: inherit; }
 .icon-btn svg { width: 22px; height: 22px; }
 .icon-btn:hover { color: var(--text); background: var(--bg-elev-2); }
 .icon-btn:active { transform: scale(.96); }
-.zone-btn.is-set { color: var(--accent-text); }
 
 .topbar-search { display: flex; align-items: center; flex: 0 0 auto; }
 /* The field takes the row when it opens. Sharing it with the screen title left
@@ -180,7 +179,11 @@ button, input { font-family: inherit; }
   height: 56px; padding: 0 10px 0 18px;
   border-bottom: 1px solid var(--border);
 }
-.menu-brand { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+/* The real mark, at the size the header has room for. The SVG paints itself
+   white, which is what the dark menu wants; the light theme needs it inverted
+   because the mark carries no colour of its own to flip. */
+.menu-brand { display: block; height: 26px; width: auto; }
+[data-theme="light"] .menu-brand { filter: invert(1); }
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   width: 100%; min-height: var(--tap-min);
@@ -820,6 +823,11 @@ main {
 .mt-text { min-width: 0; display: flex; flex-direction: column; }
 .mt-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mt-artist { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Nothing playing. The bar keeps its place and its room button; only the
+   parts that describe a track step back. */
+.mini-transport.is-idle .mt-title { color: var(--text-dim); font-weight: 500; }
+.mini-transport.is-idle .mt-progress { opacity: 0; }
 
 .mt-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .mt-btn {

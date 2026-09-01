@@ -481,3 +481,40 @@ test("the worker carries the version, so a browser can see it changed", () => {
   assert.match(server, /replace\("__BUILD_VERSION__", BUILD\.version\)/);
   assert.match(server, /Cache-Control", "no-cache"/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  The top bar, and where the room picker lives                       */
+/* ------------------------------------------------------------------ */
+
+test("the top bar is the menu and the search, and nothing else", () => {
+  const row = html.slice(html.indexOf('class="topbar-row"'), html.indexOf('id="scan-progress-bar"'));
+  const buttons = [...row.matchAll(/<button id="([^"]+)"/g)].map(m => m[1]);
+  /* topbar-back is hidden on Home and appears on the screens below it. */
+  assert.deepStrictEqual(buttons, ["menu-toggle", "topbar-back", "search-open", "search-clear"]);
+  assert.ok(!row.includes("zone-btn"), "the room picker has left the corner");
+});
+
+test("Home does not name itself in the bar", () => {
+  assert.match(html, /<h1 id="screen-title" class="screen-title"><\/h1>/);
+  assert.match(js, /showView\("home", ""\)/);
+  assert.ok(!/textContent = title \|\| "MusicD"/.test(js));
+});
+
+test("the mini bar is always on screen, because it is the only room picker", () => {
+  /* Hiding it when nothing is playing would leave a fresh install with nowhere
+     to choose a speaker from, now that the top bar has no button for it. */
+  const sync = js.slice(js.indexOf("function syncMini()"));
+  const body = sync.slice(0, sync.indexOf("\n}"));
+  assert.match(body, /classList\.toggle\("hidden", onNpFace\)/);
+  assert.ok(!/!playing/.test(body), "playing state no longer decides whether the bar exists");
+  /* And it says something useful when idle. */
+  assert.match(js, /"Nothing playing" : "Choose a room"/);
+});
+
+test("the side menu carries the real mark", () => {
+  assert.match(html, /<img class="menu-brand" src="\/icons\/wordmark\.svg"/);
+  assert.match(css, /\.menu-brand \{[^}]*height: 26px/s, "sized to the header, not redrawn");
+  /* The mark paints itself white and carries no colour to flip, so the light
+     theme has to invert it. */
+  assert.match(css, /\[data-theme="light"\] \.menu-brand \{ filter: invert\(1\); \}/);
+});
