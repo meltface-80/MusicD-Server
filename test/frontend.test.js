@@ -837,6 +837,29 @@ test("the heart is hollow until it is one", () => {
   assert.match(css, /#modal-fave\.is-on \{ color: var\(--fave\); \}/, "and red");
 });
 
+test("a long press selects nothing, except on the share card", () => {
+  /* A long press on a phone is how you scroll from a standstill and how you
+     hesitate before tapping. On a web page it also selects text, so resting a
+     thumb on a menu item raised iOS's selection handles and its Copy / Look Up
+     / Translate bar over the app. This is a remote control: every word on it is
+     a label on a control. */
+  assert.match(css, /^\* \{[^}]*user-select: none/ms, "nothing is selectable by default");
+  assert.match(css, /^\* \{[^}]*-webkit-touch-callout: none/ms,
+    "and the callout goes with it — that is the half that raises iOS's own sheet");
+
+  /* Given back where there is something worth taking away. The card is an image
+     the whole screen exists to give away, and the hint under it says to long-
+     press it. */
+  const frame = css.slice(css.indexOf(".share-frame img {"));
+  const block = frame.slice(0, frame.indexOf("}"));
+  assert.match(block, /-webkit-touch-callout: default/);
+  assert.match(block, /user-select: auto/);
+
+  /* And a field is still a field. */
+  const field = css.slice(css.indexOf("input, textarea {"));
+  assert.match(field.slice(0, field.indexOf("}")), /user-select: text/);
+});
+
 test("the Play and Queue buttons are one control in two halves", () => {
   /* "Play" is shorter than "Queue", so padding alone made the primary action
      the smaller button. */
