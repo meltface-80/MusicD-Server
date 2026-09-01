@@ -334,3 +334,14 @@ test("every documented run command pulls", () => {
   assert.match(compose, /pull_policy: always/);
   assert.match(site, /--pull always/, "and the command the install site builds");
 });
+
+test("a page older than the server announces itself", () => {
+  /* The one state no cache header can fix after the fact: a shell stored under
+     the old rules will not revalidate until its lifetime runs out. */
+  assert.match(js, /const SHELL_VERSION =/);
+  assert.match(js, /function showStaleShell\(serverVersion\)/);
+  assert.match(js, /SHELL_VERSION !== status\.version/);
+  /* The reload has to be a URL the cache has never seen — location.reload()
+     can itself be answered from the entry that is the problem. */
+  assert.match(js, /location\.pathname \+ "\?r=" \+ Date\.now\(\)/);
+});

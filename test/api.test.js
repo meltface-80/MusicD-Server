@@ -383,3 +383,22 @@ test("icons keep a long cache — they are what does not change between versions
   assert.strictEqual(res.status, 200);
   assert.match(res.headers["cache-control"], /max-age=\d{5,}/);
 });
+
+test("the shell it serves is stamped with the version that built it", async () => {
+  const version = require("../package.json").version;
+  const res = await request("/");
+  const html = res.body.toString();
+  assert.match(html, new RegExp(`<meta name="musicd-build" content="${version.replace(/\./g, "\\.")}">`),
+    "the document records which version it is");
+  /* A browser holding an old app.js cannot serve it against a new address, so
+     the asset URLs change with every release. */
+  for (const asset of ["app.js", "sharecard.js", "style.css"]) {
+    assert.ok(html.includes(`${asset}?v=${version}`), asset + " is versioned");
+  }
+});
+
+test("a deep link gets the same built shell, not the file on disk", async () => {
+  const deep = (await request("/album/anything")).body.toString();
+  assert.match(deep, /<meta name="musicd-build"/);
+  assert.match(deep, /app\.js\?v=/);
+});

@@ -102,7 +102,7 @@ checks GitHub for a newer release when it loads and says so if there is one.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.2.1` | that exact version, for pinning |
+| `:0.2.2` | that exact version, for pinning |
 | `:0.2` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 

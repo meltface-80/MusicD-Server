@@ -399,8 +399,47 @@ app.get("/art/:token", (req, res) => {
  */
 const SHELL = /\.(html|js|css)$/i;
 
+/*
+ * index.html is built here rather than served as a static file, so that it can
+ * carry the version in two places.
+ *
+ * The asset URLs get ?v=<version>, which makes app.js and style.css a
+ * different URL on every release — a browser holding an old copy of either
+ * cannot serve it against the new address, whatever its cache headers said at
+ * the time it was stored.
+ *
+ * A <meta> records which version this document IS. The client compares it with
+ * what /api/status reports and says so when they disagree, because that is the
+ * one state nothing else can detect: a shell cached before the caching rules
+ * were fixed will not revalidate until its old max-age runs out, and until
+ * then a correctly updated server serves an interface from a previous release
+ * with nothing to indicate it.
+ */
+let shellHtml = "";
+let shellFor = "";
+
+function renderShell() {
+  if (shellHtml && shellFor === BUILD.version) return shellHtml;
+  const version = encodeURIComponent(BUILD.version);
+  shellHtml = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8")
+    .replace(/(src|href)="\/(app|sharecard)\.js"/g, `$1="/$2.js?v=${version}"`)
+    .replace(/href="\/style\.css"/g, `href="/style.css?v=${version}"`)
+    .replace("<head>", `<head>\n  <meta name="musicd-build" content="${BUILD.version}">`);
+  shellFor = BUILD.version;
+  return shellHtml;
+}
+
+function sendShell(req, res) {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.send(renderShell());
+}
+
+app.get("/", sendShell);
+
 app.use(express.static(PUBLIC_DIR, {
-  index: "index.html",
+  /* index:false — "/" is the rendered shell above, not the file on disk. */
+  index: false,
   etag: true,
   setHeaders(res, filePath) {
     res.setHeader("Cache-Control", SHELL.test(filePath) ? "no-cache" : "public, max-age=604800");
@@ -412,11 +451,8 @@ app.use(express.static(PUBLIC_DIR, {
    from the cause. Everything else falls through to the app, which is what makes
    a deep link work. */
 app.use("/api", (req, res) => res.status(404).json({ error: "No such endpoint: " + req.path }));
-app.get("*", (req, res) => {
-  /* Same rule for the deep-link fallback — it is the same document. */
-  res.setHeader("Cache-Control", "no-cache");
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
+/* The deep-link fallback is the same document, built the same way. */
+app.get("*", sendShell);
 
 /* ------------------------------------------------------------------ */
 /*  Start                                                              */
