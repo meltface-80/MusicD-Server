@@ -95,6 +95,9 @@ part of the fix.
 
 ## Repository
 
+- **Stay on `0.4.x`.** Bump the patch number for anything that ships; the minor
+  number moves only when the user says so, in as many words. A feature large
+  enough to feel like a minor release is still a patch until then.
 - Develop on a feature branch (`claude/<topic>`). Never commit to `main`.
 - Never open or merge a pull request unless the user asks. The user merges.
 - Never write an invalid `${{ ... }}` expression in a workflow file — Actions
