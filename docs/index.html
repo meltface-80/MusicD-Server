@@ -289,7 +289,7 @@
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
      album identification, no streaming accounts.</p>
   <div class="badges">
-    <span class="badge" id="ver-badge">v0.3.0</span>
+    <span class="badge" id="ver-badge">v0.3.1</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT licence</span>
     <span class="badge plain">Your files, your speakers</span>
@@ -530,8 +530,8 @@
       <ol>
         <li>Open <b>http://&lt;host-ip&gt;:3400/</b>. The first scan starts on its own — the home
             screen fills in as it goes, and a thin progress bar sits under the top bar.</li>
-        <li>Tap the <b>speaker icon</b> in the top right and choose a room. It is remembered, so you
-            are not asked again.</li>
+        <li>Tap the <b>speaker icon</b> on the transport bar at the foot of the screen and choose
+            a room. It is remembered, so you are not asked again.</li>
         <li>Open an album and press <b>Play</b>. Tapping a track plays the album from there.</li>
         <li><b>Recently played</b> fills as you listen. A track counts once you are half way
             through it, so skipping past an album never puts it there.</li>
@@ -575,7 +575,7 @@
   var IMAGE = "musicd-server";
   var REPO  = "meltface-80/MusicD-Server";
   var VOLUME = "musicd-server-data";
-  var FALLBACK_VERSION = "0.3.0";
+  var FALLBACK_VERSION = "0.3.1";
 
   var els = {
     modes:     document.getElementById("modes"),

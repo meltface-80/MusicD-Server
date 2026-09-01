@@ -247,7 +247,7 @@ function showView(view, title) {
   })) {
     $(id).classList.toggle("hidden", name !== view);
   }
-  $("screen-title").textContent = title || "MusicD";
+  $("screen-title").textContent = title || "";
   $("topbar-back").classList.toggle("hidden", view === "home");
   window.scrollTo(0, 0);
 }
@@ -289,7 +289,7 @@ function renderHome(data) {
     host.appendChild(section);
   }
 
-  showView("home", "MusicD");
+  showView("home", "");
 }
 
 function homeSkeleton() {
@@ -554,9 +554,12 @@ function setFace(face) {
  * set of the same controls a centimetre below the first.
  */
 function syncMini() {
-  const playing = state.now && (state.now.track || state.now.foreign);
+  /* Always on screen, playing or not — it carries the room picker, and since
+     the top bar no longer does, hiding the bar on a fresh install would leave
+     nowhere to choose a speaker from. The one face that hides it is Now
+     playing, which has the full transport on it already. */
   const onNpFace = state.face === "np" && !$("album-modal").classList.contains("hidden");
-  $("mini").classList.toggle("hidden", !playing || onNpFace);
+  $("mini").classList.toggle("hidden", onNpFace);
 }
 
 function openModal() {
@@ -717,12 +720,20 @@ function fillRange(input, value, max) {
 
 function renderNow(now) {
   state.now = now;
+  syncMini();
 
   if (!now || (!now.track && !now.foreign)) {
-    syncMini();
+    /* Nothing playing. The bar stays, because it is how a room is chosen — so
+       it says which room it would play to, or asks for one. */
+    $("mt-title").textContent = state.zone ? "Nothing playing" : "Choose a room";
+    $("mt-artist").textContent = state.zone ? state.zone.name : "";
+    $("mt-art").classList.add("hidden");
+    $("mt-fill").style.width = "0";
+    setPlayIcons(false);
+    $("mini").classList.add("is-idle");
     return;
   }
-  syncMini();
+  $("mini").classList.remove("is-idle");
 
   const title = now.track ? now.track.title : "Playing from another app";
   const artist = now.track ? (now.track.artist || "") : now.zone.name;
@@ -1078,8 +1089,6 @@ async function openZoneSheet(refresh = false) {
       row.addEventListener("click", () => {
         state.zone = { uuid: room.uuid, name: room.name };
         saveZone(state.zone);
-        $("zone-btn").classList.add("is-set");
-        $("zone-btn").title = room.name;
         closeSheet();
         startPolling();
         if (state.face === "queue") loadQueue();
@@ -1464,7 +1473,6 @@ function wire() {
   $("mt-zone").addEventListener("click", () => openZoneSheet());
 
   /* Rooms */
-  $("zone-btn").addEventListener("click", () => openZoneSheet());
   $("zone-refresh").addEventListener("click", () => openZoneSheet(true));
   for (const node of document.querySelectorAll("[data-close-sheet]")) {
     node.addEventListener("click", closeSheet);
@@ -1497,10 +1505,6 @@ function wire() {
   applyTheme(saved);
 
   state.zone = loadZone();
-  if (state.zone) {
-    $("zone-btn").classList.add("is-set");
-    $("zone-btn").title = state.zone.name;
-  }
 
   wire();
   registerServiceWorker();

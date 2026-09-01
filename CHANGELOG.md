@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1
+
+- The top bar is the menu and the search, and nothing else. The wordmark has
+  gone from it — the side menu carries the mark, and repeating it over a screen
+  that is plainly the app cost a line the screen names need on every other view
+  — and the search moves into the corner it left.
+- The room picker has gone from the top bar too. It was a third copy: the mini
+  transport has one and so does Now playing.
+- **Which means the mini transport is now always on screen**, playing or not,
+  because it is where a room is chosen. Idle it says which room it would play
+  to, or asks for one — hiding it on a fresh install would have left nowhere to
+  pick a speaker at all.
+- The side menu's wordmark is the same mark as the share card, sized to the
+  header. The light theme inverts it, the mark carrying no colour of its own.
+
 ## 0.3.0
 
 ### An installed app updates itself

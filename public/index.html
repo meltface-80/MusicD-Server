@@ -43,7 +43,10 @@
         </svg>
       </button>
 
-      <h1 id="screen-title" class="screen-title">MusicD</h1>
+      <!-- Empty on Home. The wordmark is in the side menu, and repeating it
+           over a screen that is plainly the app costs a line of the top bar
+           that the screen names need on every other view. -->
+      <h1 id="screen-title" class="screen-title"></h1>
 
       <div id="topbar-search" class="topbar-search">
         <button id="search-open" class="icon-btn" type="button" aria-label="Search" aria-expanded="false">
@@ -69,13 +72,6 @@
         </div>
       </div>
 
-      <button id="zone-btn" class="icon-btn zone-btn" type="button" aria-label="Choose room" title="Room">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="6" y="2" width="12" height="20" rx="2"/>
-          <circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1.2"/>
-        </svg>
-      </button>
     </div>
 
     <div id="scan-progress-bar" class="scan-progress-bar hidden" aria-hidden="true">
@@ -90,7 +86,7 @@
     <div class="menu-backdrop" data-close-menu></div>
     <nav class="menu-panel">
       <div class="menu-head">
-        <span class="menu-brand">MusicD</span>
+        <img class="menu-brand" src="/icons/wordmark.svg" alt="MusicD" width="3908" height="1848">
         <button class="icon-btn" type="button" data-close-menu aria-label="Close menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
