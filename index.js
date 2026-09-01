@@ -415,18 +415,18 @@ const SHELL = /\.(html|js|css)$/i;
  * then a correctly updated server serves an interface from a previous release
  * with nothing to indicate it.
  */
-let shellHtml = "";
-let shellFor = "";
-
 function renderShell() {
-  if (shellHtml && shellFor === BUILD.version) return shellHtml;
+  /* Read every time rather than memoised. The file cannot change under a
+     running container in normal use, but holding it in memory means that when
+     it DOES — a bind mount, a developer editing it — the server keeps serving
+     the old page with nothing to explain why, and this project has spent
+     enough rounds on exactly that shape of problem. A 15KB read from the OS
+     page cache is not worth the trap. */
   const version = encodeURIComponent(BUILD.version);
-  shellHtml = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8")
+  return fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8")
     .replace(/(src|href)="\/(app|sharecard)\.js"/g, `$1="/$2.js?v=${version}"`)
     .replace(/href="\/style\.css"/g, `href="/style.css?v=${version}"`)
     .replace("<head>", `<head>\n  <meta name="musicd-build" content="${BUILD.version}">`);
-  shellFor = BUILD.version;
-  return shellHtml;
 }
 
 function sendShell(req, res) {
@@ -436,6 +436,23 @@ function sendShell(req, res) {
 }
 
 app.get("/", sendShell);
+
+/*
+ * The service worker, with the version written into it.
+ *
+ * A browser only looks for a NEW worker when the bytes of this file change, so
+ * the version is what makes an update visible to it at all. It must never be
+ * cached, or the check that finds updates is itself answered from a stale copy.
+ */
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  /* Scope is the whole site; the header is required to allow that from any
+     path, and costs nothing when the file already sits at the root. */
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.send(fs.readFileSync(path.join(PUBLIC_DIR, "sw.js"), "utf8")
+             .replace("__BUILD_VERSION__", BUILD.version));
+});
 
 app.use(express.static(PUBLIC_DIR, {
   /* index:false — "/" is the rendered shell above, not the file on disk. */

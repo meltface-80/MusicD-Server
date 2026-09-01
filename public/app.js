@@ -952,9 +952,7 @@ async function openShareCard() {
       coverUrl: album.art || "",
       title: album.title,
       artist: album.artist,
-      year: album.year,
-      meta: [`${album.trackCount} track${album.trackCount === 1 ? "" : "s"}`,
-             runtime(album.duration)].join(" · ")
+      year: album.year
     });
     const dataUrl = await blobToDataUrl(blob);
     const img = el("img");
@@ -1255,6 +1253,53 @@ async function checkForUpdate(build) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Keeping an installed app up to date                                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Register the service worker, and reload once when a new one takes over.
+ *
+ * Deliberately NOT a <link rel="manifest"> or any <head> tag: iOS reads those
+ * at add-to-home-screen time and bakes the result into the shortcut, and this
+ * project has already been bitten by that. A registration call is script, runs
+ * after layout, and changes nothing about how the window is sized.
+ */
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    /* A new worker took over. The document in front of the user is the OLD
+       shell, so it is replaced — once, because controllerchange can fire more
+       than once and a reload loop is worse than a stale page. */
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    /* Ask on every load, rather than waiting for the browser's own 24-hour
+       check — on a home-screen app that check is what "it never updates"
+       actually means. */
+    reg.update().catch(() => { /* offline; the next load will try again */ });
+    reg.addEventListener("updatefound", () => {
+      const installing = reg.installing;
+      if (!installing) return;
+      installing.addEventListener("statechange", () => {
+        if (installing.state === "installed" && navigator.serviceWorker.controller) {
+          /* An update is ready and something is already controlling the page,
+             so this is a genuine upgrade rather than the first install. */
+          installing.postMessage("skip-waiting");
+        }
+      });
+    });
+  }).catch(() => {
+    /* Registration needs a secure context; over plain HTTP on a LAN address
+       this is refused, and the app works exactly as it did before. */
+  });
+}
+
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   document.querySelector('meta[name="theme-color"]')
@@ -1458,6 +1503,7 @@ function wire() {
   }
 
   wire();
+  registerServiceWorker();
   loadHome();
   refreshStatus();
   setInterval(refreshStatus, 30000);

@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.3.0
+
+### An installed app updates itself
+- A service worker, added for one reason: a home-screen app would not pick up
+  new versions. Its strategy is the opposite of the usual one — nothing is
+  pre-served from cache while the network is reachable, and every shell request
+  goes out with `cache: "reload"`, which bypasses the HTTP cache underneath the
+  worker as well. The cache is a fallback for being offline, not a speed layer;
+  this is a server on the same LAN and a round trip is not worth a stale
+  interface. A new worker takes over immediately and the page reloads once.
+- It is registered from script, never from a `<head>` tag. iOS reads the head at
+  add-to-home-screen time and bakes the result into the shortcut, which this
+  project has already been bitten by.
+- **Service workers need a secure context.** Over plain `http://` on a LAN
+  address the registration is refused and the app behaves exactly as before —
+  the no-cache shell, versioned asset URLs and stale-page banner from 0.2.x are
+  what cover that case. Behind HTTPS, this is what makes updates arrive on
+  their own.
+
+### Share card
+- Type sizes and spacing are MusicD Remote's, so a card from either app is
+  recognisably the same object: the year at 26, the title stepping 56 → 27 and
+  the artist 37 → 21, both shrinking before anything is cut.
+- The track count and running time are gone. A share card says what the record
+  is; how long it runs is a detail for the album screen.
+- The wordmark is the real mark — traced from the original artwork at 4x into a
+  6.8KB SVG, so these are the same shapes rather than a redrawing, on a
+  transparent ground and drawn twice the size it was.
+- The text now reserves the mark's band and steps its type down to fit what is
+  left. Fitting on width alone was enough while the mark was small; at its real
+  size a long title ran straight through it.
+
 ## 0.2.3
 
 - **Now playing is laid out the way MusicD Remote lays it out.** The screen

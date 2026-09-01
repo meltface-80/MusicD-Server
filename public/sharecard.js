@@ -11,7 +11,7 @@
  *   |    | +--------+   1988                              |  |
  *   |    | | cover  |   Spirit of Eden                    |  |
  *   |    | | 424px  |   by Talk Talk                      |  |
- *   |    | +--------+   6 tracks · 41 min       MusicD    |  |
+ *   |    | +--------+                       [ MusicD ]    |  |
  *   |    +------------------------------------------------+  |
  *   +--------------------------------------------------------+
  *
@@ -53,6 +53,23 @@ const ShareCard = (() => {
   const PANE_EDGE = "rgba(255,255,255,.14)";
   const FONT = '"Helvetica Neue", Helvetica, Arial, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
+  /* Type sizes and spacing are MusicD Remote's, so a card from either app is
+     recognisably the same object. Title and artist step DOWN through their
+     lists until the text fits rather than being ellipsed at one size — a long
+     album name gets smaller before it gets cut. */
+  const YEAR_SIZE = 26;
+  const YEAR_H = YEAR_SIZE + 4;
+  const YEAR_GAP = 24;
+  const TITLE_SIZES = [56, 48, 42, 36, 31, 27];
+  const TITLE_LH = 68 / 56;
+  const ARTIST_SIZES = [37, 32, 28, 24, 21];
+  const ARTIST_LH = 48 / 37;
+  const BLOCK_GAP = 18;
+
+  const WORDMARK_URL = "/icons/wordmark.svg";
+  const WORDMARK_W = 230;                 // the mark carries the waveform too
+  const WORDMARK_PAD = 34;
+
   /* roundRect() is still missing in enough shipping browsers to be worth not
      depending on. */
   function roundRectPath(ctx, x, y, w, h, r) {
@@ -72,7 +89,7 @@ const ShareCard = (() => {
       const img = new Image();
       /* Same origin in normal use, but the canvas is read back with toBlob and
          a tainted one throws — so ask for CORS and let the catch handle a
-         refusal by drawing the card without a cover. */
+         refusal by drawing the card without that piece. */
       img.crossOrigin = "anonymous";
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error("image failed to load"));
@@ -85,6 +102,7 @@ const ShareCard = (() => {
      real font being wrapped rather than an estimate of it. */
   function wrap(ctx, text, maxWidth, maxLines) {
     const words = String(text || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
     const lines = [];
     let line = "";
     for (const word of words) {
@@ -102,8 +120,7 @@ const ShareCard = (() => {
     if (lines.length === maxLines) {
       /* Anything left over is dropped, so the final line has to admit it. */
       let last = lines[maxLines - 1];
-      const consumed = lines.join(" ");
-      if (consumed.length < String(text || "").trim().length) {
+      if (lines.join(" ").length < String(text || "").trim().length) {
         while (last && ctx.measureText(last + "…").width > maxWidth) {
           last = last.replace(/\s*\S$/, "");
         }
@@ -113,19 +130,20 @@ const ShareCard = (() => {
     return lines;
   }
 
-  /* Shrink the title until it fits the space it has, rather than ellipsing a
-     long one straight away — a two-word album name at 54px reads better than
-     four lines of it at 42px. */
-  function fitTitle(ctx, text, maxWidth, maxLines) {
-    for (const size of [54, 48, 42, 36, 32]) {
-      ctx.font = `700 ${size}px ${FONT}`;
-      const lines = wrap(ctx, text, maxWidth, maxLines);
-      if (lines.length <= maxLines && !lines.some(l => l.endsWith("…"))) {
-        return { lines, size };
-      }
+  /* Step down through the sizes until the text fits the space it has. A
+     two-word album name at 56px reads better than four lines of it at 42px,
+     and only when the smallest size still overflows is the last line cut. */
+  function fitText(ctx, text, maxWidth, maxLines, weight, sizes, lhRatio) {
+    let lines = [];
+    let size = sizes[sizes.length - 1];
+    for (const candidate of sizes) {
+      size = candidate;
+      ctx.font = `${weight} ${candidate}px ${FONT}`;
+      lines = wrap(ctx, text, maxWidth, maxLines);
+      if (!lines.some(line => line.endsWith("…"))) break;
     }
-    ctx.font = `700 32px ${FONT}`;
-    return { lines: wrap(ctx, text, maxWidth, maxLines), size: 32 };
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    return { lines, size, lh: Math.round(size * lhRatio) };
   }
 
   function drawCover(ctx, img, dx, dy, dw, dh) {
@@ -152,21 +170,24 @@ const ShareCard = (() => {
     ctx.imageSmoothingEnabled = prev;
   }
 
-  /* The wordmark, drawn rather than loaded: one less asset to fetch, and it
-     cannot fail halfway through generating a card. */
-  function drawWordmark(ctx, right, bottom) {
-    ctx.textAlign = "right";
-    ctx.font = `700 26px ${FONT}`;
-    const d = ctx.measureText("D").width;
-    ctx.fillStyle = "#c47f4a";
-    ctx.fillText("D", right, bottom);
-    ctx.fillStyle = "rgba(255,255,255,.82)";
-    ctx.fillText("Music", right - d, bottom);
-    ctx.textAlign = "left";
+  /* The wordmark is the real mark — the same shapes as the artwork, traced,
+     on a transparent ground so it sits on whatever is behind it. Loaded rather
+     than typed out, because a typeface approximation of a logo is not the
+     logo. A card without it is still a usable card, so a mark that will not
+     load is not a failure. */
+  function drawWordmark(ctx, mark, right, bottom) {
+    if (!mark) return;
+    const h = Math.round(WORDMARK_W * (mark.height / mark.width));
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(mark, right - WORDMARK_W, bottom - h, WORDMARK_W, h);
+    ctx.globalAlpha = 1;
   }
 
   async function render(data) {
-    const cover = await loadImage(data.coverUrl).catch(() => null);
+    const [cover, mark] = await Promise.all([
+      loadImage(data.coverUrl).catch(() => null),
+      loadImage(data.wordmarkUrl || WORDMARK_URL).catch(() => null)
+    ]);
 
     const canvas = document.createElement("canvas");
     canvas.width = CARD_W;
@@ -224,49 +245,61 @@ const ShareCard = (() => {
     ctx.restore();
 
     /* --- The text column --- */
-    const title = fitTitle(ctx, data.title || "", TEXT_W, 3);
-    const titleLh = Math.round(title.size * 1.16);
-
-    ctx.font = `400 24px ${FONT}`;
-    const artistLines = wrap(ctx, data.artist ? "by " + data.artist : "", TEXT_W, 2);
-    const artistLh = 32;
-
     const yearText = data.year ? String(data.year) : "";
-    const metaText = data.meta || "";
+    const artistText = data.artist ? "by " + data.artist : "";
 
-    const blockH =
-      (yearText ? 34 : 0) +
-      title.lines.length * titleLh +
-      (artistLines.length ? 10 + artistLines.length * artistLh : 0) +
-      (metaText ? 22 + 26 : 0);
-    let y = PANE_Y + Math.round((PANE_H - blockH) / 2);
+    /* The wordmark sits at the bottom of this same column, so the text has to
+       know it is there. Reserving its band and then choosing type that fits
+       what remains is what stops a long title running straight through it —
+       fitting on WIDTH alone was enough while the mark was small, and is not
+       now that it is the real one. */
+    const markH = mark ? Math.round(WORDMARK_W * (mark.height / mark.width)) : 0;
+    const availTop = PANE_Y + PANE_PAD;
+    const availH = PANE_H - PANE_PAD * 2 - (markH ? markH + 16 : 0);
+
+    /* Step title and artist DOWN TOGETHER, so their relative scale holds, until
+       the block fits the height it has. The smallest pair is used if even that
+       overflows — at which point wrap() has already ellipsed the last line. */
+    let title = null, artist = null, blockH = 0;
+    for (let step = 0; step < TITLE_SIZES.length; step++) {
+      title = fitText(ctx, data.title || "", TEXT_W, 4, 700, [TITLE_SIZES[step]], TITLE_LH);
+      artist = fitText(ctx, artistText, TEXT_W, 4, 400,
+                       [ARTIST_SIZES[Math.min(step, ARTIST_SIZES.length - 1)]], ARTIST_LH);
+      blockH = (yearText ? YEAR_H + YEAR_GAP : 0) +
+               title.lines.length * title.lh +
+               (artist.lines.length ? BLOCK_GAP + artist.lines.length * artist.lh : 0);
+      if (blockH <= availH) break;
+    }
+    const titleH = title.lines.length * title.lh;
+    const artistH = artist.lines.length * artist.lh;
+
+    /* Centred in what is left, with a slight upward nudge — the optical centre
+       sits a little above the mathematical one. */
+    let y = availTop + Math.max(0, Math.round((availH - blockH) / 2) - 6);
 
     if (yearText) {
-      ctx.font = `700 16px ${FONT}`;
-      ctx.fillStyle = "rgba(255,255,255,.55)";
+      ctx.font = `600 ${YEAR_SIZE}px ${FONT}`;
+      /* Solved against the worst case the pane can present: a white sleeve
+         under the scrim and the pane, which flattens to about rgb(83,85,88).
+         A dimmer grey fails even the large-text contrast floor there. */
+      ctx.fillStyle = "#c2cad3";
       ctx.fillText(yearText.toUpperCase(), TEXT_X, y);
-      y += 34;
+      y += YEAR_H + YEAR_GAP;
     }
 
     ctx.font = `700 ${title.size}px ${FONT}`;
-    ctx.fillStyle = "#f2f1ef";
-    for (const line of title.lines) { ctx.fillText(line, TEXT_X, y); y += titleLh; }
+    ctx.fillStyle = "#ffffff";
+    title.lines.forEach((line, i) => ctx.fillText(line, TEXT_X, y + i * title.lh));
+    y += titleH;
 
-    if (artistLines.length) {
-      y += 10;
-      ctx.font = `400 24px ${FONT}`;
-      ctx.fillStyle = "rgba(255,255,255,.72)";
-      for (const line of artistLines) { ctx.fillText(line, TEXT_X, y); y += artistLh; }
+    if (artistH) {
+      y += BLOCK_GAP;
+      ctx.font = `400 ${artist.size}px ${FONT}`;
+      ctx.fillStyle = "#cdd3d9";
+      artist.lines.forEach((line, i) => ctx.fillText(line, TEXT_X, y + i * artist.lh));
     }
 
-    if (metaText) {
-      y += 22;
-      ctx.font = `400 18px ${FONT}`;
-      ctx.fillStyle = "rgba(255,255,255,.45)";
-      ctx.fillText(metaText, TEXT_X, y);
-    }
-
-    drawWordmark(ctx, PANE_X + PANE_W - 34, PANE_Y + PANE_H - 34 - 26);
+    drawWordmark(ctx, mark, PANE_X + PANE_W - WORDMARK_PAD, PANE_Y + PANE_H - WORDMARK_PAD);
 
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -276,7 +309,7 @@ const ShareCard = (() => {
     });
   }
 
-  return { render, CARD_W, CARD_H };
+  return { render, CARD_W, CARD_H, WORDMARK_URL };
 })();
 
 /* Node's test runner loads this file to check the layout arithmetic; a browser
