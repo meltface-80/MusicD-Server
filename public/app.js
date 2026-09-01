@@ -45,10 +45,14 @@ function mmss(seconds) {
 }
 
 function runtime(seconds) {
-  const mins = Math.round((Number(seconds) || 0) / 60);
+  const total = Number(seconds) || 0;
+  /* Rounding to the nearest minute turns anything under thirty seconds into
+     "0 min", which reads as missing data rather than as a short record. */
+  if (total < 60) return "under a minute";
+  const mins = Math.round(total / 60);
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
-  return `${h} hr ${mins % 60} min`;
+  return mins % 60 ? `${h} hr ${mins % 60} min` : `${h} hr`;
 }
 
 /* Dates are shown as "how long ago", because that is the only thing anybody
@@ -132,6 +136,58 @@ function saveZone(zone) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Navigation                                                         */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Everything that opens over the library goes on this stack, and the phone's
+ * Back gesture pops it.
+ *
+ * The rule that makes it predictable: nothing closes itself. An on-screen
+ * close control calls navBack(), which asks the browser to go back, and the
+ * popstate handler below is the ONLY thing that actually closes a layer. One
+ * path means the hardware Back and the on-screen one cannot drift apart — and
+ * on an installed shortcut, Back closing the album you are looking at rather
+ * than the whole app is the difference between the thing feeling native and
+ * feeling like a web page.
+ */
+const nav = [];
+
+function navOpen(name, close) {
+  /* Re-opening a layer that is already the top one replaces it rather than
+     stacking a second entry — tapping Queue then Now playing is one screen
+     changing tabs, not two screens deep. */
+  if (nav.length && nav[nav.length - 1].name === name) {
+    nav[nav.length - 1].close = close;
+    return;
+  }
+  nav.push({ name, close });
+  history.pushState({ musicdDepth: nav.length }, "");
+}
+
+function navBack() {
+  if (nav.length) history.back();
+}
+
+/* Unwind everything — the side menu's Home entry, which should land on the
+   library however deep you were. */
+function navReset() {
+  if (nav.length) history.go(-nav.length);
+}
+
+window.addEventListener("popstate", (event) => {
+  /* Reconciled against the depth the entry was pushed with rather than popping
+     one per event: a held Back, or a jump of several entries, arrives as a
+     single popstate and must close every layer it passed. */
+  const depth = (event.state && event.state.musicdDepth) || 0;
+  while (nav.length > depth) {
+    const layer = nav.pop();
+    try { layer.close(); }
+    catch { /* a layer whose DOM has already gone — nothing left to close */ }
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  Album cards                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -180,6 +236,10 @@ function skeletonCard() {
 
 function showView(view, title) {
   if (view !== "grid") state.grid = null;
+  /* One entry for "away from Home", however many browse screens you cross:
+     Back from a grid, a search or an artist lands on the library, which is
+     what the top-bar chevron has always done. */
+  if (view !== "home") navOpen("view", goHomeView);
   state.view = view;
   for (const [name, id] of Object.entries({
     home: "home-view", grid: "grid-view", search: "search-view", artists: "artists-view"
@@ -189,6 +249,14 @@ function showView(view, title) {
   $("screen-title").textContent = title || "MusicD";
   $("topbar-back").classList.toggle("hidden", view === "home");
   window.scrollTo(0, 0);
+}
+
+/* Called by the navigation stack when a browse view is popped. */
+function goHomeView() {
+  $("search-input").value = "";
+  $("topbar-search").classList.remove("is-open");
+  document.querySelector(".topbar-row").classList.remove("searching");
+  loadHome();
 }
 
 /* ---- Home -------------------------------------------------------- */
@@ -482,13 +550,22 @@ function syncMini() {
   $("mini").classList.toggle("hidden", !playing || onNpFace);
 }
 
-function openModal() { $("album-modal").classList.remove("hidden"); syncMini(); }
-function closeModal() {
-  $("album-modal").classList.add("hidden");
-  closeVolSheet();
-  setFace("album");
+function openModal() {
+  $("album-modal").classList.remove("hidden");
+  navOpen("modal", hideModal);
   syncMini();
 }
+
+/* The actual close, called only by the navigation stack. */
+function hideModal() {
+  $("album-modal").classList.add("hidden");
+  $("np-vol-sheet").classList.add("hidden");
+  $("np-volbtn").classList.remove("is-open");
+  $("np-volbtn").setAttribute("aria-expanded", "false");
+  state.face = "album";
+  syncMini();
+}
+function closeModal() { navBack(); }
 
 function closeVolSheet() {
   $("np-vol-sheet").classList.add("hidden");
@@ -809,11 +886,167 @@ async function jumpTo(item) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Share card                                                         */
+/* ------------------------------------------------------------------ */
+
+const SHARE_ICONS = {
+  share: '<polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+};
+
+function shareIcon(name) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ` +
+         `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHARE_ICONS[name]}</svg>`;
+}
+
+function resetShare() {
+  $("share-frame").innerHTML =
+    '<div class="share-placeholder"><div class="share-spinner"></div><div>Generating card…</div></div>';
+  $("share-actions").textContent = "";
+  $("share-hint").textContent = "";
+  $("share-err").textContent = "";
+}
+
+function closeShare() {
+  $("share-overlay").classList.add("hidden");
+  resetShare();
+}
+
+/*
+ * Which album the card is of.
+ *
+ * On the album face it is the album you are looking at. On Now playing or the
+ * Queue it is read from the LIVE state rather than from whatever the panel was
+ * opened with — three tracks later that is a different record, and a card of
+ * the album that happened to be playing when you opened the screen is a
+ * confusing thing to have shared.
+ */
+function shareTarget() {
+  if (state.face === "album" && state.album) return state.album.id;
+  if (state.now && state.now.album) return state.now.album.id;
+  if (state.album) return state.album.id;
+  return null;
+}
+
+async function openShareCard() {
+  const albumId = shareTarget();
+  if (!albumId) { toast("Nothing to make a card from yet."); return; }
+
+  resetShare();
+  $("share-overlay").classList.remove("hidden");
+  navOpen("share", closeShare);
+
+  try {
+    const album = await api("/api/album/" + b64url(albumId));
+    const blob = await ShareCard.render({
+      coverUrl: album.art || "",
+      title: album.title,
+      artist: album.artist,
+      year: album.year,
+      meta: [`${album.trackCount} track${album.trackCount === 1 ? "" : "s"}`,
+             runtime(album.duration)].join(" · ")
+    });
+    const dataUrl = await blobToDataUrl(blob);
+    const img = el("img");
+    img.src = dataUrl;
+    img.alt = `Share card for ${album.title}`;
+    $("share-frame").textContent = "";
+    $("share-frame").appendChild(img);
+    buildShareActions(blob, album);
+  } catch (e) {
+    $("share-frame").innerHTML = '<div class="share-placeholder">Could not generate the card.</div>';
+    $("share-err").textContent = e.message || String(e);
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("could not read the generated card"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/*
+ * Only the actions this browser can actually perform are offered.
+ *
+ * Sharing files and writing images to the clipboard are both behind capability
+ * checks that vary by browser and by whether the page is secure — a button
+ * that throws when tapped is worse than one that was never there. Download is
+ * always offered, because an anchor always works.
+ */
+function buildShareActions(blob, album) {
+  const actions = $("share-actions");
+  actions.textContent = "";
+
+  const fileName =
+    `${(album.artist || "artist").replace(/[^a-z0-9]+/gi, "_")}-` +
+    `${(album.title || "card").replace(/[^a-z0-9]+/gi, "_")}.png`;
+
+  const canShare = (() => {
+    try {
+      if (!navigator.share || !navigator.canShare) return false;
+      const probe = new File([new Uint8Array([0])], "probe.png", { type: "image/png" });
+      return navigator.canShare({ files: [probe] });
+    } catch { return false; }      // no File constructor, or a refusal to probe
+  })();
+  const canCopy = typeof window.ClipboardItem !== "undefined" &&
+                  navigator.clipboard && typeof navigator.clipboard.write === "function";
+
+  const button = (cls, iconName, label) => {
+    const b = el("button", cls);
+    b.type = "button";
+    b.innerHTML = shareIcon(iconName) + "<span>" + label + "</span>";
+    return b;
+  };
+  const relabel = (b, text) => { b.querySelector("span").textContent = text; };
+
+  if (canCopy) {
+    const copy = button("", "copy", "Copy image");
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]);
+        relabel(copy, "Copied");
+        setTimeout(() => relabel(copy, "Copy image"), 2000);
+      } catch (e) { $("share-err").textContent = e.message || String(e); }
+    });
+    actions.appendChild(copy);
+  }
+
+  if (canShare) {
+    const share = button("primary", "share", "Share…");
+    share.addEventListener("click", async () => {
+      try {
+        await navigator.share({ files: [new File([blob], fileName, { type: "image/png" })] });
+      } catch (e) {
+        /* Dismissing the system share sheet is an AbortError, and is not a
+           failure worth reporting back to the user. */
+        if (e && e.name !== "AbortError") $("share-err").textContent = e.message || String(e);
+      }
+    });
+    actions.appendChild(share);
+  }
+
+  const download = el("a");
+  download.href = URL.createObjectURL(blob);
+  download.download = fileName;
+  download.innerHTML = shareIcon("download") + "<span>Download</span>";
+  actions.appendChild(download);
+
+  $("share-hint").textContent = canShare || canCopy
+    ? "Tap a button above, or long-press the card to save it."
+    : "Long-press the card to save it, or tap Download.";
+}
+
+/* ------------------------------------------------------------------ */
 /*  Rooms                                                              */
 /* ------------------------------------------------------------------ */
 
 async function openZoneSheet(refresh = false) {
   $("zone-sheet").classList.remove("hidden");
+  navOpen("sheet", hideSheet);
   const list = $("zone-list");
   const note = $("zone-note");
   list.textContent = "";
@@ -856,7 +1089,8 @@ async function openZoneSheet(refresh = false) {
   }
 }
 
-function closeSheet() { $("zone-sheet").classList.add("hidden"); }
+function closeSheet() { navBack(); }
+function hideSheet() { $("zone-sheet").classList.add("hidden"); }
 
 /* ------------------------------------------------------------------ */
 /*  Status, scanning, theme                                            */
@@ -932,7 +1166,7 @@ function wire() {
     node.addEventListener("click", () => {
       $("menu-overlay").classList.add("hidden");
       const target = node.getAttribute("data-go");
-      if (target === "home") loadHome();
+      if (target === "home") navReset();
       else if (target === "artists") openArtists();
       else if (target.startsWith("row:")) openRow(target.slice(4));
     });
@@ -952,12 +1186,7 @@ function wire() {
   });
 
   /* Navigation */
-  $("topbar-back").addEventListener("click", () => {
-    $("search-input").value = "";
-    $("topbar-search").classList.remove("is-open");
-    document.querySelector(".topbar-row").classList.remove("searching");
-    loadHome();
-  });
+  $("topbar-back").addEventListener("click", navBack);
 
   /* Search */
   $("search-open").addEventListener("click", () => {
@@ -967,10 +1196,10 @@ function wire() {
   });
   $("search-input").addEventListener("input", (e) => runSearch(e.target.value));
   $("search-clear").addEventListener("click", () => {
+    if (state.view === "search") return navBack();
     $("search-input").value = "";
     $("topbar-search").classList.remove("is-open");
     document.querySelector(".topbar-row").classList.remove("searching");
-    if (state.view === "search") loadHome();
   });
 
   /* Modal */
@@ -1010,7 +1239,14 @@ function wire() {
       if (which === "queue") loadQueue();
     });
   }
-  $("modal-home").addEventListener("click", () => { closeModal(); loadHome(); });
+  /* Home from Now playing unwinds everything, rather than stepping back one
+     layer into whatever screen happened to open the panel. */
+  $("modal-home").addEventListener("click", navReset);
+  $("modal-share").addEventListener("click", openShareCard);
+
+  for (const node of document.querySelectorAll("[data-share-close]")) {
+    node.addEventListener("click", navBack);
+  }
 
   /* Seeking. The value is held while the thumb is down so an in-flight poll
      cannot yank it back under the finger. */
@@ -1068,10 +1304,14 @@ function wire() {
   /* Escape closes whatever is on top, innermost first. */
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (!$("zone-sheet").classList.contains("hidden")) return closeSheet();
+    /* The side menu is not on the navigation stack — it is a menu, not a place
+       you went — so it is closed here directly. Everything else unwinds
+       through the same Back the phone's gesture uses. */
+    if (!$("menu-overlay").classList.contains("hidden")) {
+      return $("menu-overlay").classList.add("hidden");
+    }
     if (!$("np-vol-sheet").classList.contains("hidden")) return closeVolSheet();
-    if (!$("album-modal").classList.contains("hidden")) return closeModal();
-    if (!$("menu-overlay").classList.contains("hidden")) return $("menu-overlay").classList.add("hidden");
+    navBack();
   });
 
   document.addEventListener("visibilitychange", () => { if (!document.hidden) pollNow(); });

@@ -71,6 +71,15 @@ First version. A local music server that plays to Sonos.
 - Mini transport with play/pause leading, then what is playing, then room and
   volume. It sits above the album and queue screens and steps aside for Now
   playing, which already has the full transport.
+- Share card: a 1200x600 PNG of any album, drawn in the browser from the album
+  row alone — the cover softened as the ground, a glass pane over it holding
+  the sharp cover, the year, the title, the artist and the length. Copy,
+  system share and download are each offered only where the browser can
+  actually perform them. From Now playing it uses the track playing at the
+  moment you tap, not the album the panel was opened with.
+- Back — the phone gesture as much as the on-screen control — closes the
+  innermost thing that is open, one layer at a time, and leaves the app only
+  from the library.
 
 ### Packaging
 - Docker image on host networking, with `TZ` documented as load-bearing: the
