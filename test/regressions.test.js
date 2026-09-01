@@ -373,3 +373,55 @@ test("an artist whose name contains a percent sign has a working page", async ()
     ws.cleanup();
   }
 });
+
+test("an upgrade that adds tag columns re-reads the files, instead of blanking albums", async () => {
+  /*
+   * The 0.1.0 → 0.2.0 shape of the bug, and the reason a large library came
+   * back from a rescan full of "Unknown artist" and folder-name titles.
+   *
+   * 0.2.0 added album, album artist, genre and year as per-track columns and
+   * started deriving the album from ALL of them. The migration added the
+   * columns EMPTY, and the scan skips any file whose size and mtime have not
+   * changed — so those files were never opened again, the columns stayed empty,
+   * and the next scan derived the album from nothing.
+   */
+  const ws = workspace();
+  buildLibrary(ws.music);
+  const db = await scanned(ws);
+
+  const before = db.prepare(
+    "SELECT title, artist, year, genre FROM albums WHERE title = 'Spirit of Eden'").get();
+  assert.deepStrictEqual(before,
+    { title: "Spirit of Eden", artist: "Talk Talk", year: 1988, genre: "Art Rock" });
+
+  /* Exactly what the migration leaves behind: the columns exist and are empty,
+     and nothing records that they were never filled in. */
+  db.prepare(`UPDATE tracks SET albumartist = '', album_tag = '', genre = '',
+              year = NULL, tags_read = 0`).run();
+
+  const stats = await scanner.scan(db, [ws.music], { artDir: ws.art });
+  assert.strictEqual(stats.reused, 0, "every track was re-read, not skipped on mtime");
+  assert.strictEqual(stats.parsed, 21);
+
+  const after = db.prepare(
+    "SELECT title, artist, year, genre FROM albums WHERE title = 'Spirit of Eden'").get();
+  assert.deepStrictEqual(after, before, "and the album came back exactly as it was");
+  ws.cleanup();
+});
+
+test("once re-read, a rescan goes back to skipping unchanged files", async () => {
+  /* The re-read is a one-off. If tags_read were not written back, every scan
+     would re-parse the whole library forever. */
+  const ws = workspace();
+  buildLibrary(ws.music);
+  const db = await scanned(ws);
+  db.prepare("UPDATE tracks SET tags_read = 0").run();
+
+  const repair = await scanner.scan(db, [ws.music], { artDir: ws.art });
+  assert.strictEqual(repair.parsed, 21, "the repair pass reads everything");
+
+  const next = await scanner.scan(db, [ws.music], { artDir: ws.art });
+  assert.strictEqual(next.parsed, 0, "and the one after it reads nothing");
+  assert.strictEqual(next.reused, 21);
+  ws.cleanup();
+});

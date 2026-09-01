@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.2
+
+### Albums coming back as "Unknown artist"
+- **A rescan after upgrading from 0.1.0 blanked album titles and artists, and
+  this fixes it.** 0.2.0 started keeping the album, album artist, genre and
+  year per track and deriving the album from all of them; the migration added
+  those columns empty, and the scan skips any file whose size and modification
+  time are unchanged — so the files were never opened again, the columns stayed
+  empty, and the next scan derived the album from nothing. Tracks now record
+  which generation of tag-reading produced them, and anything older is re-read
+  once. Nothing to do but let a scan run.
+- The album artist is worked out down a ladder rather than in one step: the
+  album-artist tag when the folder agrees, the one most tracks carry when a few
+  disagree, then the track artist, then Various Artists, and finally the folder
+  the album sits in — `Artist/Album/` is how most libraries are laid out. A
+  folder called Unknown, Various Artists or Compilations is read as saying there
+  is no artist rather than naming one.
+- A year in a folder name — `Deceiver (2021)` — becomes the album's year instead
+  of part of its title.
+
+### Interface
+- The share button on the album screen is in the right corner. Auto-placement
+  had put it in the middle column, next to Back, because the controls it should
+  have followed are hidden on that screen.
+- The progress bar runs on a clock rather than on the poll, so it moves
+  smoothly instead of sitting still and jumping every few seconds. Playback was
+  never affected; only the drawing was.
+- Track rows have the same inset on both sides. The number was right-aligned
+  inside a fixed box, which pushed every single digit about twenty pixels in.
+- **Check for updates** in the side menu, which reports what it finds either
+  way — the automatic check only speaks up when there is something to say, so
+  there was no way to see it working.
+
 ## 0.3.1
 
 - The top bar is the menu and the search, and nothing else. The wordmark has

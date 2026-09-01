@@ -518,3 +518,46 @@ test("the side menu carries the real mark", () => {
      theme has to invert it. */
   assert.match(css, /\[data-theme="light"\] \.menu-brand \{ filter: invert\(1\); \}/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  Fixes with a measurement behind them                               */
+/* ------------------------------------------------------------------ */
+
+test("the panel header places each control in its own column", () => {
+  /* Auto-placement put Share in the middle column on the album face, where
+     Home and the tabs are display:none and take no cell — so it landed next to
+     Back instead of in the far corner. */
+  assert.match(css, /\.modal-head > #modal-share \{ grid-column: 3; grid-row: 1; justify-self: end; \}/);
+  assert.match(css, /\.modal-head > #modal-back,\s*\n\.modal-head > #modal-home \{ grid-column: 1/);
+  assert.match(css, /\.modal-head > \.modal-tabs \{ grid-column: 2/);
+});
+
+test("a track row has the same inset on both sides", () => {
+  /* Right-aligning the number inside a fixed box pushed every single digit
+     about twenty pixels in, and the list read as though the left margin were
+     wider than the right. */
+  assert.match(css, /\.track-list li \{[^}]*padding: 10px 0;/s);
+  assert.match(css, /\.t-no \{[^}]*text-align: left;/s);
+  assert.match(css, /\.t-no \{[^}]*font-variant-numeric: tabular-nums/s,
+    "figures still line the titles up");
+});
+
+test("the progress bar runs on a clock, not on the poll", () => {
+  /* Painting position only when the speaker answers made the bar sit still and
+     then jump — a visual stutter over perfectly smooth playback. */
+  assert.match(js, /function paintProgress\(\)/);
+  assert.match(js, /function startProgressTicker\(\)/);
+  assert.match(js, /\(Date\.now\(\) - state\.positionAt\) \/ 1000/);
+  assert.match(js, /state\.positionAt = Date\.now\(\)/, "and each poll re-anchors it");
+  assert.match(js, /if \(state\.seeking\) return;/, "never while a finger is on the bar");
+});
+
+test("the update check can be run on demand", () => {
+  assert.ok(htmlIds.has("menu-update"), "there is a menu entry for it");
+  assert.match(js, /checkForUpdate\(state\.build, \{ manual: true \}\)/);
+  /* Asking for the check is asking to see the answer, whatever it is. */
+  assert.match(js, /You are on the latest version/);
+  assert.match(js, /if \(!manual && dismissed === latest\) return;/,
+    "a dismissal only silences the automatic check");
+  assert.match(js, /Could not check for updates/, "and a failed check says so");
+});

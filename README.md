@@ -102,7 +102,7 @@ checks GitHub for a newer release when it loads and says so if there is one.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.3.1` | that exact version, for pinning |
+| `:0.3.2` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -199,11 +199,15 @@ An album is a folder that contains audio files. A folder holding only other
 folders is not an album, and a folder of scans with no audio in it never appears.
 
 - **Title** comes from the album tag. If the folder's tracks disagree, or there
-  is no tag at all, the folder's own name is used, with a leading `01 - ` index
-  stripped.
-- **Artist** comes from the album-artist tag if the folder agrees about it, then
-  the track artist if *that* agrees. A folder whose tracks name different artists
-  is shown as Various Artists.
+  is no tag at all, the folder's own name is used — with a leading `01 - ` index
+  stripped, and a trailing year read as the year rather than left in the title,
+  so `Deceiver (2021)` is *Deceiver*, from 2021.
+- **Artist** is worked out down a ladder: the album-artist tag when the folder
+  agrees about it, the one most tracks carry when a few disagree, then the track
+  artist, then Various Artists when they genuinely differ — and finally the
+  folder the album sits in, since `Artist/Album/` is how most libraries are laid
+  out. A parent called `Unknown`, `Various Artists` or `Compilations` is read as
+  saying there is no artist rather than naming one.
 - **Cover** is `cover`, `folder`, `front`, `album`, `albumart` or `artwork`
   (`.jpg`, `.jpeg`, `.png`, `.webp`), then any other image in the folder, then
   artwork embedded in the files themselves, which is extracted once and cached.

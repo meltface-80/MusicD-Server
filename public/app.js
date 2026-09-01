@@ -96,6 +96,9 @@ const state = {
   volumeHeld: false,
   pollTimer: null,
   scanTimer: null,
+  progressTimer: null,
+  positionAt: 0,
+  build: null,
   checkedForUpdate: false
 };
 
@@ -712,6 +715,42 @@ function setPlayIcons(playing) {
   }
 }
 
+/*
+ * The progress bar runs on a clock, not on the poll.
+ *
+ * Position only arrives when the speaker is asked for it, every few seconds,
+ * and painting it only then made the bar sit still and then jump — a visual
+ * stutter over perfectly smooth playback. The last answer is kept with the
+ * time it arrived, and the bar is drawn from that plus however long ago it
+ * was, four times a second. Each poll re-anchors it, so it can drift by at
+ * most one poll's worth and never accumulates error.
+ */
+function paintProgress() {
+  const now = state.now;
+  if (!now || !now.track) return;
+
+  const elapsed = now.state === "PLAYING" ? (Date.now() - state.positionAt) / 1000 : 0;
+  const position = Math.min(now.duration || 0, (now.position || 0) + elapsed);
+
+  $("mt-fill").style.width = now.duration ? `${(position / now.duration) * 100}%` : "0";
+
+  /* Not while a finger is on the seek bar — the poll must not yank the thumb
+     out from under it. */
+  if (state.seeking) return;
+  const seek = $("np-seek");
+  seek.value = Math.round(position);
+  fillRange(seek, position, Number(seek.max) || 1);
+  $("np-cur").textContent = mmss(position);
+}
+
+function startProgressTicker() {
+  clearInterval(state.progressTimer);
+  state.progressTimer = setInterval(() => {
+    if (document.hidden) return;      // nothing to paint behind another app
+    paintProgress();
+  }, 250);
+}
+
 function fillRange(input, value, max) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   input.style.setProperty("--fill",
@@ -747,7 +786,6 @@ function renderNow(now) {
   $("mt-artist").textContent = [artist, album].filter(Boolean).join(" · ");
   if (art) { $("mt-art").src = art; $("mt-art").classList.remove("hidden"); }
   else $("mt-art").classList.add("hidden");
-  $("mt-fill").style.width = now.duration ? `${(now.position / now.duration) * 100}%` : "0";
   setPlayIcons(playing);
 
   /* Now playing face */
@@ -758,12 +796,11 @@ function renderNow(now) {
   if (art) { npImg.src = art; npImg.classList.remove("hidden"); }
   else { npImg.removeAttribute("src"); npImg.classList.add("hidden"); }
 
-  const seek = $("np-seek");
-  seek.max = Math.max(1, Math.round(now.duration || 0));
-  if (!state.seeking) seek.value = Math.round(now.position || 0);
-  fillRange(seek, Number(seek.value), Number(seek.max));
-  $("np-cur").textContent = mmss(seek.value);
+  $("np-seek").max = Math.max(1, Math.round(now.duration || 0));
   $("np-tot").textContent = mmss(now.duration);
+  /* Anchor the clock the ticker runs off, then let it do the drawing. */
+  state.positionAt = Date.now();
+  paintProgress();
 
   $("np-room").textContent = now.grouped
     ? `${now.coordinator.name} + ${now.members.length - 1}`
@@ -1151,6 +1188,7 @@ async function refreshStatus() {
       }
     }
 
+    state.build = status.build;
     $("version-sub").textContent = describeBuild(status.build);
     $("menu-foot").textContent =
       `${status.stats.albums} albums, ${status.stats.tracks} tracks · ` +
@@ -1233,32 +1271,45 @@ function describeBuild(build) {
  * load, fails silently when offline, and remembers a dismissal per version so
  * it does not become a nag.
  */
-async function checkForUpdate(build) {
+async function checkForUpdate(build, { manual = false } = {}) {
   if (!build || !build.version) return;
   let dismissed = "";
   try { dismissed = localStorage.getItem("musicd.dismissedUpdate") || ""; }
   catch { /* storage off — the notice simply reappears next load */ }
 
   try {
+    if (manual) toast("Checking for updates…");
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { cache: "no-store" });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error("GitHub answered " + res.status);
     const release = await res.json();
     const latest = String(release.tag_name || "").replace(/^v/, "");
-    if (!/^\d+\.\d+\.\d+$/.test(latest)) return;
-    if (!isNewer(latest, build.version) || dismissed === latest) return;
+    if (!/^\d+\.\d+\.\d+$/.test(latest)) throw new Error("no released version to compare with");
+    if (!isNewer(latest, build.version)) {
+      if (manual) toast(`You are on the latest version (${build.version}).`);
+      return;
+    }
+    /* A dismissal is remembered for the automatic check only. Asking for the
+       check is asking to see the answer. */
+    if (!manual && dismissed === latest) return;
 
     $("update-text").textContent =
-      `Version ${latest} is out — you are running ${build.version}.`;
-    $("update-link").href = release.html_url || `https://github.com/${REPO}/releases`;
+      `Version ${latest} is out — you are running ${build.version}. ` +
+      `Pull the new image on your server, then restart the container.`;
+    const link = $("update-link");
+    link.textContent = "Release notes";
+    link.target = "_blank";
+    link.href = release.html_url || `https://github.com/${REPO}/releases`;
     $("update-banner").classList.remove("hidden");
     $("update-dismiss").onclick = () => {
       $("update-banner").classList.add("hidden");
       try { localStorage.setItem("musicd.dismissedUpdate", latest); }
       catch { /* storage off — dismissing lasts for this visit only */ }
     };
-  } catch {
-    /* Offline, rate-limited, or no release yet. The app does not depend on
-       this answer, so there is nothing to report. */
+  } catch (e) {
+    /* Offline, rate-limited, or no release yet. The automatic check says
+       nothing — the app does not depend on the answer — but somebody who
+       asked deserves to be told it could not be got. */
+    if (manual) toast("Could not check for updates: " + e.message, true);
   }
 }
 
@@ -1346,6 +1397,11 @@ function wire() {
     } catch (e) { toast(e.message, true); }
   });
 
+  $("menu-update").addEventListener("click", () => {
+    $("menu-overlay").classList.add("hidden");
+    checkForUpdate(state.build, { manual: true });
+  });
+
   $("menu-version").addEventListener("click", () => {
     const text = $("version-sub").textContent;
     if (!text) return;
@@ -1399,6 +1455,14 @@ function wire() {
     $(id).addEventListener("click", () => {
       const playing = state.now && state.now.state === "PLAYING";
       setPlayIcons(!playing);                 // move now, reconcile on the next poll
+      if (state.now) {
+        /* Bank the position reached so far, so resuming does not replay the
+           seconds that passed while it was paused. */
+        if (playing) state.now.position = Math.min(state.now.duration || 0,
+          (state.now.position || 0) + (Date.now() - state.positionAt) / 1000);
+        state.now.state = playing ? "PAUSED_PLAYBACK" : "PLAYING";
+        state.positionAt = Date.now();
+      }
       transport(playing ? "pause" : "play");
     });
   }
@@ -1507,6 +1571,7 @@ function wire() {
   state.zone = loadZone();
 
   wire();
+  startProgressTicker();
   registerServiceWorker();
   loadHome();
   refreshStatus();
