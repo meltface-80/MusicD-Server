@@ -436,6 +436,14 @@ main {
   background: var(--bg);
 }
 
+/* Each control is placed in its own column. Left to auto-placement, the album
+   face — where Home and the tabs are display:none and so occupy no cell — put
+   Share in the middle column, right next to Back. */
+.modal-head > #modal-back,
+.modal-head > #modal-home { grid-column: 1; grid-row: 1; }
+.modal-head > .modal-tabs { grid-column: 2; grid-row: 1; }
+.modal-head > #modal-share { grid-column: 3; grid-row: 1; justify-self: end; }
+
 .modal-tabs { display: flex; gap: 22px; justify-content: center; }
 .modal-tab {
   position: relative;
@@ -488,7 +496,7 @@ main {
 .track-list { list-style: none; margin: 0; padding: 0; text-align: left; }
 .track-list li {
   display: flex; align-items: center; gap: 12px;
-  min-height: var(--tap-min); padding: 8px 4px;
+  min-height: var(--tap-min); padding: 10px 0;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
 }
@@ -496,13 +504,17 @@ main {
 .track-list li:hover  { background: var(--bg-elev); }
 .track-list li:active { background: var(--accent-soft); }
 .track-list li.is-disc {
-  cursor: default; background: none; padding-top: 16px;
+  cursor: default; background: none; padding: 18px 0 6px;
   font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-faint); border-bottom: 0; min-height: 0;
 }
 .track-list li.is-disc:hover { background: none; }
+/* Left-aligned, so the number starts at the same inset the duration ends at.
+   Right-aligning it inside a fixed box pushed every single-digit number about
+   twenty pixels in, and the list read as though the left margin were wider than
+   the right one. Tabular figures keep the titles lined up regardless. */
 .t-no {
-  flex: 0 0 26px; text-align: right;
+  flex: 0 0 26px; text-align: left;
   color: var(--text-faint); font-size: 13px; font-variant-numeric: tabular-nums;
 }
 .t-text { flex: 1 1 auto; min-width: 0; }

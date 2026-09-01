@@ -46,7 +46,9 @@ test("untagged folders fall back to the folder name, index stripped", async () =
   const { ws, db } = await scannedLibrary();
   const row = db.prepare("SELECT title, artist FROM albums WHERE title = 'Field Recordings'").get();
   assert.ok(row, "the untagged folder still became an album");
-  assert.strictEqual(row.artist, "", "no artist was invented for it");
+  /* Its parent is called "Unknown", which is a folder SAYING there is no
+     artist rather than naming one — so nothing is invented from it. */
+  assert.strictEqual(row.artist, "");
   ws.cleanup();
 });
 
@@ -264,4 +266,45 @@ test("play counts are kept for albums and tracks separately", async () => {
   assert.strictEqual(db.prepare("SELECT play_count FROM albums WHERE id = ?").get(album).play_count, 1);
   assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM plays").get().n, 4, "the history keeps every play");
   ws.cleanup();
+});
+
+/* ---------------------------------------------------------------- */
+/*  Working out the album artist                                     */
+/* ---------------------------------------------------------------- */
+
+test("one mistagged track does not rename the album", () => {
+  /* A clear majority is the album's artist. Treating any disagreement as a
+     compilation turned a twelve-track album with one typo into "Various
+     Artists". */
+  const rows = (values) => values.map(v => ({ albumartist: v, artist: "" }));
+  assert.strictEqual(
+    scanner.deriveAlbumArtist(rows(["Bonobo", "Bonobo", "Bonobo", "Bonobo", "Bonbo"]),
+                              "/music/Bonobo/Black Sands", ["/music"]),
+    "Bonobo");
+  assert.strictEqual(
+    scanner.deriveAlbumArtist(rows(["A", "B", "C"]), "/music/X/Y", ["/music"]),
+    "Various Artists", "a real split is still a compilation");
+});
+
+test("with no artist tag at all, the folder above the album is used", () => {
+  /* `Artist/Album/` is how most libraries are laid out, and the name is right
+     there. No lookup — just the information the layout already carries. */
+  const untagged = [{ albumartist: "", artist: "" }, { albumartist: "", artist: "" }];
+  assert.strictEqual(scanner.deriveAlbumArtist(untagged, "/music/Khemmis/Deceiver", ["/music"]),
+    "Khemmis");
+  assert.strictEqual(scanner.deriveAlbumArtist(untagged, "/music/Deceiver", ["/music"]), "",
+    "an album sitting straight in the root has no such parent");
+  for (const meaningless of ["Unknown", "Various Artists", "Compilations", "MP3", "CD 2"]) {
+    assert.strictEqual(
+      scanner.deriveAlbumArtist(untagged, `/music/${meaningless}/Deceiver`, ["/music"]), "",
+      `"${meaningless}" says there is no artist rather than naming one`);
+  }
+});
+
+test("a year in the folder name becomes the year, not part of the title", () => {
+  assert.deepStrictEqual(scanner.titleFromFolder("/m/Deceiver (2021)"), { title: "Deceiver", year: 2021 });
+  assert.deepStrictEqual(scanner.titleFromFolder("/m/Dark Angel (2008)"), { title: "Dark Angel", year: 2008 });
+  assert.deepStrictEqual(scanner.titleFromFolder("/m/01 - Kid A"), { title: "Kid A", year: null });
+  /* A folder actually called 1999 keeps its name. */
+  assert.deepStrictEqual(scanner.titleFromFolder("/m/1999"), { title: "1999", year: null });
 });
