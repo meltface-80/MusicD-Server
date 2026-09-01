@@ -102,7 +102,7 @@ checks GitHub for a newer release when it loads and says so if there is one.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.3.2` | that exact version, for pinning |
+| `:0.3.3` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -197,6 +197,17 @@ Everything is optional except your music path.
 
 An album is a folder that contains audio files. A folder holding only other
 folders is not an album, and a folder of scans with no audio in it never appears.
+
+**Multi-disc releases are one album.** A folder named for a disc — `Disc`, `Disk`
+or `CD`, in any case, with or without a space before the number, and with a
+separator or brackets around it if your ripper put one there, so `Disc 1`,
+`disc1`, `CD 2`, `cd2`, `Disc-1`, `CD_2`, `(Disc 2)`, `[CD1]` and `CD 1 of 2` all
+count — is folded into the album it belongs to. Discs inside the album folder
+(`Physical Graffiti/CD1/`) fold into that folder; discs sitting side by side
+(`Kid A (Disc 1)`, `Kid A (Disc 2)`) fold together on the name they share. The
+folder's number decides the disc order, because a rip split in two very often has
+every file tagged disc 1. Words that only begin the same way — `Discovery`,
+`Discipline`, `Disco 2000`, `CD Baby` — are albums, and are left alone.
 
 - **Title** comes from the album tag. If the folder's tracks disagree, or there
   is no tag at all, the folder's own name is used — with a leading `01 - ` index
