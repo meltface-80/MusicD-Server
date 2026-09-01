@@ -235,6 +235,43 @@ button, input { font-family: inherit; }
 .menu-foot { padding: 4px 18px 18px; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
 
 /* ------------------------------------------------------------------ */
+/*  The menu's row list, which is also its arrangement                 */
+/* ------------------------------------------------------------------ */
+
+.menu-rows { display: flex; flex-direction: column; }
+.menu-row { display: flex; align-items: center; }
+.menu-row-open { flex: 1 1 auto; min-width: 0; text-align: left; }
+
+/* The pad, and the only thing a drag starts from — the rest of the entry stays
+   a plain tap that opens the row, so arranging the menu never gets in the way
+   of using it. touch-action tells the browser this gesture is ours: without
+   it a held-then-dragged finger scrolls the menu instead. */
+.menu-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--tap-min); height: var(--tap-min);
+  margin-right: 6px;
+  background: none; border: 0; padding: 0;
+  color: var(--text-faint); cursor: grab;
+  touch-action: none;
+}
+.menu-grip svg { width: 20px; height: 20px; display: block; }
+.menu-grip:active { cursor: grabbing; }
+
+/* Held. The row lifts off the list and everything else dims, so the one thing
+   moving is the one thing being moved. */
+.menu-row.is-dragging {
+  background: var(--bg-elev-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  position: relative; z-index: 1;
+}
+.menu-row.is-dragging .menu-grip { color: var(--accent-text); }
+.menu-rows.is-arranging .menu-row:not(.is-dragging) { opacity: .55; }
+/* No transition on the row being dragged: it is already following a finger,
+   and animating it as well makes it lag behind. */
+.menu-rows.is-arranging .menu-row:not(.is-dragging) { transition: transform .12s ease; }
+
+/* ------------------------------------------------------------------ */
 /*  Main                                                               */
 /* ------------------------------------------------------------------ */
 

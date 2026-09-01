@@ -41,23 +41,29 @@ test.after(async () => {
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-function request(pathname, { headers = {}, method = "GET" } = {}) {
+function request(pathname, { headers = {}, method = "GET", body = null } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(pathname, base);
-    http.request({
-      hostname: url.hostname, port: url.port, path: url.pathname + url.search, method, headers
+    const payload = body === null ? null : Buffer.from(JSON.stringify(body));
+    const req = http.request({
+      hostname: url.hostname, port: url.port, path: url.pathname + url.search, method,
+      headers: payload
+        ? { "Content-Type": "application/json", "Content-Length": payload.length, ...headers }
+        : headers
     }, res => {
       const chunks = [];
       res.on("data", c => chunks.push(c));
       res.on("end", () => resolve({
         status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks)
       }));
-    }).on("error", reject).end();
+    });
+    req.on("error", reject);
+    req.end(payload);
   });
 }
 
-async function json(pathname) {
-  const res = await request(pathname);
+async function json(pathname, options) {
+  const res = await request(pathname, options);
   return { status: res.status, body: JSON.parse(res.body.toString("utf8")) };
 }
 
@@ -112,6 +118,48 @@ test("an album card carries everything the grid needs and nothing it does not", 
   assert.strictEqual(album.year, 1993);
   assert.strictEqual(album.playCount, 0);
   assert.strictEqual(album.lastPlayedAt, null);
+});
+
+/* ---------------------------------------------------------------- */
+/*  The home screen's order                                          */
+/* ---------------------------------------------------------------- */
+
+test("the row order is readable, and names every row", async () => {
+  const { body } = await json("/api/rows");
+  assert.deepStrictEqual(body.order,
+    ["favourites", "library", "random", "added", "played", "unplayed", "picks"]);
+  /* The menu needs a name for each, and it must be the same name the home
+     screen uses — one table on the server rather than two lists to keep in
+     step. */
+  assert.strictEqual(body.titles.picks, "Smart Picks");
+  assert.strictEqual(body.titles.unplayed, "Not played in 6 months");
+  assert.deepStrictEqual(Object.keys(body.titles).sort(), [...body.order].sort());
+});
+
+test("rearranging the rows rearranges the home screen", async () => {
+  const wanted = ["picks", "unplayed", "played", "added", "random", "library", "favourites"];
+  const { body: saved } = await json("/api/rows", { method: "POST", body: { order: wanted } });
+  assert.deepStrictEqual(saved.order, wanted);
+
+  const { body: home } = await json("/api/home");
+  /* Favourites is absent when there are none, so compare what is left. */
+  assert.deepStrictEqual(home.rows.map(r => r.key),
+    wanted.filter(k => k !== "favourites"));
+
+  /* Put it back, so the order of tests in this file cannot matter. */
+  await json("/api/rows", { method: "POST", body: { order: [] } });
+  const { body: back } = await json("/api/home");
+  assert.strictEqual(back.rows[0].key, "library");
+});
+
+test("an order naming rows that do not exist still leaves a whole home screen", async () => {
+  await json("/api/rows", { method: "POST", body: { order: ["nope", "picks", 42] } });
+  const { body } = await json("/api/rows");
+  assert.strictEqual(body.order[0], "picks", "what it could use, it used");
+  assert.deepStrictEqual([...body.order].sort(),
+    ["added", "favourites", "library", "picks", "played", "random", "unplayed"],
+    "and every row is still there");
+  await json("/api/rows", { method: "POST", body: { order: [] } });
 });
 
 /* ---------------------------------------------------------------- */

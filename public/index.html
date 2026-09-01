@@ -94,12 +94,14 @@
       </div>
 
       <button class="menu-item" type="button" data-go="home">Home</button>
-      <button class="menu-item" type="button" data-go="row:library">Library</button>
       <button class="menu-item" type="button" data-go="artists">Artists</button>
-      <button class="menu-item" type="button" data-go="row:added">Recently added</button>
-      <button class="menu-item" type="button" data-go="row:played">Recently played</button>
-      <button class="menu-item" type="button" data-go="row:unplayed">Not played in 6 months</button>
-      <button class="menu-item" type="button" data-go="row:picks">Smart Picks</button>
+
+      <!-- The home screen's rows, in the order the home screen shows them.
+           Built by app.js from /api/rows rather than written out here, because
+           the order is the user's and lives in the database — a list nailed
+           into the markup could only ever be one of the two, and the two have
+           to agree. Each one carries a pad you hold and drag to move it. -->
+      <div id="menu-rows" class="menu-rows"></div>
 
       <div class="menu-sep"></div>
 

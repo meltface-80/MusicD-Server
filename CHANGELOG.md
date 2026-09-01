@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.6
+
+### Arrange the home screen
+- **Every row now has a pad in the side menu. Hold it, drag the row where you
+  want it, let go.** The home screen follows immediately, and the arrangement
+  is saved.
+- **The menu lists every row the home screen can show**, which it did not
+  before — Random albums and Favourites were on the home screen but not in the
+  menu. Reordering a list missing two of the rows would have left them
+  stranded wherever they happened to be, so the menu is now the complete
+  picture and the pads act on all of it.
+- The order lives in the library's own database, not in the browser: arrange it
+  once and every phone in the house agrees, a reinstalled shortcut remembers,
+  and it survives an update for the same reason the play history does.
+- A quick flick on a pad still scrolls the menu. The hold is what starts a
+  drag, and moving before it elapses is taken as a scroll.
+- Tapping a row still opens it — the pad is its own control, so arranging the
+  menu never gets in the way of using it.
+- An order that names a row this version does not have drops it, and a row it
+  does not mention goes back where it started. That is what lets a later
+  version add a row without it disappearing for anybody who had already
+  arranged theirs.
+
 ## 0.4.5
 
 ### The in-app update works
