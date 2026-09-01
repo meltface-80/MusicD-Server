@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.3
+
+### Multi-disc albums are one album again
+- **A release split across `Disc 1` / `Disc 2` folders is now a single album.**
+  Every spelling in ordinary use is read: `Disc`, `Disk` and `CD`, in any
+  mixture of upper and lower case, with or without a space before the number —
+  `Disc 1`, `disc1`, `CD 2`, `cd2`, `DISK 3` — and with a separator or brackets
+  around it if the ripper put one there: `Disc-1`, `CD_2`, `(Disc 2)`,
+  `[CD1]`, `CD 1 of 2`. A subtitle after the number, as in
+  `CD1 - Early Sessions`, is read as the disc's own name and does not stop the
+  fold.
+- Both of the two layouts these rips arrive in are handled. Discs sitting
+  inside the album folder — `Physical Graffiti/CD1/` — fold into the folder
+  that holds them. Discs sitting beside each other as siblings —
+  `Kid A (Disc 1)/` and `Kid A (Disc 2)/` — fold together on the name they
+  share, so `Kid A Disc 1`, `Kid A - Disc 1`, `Kid A (Disc 1)` and
+  `Kid A [CD2]` all land on `Kid A`.
+- **The folder's disc number wins over the tag.** A rip split into two folders
+  very often has every file tagged disc 1, and trusting that would interleave
+  the two halves. A tag is still used when the folder does not say.
+- Words that merely start the same way are left alone. `Discovery`,
+  `Discipline`, `Disco 2000` and `CD Baby` are albums, not discs.
+- **Folding an album keeps the history of the pieces it was made from.** Play
+  counts add up, the earliest date added is kept, the most recent play is kept,
+  and the individual plays are moved onto the merged album — so the six-month
+  row and Smart Picks still know what you listened to. Nothing is deleted.
+
+### Fixed
+- `Disco 2000` was becoming an album called `Disco` released in 2000. The year
+  strip added in 0.3.2 took any four digits off the end of a folder name; it now
+  requires the year to be bracketed — `Deceiver (2021)`, `[2021]` — or set off
+  by a separator — `Album - 2021`, `Album_2016`. A bare space in front of it is
+  part of the title.
+
 ## 0.3.2
 
 ### Albums coming back as "Unknown artist"

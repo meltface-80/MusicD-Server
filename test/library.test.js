@@ -10,7 +10,7 @@ const dbLib = require("../lib/db");
 const scanner = require("../lib/scanner");
 const library = require("../lib/library");
 const picks = require("../lib/picks");
-const { buildLibrary } = require("./fixtures");
+const { buildLibrary, wav } = require("./fixtures");
 
 const DAY = 86400000;
 
@@ -307,4 +307,215 @@ test("a year in the folder name becomes the year, not part of the title", () => 
   assert.deepStrictEqual(scanner.titleFromFolder("/m/01 - Kid A"), { title: "Kid A", year: null });
   /* A folder actually called 1999 keeps its name. */
   assert.deepStrictEqual(scanner.titleFromFolder("/m/1999"), { title: "1999", year: null });
+
+  /* The year has to be MARKED as one. A bare space and four digits is part of
+     the title far too often to strip. */
+  for (const marked of ["Deceiver [2021]", "Deceiver - 2021", "Deceiver_2016"]) {
+    assert.strictEqual(scanner.titleFromFolder("/m/" + marked).title, "Deceiver", marked);
+  }
+  for (const bare of ["Disco 2000", "Blade Runner 2049", "Summer 1993"]) {
+    assert.deepStrictEqual(scanner.titleFromFolder("/m/" + bare), { title: bare, year: null },
+      bare + " is a title, not an album with a year after it");
+  }
+});
+
+/* ---------------------------------------------------------------- */
+/*  Multi-disc albums                                                */
+/* ---------------------------------------------------------------- */
+
+test("a disc folder is read in any case, with or without a space", () => {
+  const cases = {
+    "Disc 1": 1, "Disc1": 1, "disc 2": 2, "DISC 3": 3, "Disk 1": 1,
+    "CD 1": 1, "CD1": 1, "cd2": 2, "CD 1 of 2": 1,
+    "Disc-1": 1, "CD_2": 2, "CD.1": 1, "(Disc 2)": 2, "CD1 - Early Sessions": 1
+  };
+  for (const [name, disc] of Object.entries(cases)) {
+    assert.deepStrictEqual(scanner.parseDiscFolder(name), { album: "", disc },
+      name + " names a disc and nothing else");
+  }
+});
+
+test("a folder carrying the album name AND a disc gives up both", () => {
+  const cases = {
+    "Kid A Disc 1": ["Kid A", 1], "Kid A - Disc 1": ["Kid A", 1],
+    "Kid A (Disc 1)": ["Kid A", 1], "Kid A [CD2]": ["Kid A", 2],
+    "Kid A CD 2": ["Kid A", 2], "Physical Graffiti CD1": ["Physical Graffiti", 1],
+    "THE WALL DISC 2": ["THE WALL", 2], "the wall cd1": ["the wall", 1]
+  };
+  for (const [name, [album, disc]] of Object.entries(cases)) {
+    assert.deepStrictEqual(scanner.parseDiscFolder(name), { album, disc }, name);
+  }
+});
+
+test("a word that merely starts with disc or cd is not a disc folder", () => {
+  /* The word has to be followed by a number, with only a separator between. */
+  for (const name of ["Discovery", "Disco 2000", "Kid A", "1999", "CD Baby",
+                      "Discipline", "Deceiver (2021)"]) {
+    assert.strictEqual(scanner.parseDiscFolder(name), null, name);
+  }
+});
+
+test("discs inside an album folder become one album", async () => {
+  const ws = workspace();
+  for (const [dir, tracks] of Object.entries({
+    "Pink Floyd/The Wall/Disc 1": ["In the Flesh", "The Thin Ice"],
+    "Pink Floyd/The Wall/Disc 2": ["Hey You", "Nobody Home"]
+  })) {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    tracks.forEach((title, i) => fs.writeFileSync(
+      path.join(full, `0${i + 1} ${title}.wav`),
+      wav({ title, artist: "Pink Floyd", albumArtist: "Pink Floyd", track: i + 1 })));
+  }
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM albums WHERE present = 1").get().n, 1,
+    "one album, not two");
+  const album = library.album(db, db.prepare("SELECT id FROM albums").get().id);
+  assert.strictEqual(album.title, "The Wall");
+  assert.strictEqual(album.artist, "Pink Floyd");
+  assert.strictEqual(album.tracks.length, 4);
+  assert.strictEqual(album.multiDisc, true);
+  assert.deepStrictEqual(album.tracks.map(t => t.disc), [1, 1, 2, 2],
+    "the FOLDER decides the disc — a rip where every file is tagged disc 1 is common");
+  ws.cleanup();
+});
+
+test("sibling folders sharing an album name become one album", async () => {
+  const ws = workspace();
+  for (const [dir, title] of Object.entries({
+    "Genesis/Seconds Out Disc1": "Squonk",
+    "Genesis/Seconds Out Disc 2": "Cinema Show",
+    "Genesis/Seconds Out (CD 3)": "Afterglow"
+  })) {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    fs.writeFileSync(path.join(full, "01 " + title + ".wav"),
+      wav({ title, artist: "Genesis", albumArtist: "Genesis", track: 1 }));
+  }
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  const albums = db.prepare("SELECT title FROM albums WHERE present = 1").all();
+  assert.deepStrictEqual(albums.map(a => a.title), ["Seconds Out"]);
+  const album = library.album(db, db.prepare("SELECT id FROM albums").get().id);
+  assert.deepStrictEqual(album.tracks.map(t => t.disc), [1, 2, 3]);
+  ws.cleanup();
+});
+
+test("a folded album takes the cover from wherever one is actually named", async () => {
+  /* The cover sits one level up from the disc folders in most rips, and the
+     album folder is not one the walk ever listed — so it has to be read on
+     purpose. A cover inside a disc folder still counts when there is none
+     above it. */
+  const ws = workspace();
+  const png = fs.readFileSync(path.join(__dirname, "..", "public", "icons", "icon-192.png"));
+
+  const disc = rel => {
+    const full = path.join(ws.music, rel);
+    fs.mkdirSync(full, { recursive: true });
+    fs.writeFileSync(path.join(full, "01 Track.wav"), wav({ title: "Track", artist: "A" }));
+  };
+  disc("A/Above/CD1");
+  disc("A/Above/CD2");
+  fs.writeFileSync(path.join(ws.music, "A/Above/cover.png"), png);
+
+  disc("A/Inside/CD1");
+  disc("A/Inside/CD2");
+  fs.writeFileSync(path.join(ws.music, "A/Inside/CD2/folder.png"), png);
+
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  const art = t => db.prepare("SELECT art FROM albums WHERE title = ?").get(t).art;
+  assert.strictEqual(art("Above"), path.join(ws.music, "A/Above/cover.png"),
+    "the cover above the disc folders");
+  assert.strictEqual(art("Inside"), path.join(ws.music, "A/Inside/CD2/folder.png"),
+    "and one inside a disc folder when there is none above");
+  ws.cleanup();
+});
+
+test("folding discs together keeps the history they had apart", async () => {
+  /* Before folding, each disc was an album with its own counts. Changing the
+     album's identity must not strand real listening. */
+  const ws = workspace();
+  for (const [dir, title] of Object.entries({
+    "Yes/Yessongs/CD1": "Opening",
+    "Yes/Yessongs/CD2": "Roundabout"
+  })) {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    fs.writeFileSync(path.join(full, "01 " + title + ".wav"), wav({ title, artist: "Yes" }));
+  }
+  const db = dbLib.open(ws.data);
+
+  /* Stand in for what the old scanner left behind: one album per disc. */
+  const DAY = 86400000, now = Date.now();
+  for (const [rel, added, plays, last] of [
+    ["a:Yes/Yessongs/CD1", now - 400 * DAY, 3, now - 10 * DAY],
+    ["a:Yes/Yessongs/CD2", now - 300 * DAY, 2, now - 5 * DAY]
+  ]) {
+    db.prepare(`INSERT INTO albums (id, dir, title, artist, added_at, play_count, last_played_at)
+                VALUES (?, '', 'Yessongs', 'Yes', ?, ?, ?)`).run(rel, added, plays, last);
+    db.prepare("INSERT INTO plays (kind, ref, album_id, ts) VALUES ('album', ?, ?, ?)")
+      .run(rel, rel, last);
+  }
+
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  const album = db.prepare("SELECT * FROM albums WHERE present = 1").get();
+  assert.strictEqual(album.play_count, 5, "the counts are summed");
+  assert.strictEqual(album.added_at, now - 400 * DAY, "the earliest arrival is kept");
+  assert.strictEqual(album.last_played_at, now - 5 * DAY, "and the most recent play");
+  assert.strictEqual(
+    db.prepare("SELECT COUNT(*) n FROM plays WHERE album_id = ?").get(album.id).n, 2,
+    "the play history now points at the album that exists");
+  ws.cleanup();
+});
+
+test("folding is idempotent — a second scan does not count the same plays twice", async () => {
+  /* The pieces' counters are added onto the album they became. Left where they
+     were, the next scan would add them again, and the album would double its
+     play count every time the library was rescanned. */
+  const ws = workspace();
+  for (const [dir, title] of Object.entries({
+    "Yes/Yessongs/CD1": "Opening",
+    "Yes/Yessongs/CD2": "Roundabout"
+  })) {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    fs.writeFileSync(path.join(full, "01 " + title + ".wav"), wav({ title, artist: "Yes" }));
+  }
+  const db = dbLib.open(ws.data);
+
+  const DAY = 86400000, now = Date.now();
+  for (const [rel, added, plays, last] of [
+    ["a:Yes/Yessongs/CD1", now - 400 * DAY, 3, now - 10 * DAY],
+    ["a:Yes/Yessongs/CD2", now - 300 * DAY, 2, now - 5 * DAY]
+  ]) {
+    db.prepare(`INSERT INTO albums (id, dir, title, artist, added_at, play_count, last_played_at)
+                VALUES (?, '', 'Yessongs', 'Yes', ?, ?, ?)`).run(rel, added, plays, last);
+    db.prepare("INSERT INTO plays (kind, ref, album_id, ts) VALUES ('album', ?, ?, ?)")
+      .run(rel, rel, last);
+  }
+
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  const album = db.prepare("SELECT * FROM albums WHERE present = 1").get();
+  assert.strictEqual(album.play_count, 5, "still the five plays that happened");
+  assert.strictEqual(album.added_at, now - 400 * DAY, "and still the earliest arrival");
+  assert.strictEqual(album.last_played_at, now - 5 * DAY, "and still the most recent play");
+
+  /* Every album play now names the album it belongs to, not a disc folder that
+     is no longer an album — "recently played" reads `ref`. */
+  assert.strictEqual(
+    db.prepare("SELECT COUNT(*) n FROM plays WHERE kind = 'album' AND ref = ?").get(album.id).n, 2,
+    "the history rows name the album that exists");
+  assert.strictEqual(
+    db.prepare("SELECT COUNT(*) n FROM plays WHERE kind = 'album' AND ref LIKE '%/CD_'").get().n, 0,
+    "and none of them still name a disc");
+  ws.cleanup();
 });
