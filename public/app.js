@@ -68,6 +68,17 @@ function ago(ts) {
   return `${Math.round(months / 12)} years ago`;
 }
 
+/* Copying, with somewhere to fall back to. The clipboard needs a secure
+   context, which a LAN address over plain HTTP is not — so when it is refused
+   the text goes on screen instead, where it can at least be read out. */
+function copyText(text, done) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast(done), () => toast(text));
+  } else {
+    toast(text);
+  }
+}
+
 let toastTimer = null;
 function toast(message, isError = false) {
   const node = $("toast");
@@ -1518,8 +1529,37 @@ function describeBuild(build) {
  * load, fails silently when offline, and remembers a dismissal per version so
  * it does not become a nag.
  */
+/*
+ * How long the automatic check waits before asking GitHub again.
+ *
+ * GitHub allows sixty unauthenticated requests an hour PER ADDRESS, and every
+ * phone in the house shares one — so an installed app that asks on every
+ * launch is a household spending that allowance on a question whose answer
+ * changes a few times a week. Running out is a 403, which is what an update
+ * refusing to install looks like from the outside. Asking is still free the
+ * moment somebody asks for it: a manual check ignores this entirely.
+ */
+const UPDATE_CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
+
+function checkedRecently() {
+  try {
+    const at = Number(localStorage.getItem("musicd.lastUpdateCheck") || 0);
+    return at > 0 && Date.now() - at < UPDATE_CHECK_EVERY_MS;
+  } catch {
+    /* Storage off. Then there is nothing to remember and the check runs, which
+       is the behaviour this replaced — no worse than before. */
+    return false;
+  }
+}
+
+function rememberCheck() {
+  try { localStorage.setItem("musicd.lastUpdateCheck", String(Date.now())); }
+  catch { /* storage off — the next load asks again, as it always did */ }
+}
+
 async function checkForUpdate(build, { manual = false } = {}) {
   if (!build || !build.version) return;
+  if (!manual && checkedRecently()) return;
   let dismissed = "";
   try { dismissed = localStorage.getItem("musicd.dismissedUpdate") || ""; }
   catch { /* storage off — the notice simply reappears next load */ }
@@ -1527,8 +1567,15 @@ async function checkForUpdate(build, { manual = false } = {}) {
   try {
     if (manual) toast("Checking for updates…");
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { cache: "no-store" });
+    if (res.status === 403 || res.status === 429) {
+      /* Sixty an hour per address, shared with every other phone here. Not a
+         fault, and not worth a banner on an automatic check. */
+      rememberCheck();
+      throw new Error("GitHub is rate-limiting this address — try again later.");
+    }
     if (!res.ok) throw new Error("GitHub answered " + res.status);
     const release = await res.json();
+    rememberCheck();
     const latest = String(release.tag_name || "").replace(/^v/, "");
     if (!/^\d+\.\d+\.\d+$/.test(latest)) throw new Error("no released version to compare with");
     if (!isNewer(latest, build.version)) {
@@ -1581,12 +1628,34 @@ function showUpdateProgress(phase) {
   $("update-text").textContent = UPDATE_PHASES[phase] || "Updating…";
 }
 
-function showUpdateFailed(message) {
+/*
+ * An update that failed, and enough to know why.
+ *
+ * The server names the step it died in and gathers what it could and could not
+ * do at that moment — reach GitHub, run tar, write to its own directory. That
+ * goes behind the Release notes link, which becomes a way to copy the lot:
+ * "the update fails" is not a report anybody can act on, and the person who
+ * has to act on it is usually not standing next to the container's log.
+ */
+function showUpdateFailed(message, diagnosis) {
   updateBanner().classList.remove("is-busy");
   updateBanner().classList.add("is-error");
   $("update-text").textContent = "The update failed: " + message;
   $("update-now").disabled = false;
   $("update-now").textContent = "Try again";
+
+  const link = $("update-link");
+  if (!diagnosis) return;
+  link.textContent = "Copy details";
+  link.removeAttribute("target");
+  link.removeAttribute("href");
+  link.onclick = (e) => {
+    e.preventDefault();
+    const detail = [`MusicD Server ${state.build ? state.build.version : "?"}`,
+                    `failed: ${message}`,
+                    ...Object.entries(diagnosis).map(([k, v]) => `${k}: ${v}`)].join("\n");
+    copyText(detail, "Details copied.");
+  };
 }
 
 /* Offer the update, with the button that takes it. */
@@ -1599,6 +1668,7 @@ function offerUpdate(latest, running, notesUrl) {
   link.textContent = "Release notes";
   link.target = "_blank";
   link.href = notesUrl;
+  link.onclick = null;                 // a previous failure may have taken it over
 
   const button = $("update-now");
   button.disabled = false;
@@ -1670,7 +1740,7 @@ function watchUpdate(runningVersion) {
     const phase = (status.apply && status.apply.phase) || "idle";
     if (phase === "error") {
       clearInterval(state.updateTimer);
-      showUpdateFailed(status.apply.error || "no reason given");
+      showUpdateFailed(status.apply.error || "no reason given", status.apply.diagnosis);
       return;
     }
     if (UPDATE_PHASES[phase]) showUpdateProgress(phase);
@@ -1825,12 +1895,7 @@ function wire() {
     if (!text) return;
     /* The one thing anybody wants from a version line is to paste it into a
        message about something not working. */
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText("MusicD Server " + text)
-        .then(() => toast("Version copied."), () => toast(text));
-    } else {
-      toast(text);
-    }
+    copyText("MusicD Server " + text, "Version copied.");
   });
 
   $("menu-theme").addEventListener("click", () => {

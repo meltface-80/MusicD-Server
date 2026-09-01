@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.3
+
+### A long press no longer selects the app
+- **Resting a thumb on the app raised iOS's selection handles and its
+  Copy / Look Up / Translate bar over it.** A long press on a phone is how you
+  scroll from a standstill and how you hesitate before tapping; on a web page
+  it also selects text. This is a remote control, and every word on it is a
+  label on a control — so nothing is selectable now.
+- The two exceptions are deliberate: a search field still behaves like a field,
+  and the share card still answers a long press with the phone's own save and
+  share sheet, which is what the hint under it has always promised.
+
+### When an update fails, it now says why
+- **The failure names the step it died in** — checking, downloading, unpacking,
+  installing — and carries what the server could and could not do at that
+  moment: whether it can write where it installs, whether `tar` is there, how
+  much room is left, which Node it is on. **Copy details** on the banner puts
+  the lot on the clipboard. An update that fails does so for a reason outside
+  the code far more often than inside it, and every one of those is a different
+  fix.
+- **A rate limit says it is one.** GitHub allows sixty unauthenticated requests
+  an hour per address, shared by every phone in the house — the likeliest
+  reason an update refuses to install, and "GitHub answered 403" gives nobody
+  anywhere to go. It now says so, and roughly when the count resets.
+- **The automatic check asks GitHub at most once every six hours** rather than
+  on every launch. An installed app opened a dozen times a day was spending
+  that hourly allowance on a question whose answer changes a few times a week.
+  Asking for a check yourself still asks straight away.
+
+### Fixed
+- The download counted bytes with a `data` listener alongside a `pipe`, which
+  is two ways of reading one stream: anything arriving before the pipe was
+  attached went to the counter and nowhere else — a truncated tarball that
+  unpacks to nothing, with no error to show for it. It is one pipeline now,
+  with the size limit as a stage in it.
+
 ## 0.4.2
 
 ### Favourites

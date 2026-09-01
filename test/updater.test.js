@@ -420,3 +420,160 @@ test("a failure leaves nothing half-installed and no staging behind", async () =
   assert.ok(!fs.existsSync(path.join(ws.root, ".update")), "and no staging is left behind");
   ws.cleanup();
 });
+
+/* ------------------------------------------------------------------ */
+/*  The transport itself                                               */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The updater's own HTTPS code, driven against the shape GitHub really
+ * answers with. Everything below the transport was covered by injecting a
+ * stand-in for it, which meant this half — redirects, the size cap, reading
+ * the body — had never run at all. `https.get` is replaced with a real
+ * readable stream, so flowing mode, pipe() and the order listeners attach in
+ * all behave as they will against a socket.
+ */
+const https = require("https");
+const { EventEmitter } = require("events");
+const { PassThrough } = require("stream");
+
+function withFakeGitHub(routes, run) {
+  const asked = [];
+  const real = https.get;
+  https.get = (options, cb) => {
+    const host = options.hostname || options.host;
+    const url = `https://${host}${options.path}`;
+    asked.push({ url, headers: options.headers });
+    const res = new PassThrough();
+    const req = new EventEmitter();
+    req.setTimeout = () => {};
+    req.destroy = () => {};
+    setImmediate(() => {
+      const answer = routes(url) || { status: 404, headers: {}, body: "" };
+      res.statusCode = answer.status;
+      res.headers = answer.headers || {};
+      cb(res);
+      if (answer.body === undefined || answer.body === null) return res.end();
+      /* In pieces, the way a socket delivers it: one end() would hide a
+         mistake about when the file is opened relative to the data. */
+      const buf = Buffer.from(answer.body);
+      for (let i = 0; i < buf.length; i += 2048) res.write(buf.subarray(i, i + 2048));
+      res.end();
+    });
+    return req;
+  };
+  return Promise.resolve(run(asked)).finally(() => { https.get = real; });
+}
+
+const RELEASE = (version) => JSON.stringify({
+  tag_name: "v" + version,
+  html_url: `https://github.com/meltface-80/MusicD-Server/releases/tag/v${version}`,
+  body: "notes",
+  tarball_url: `https://api.github.com/repos/meltface-80/MusicD-Server/tarball/v${version}`
+});
+
+test("an update installs over the REAL transport, redirect and all", async () => {
+  const ws = workspace();
+  installedAt(ws.root, "0.4.1");
+  const rel = releaseTarball("0.4.2");
+  const gz = fs.readFileSync(rel.tgz);
+
+  let exited = null;
+  await withFakeGitHub((url) => {
+    if (url.includes("/releases/latest")) {
+      return { status: 200, headers: {}, body: RELEASE("0.4.2") };
+    }
+    if (url.includes("api.github.com") && url.includes("/tarball/")) {
+      /* Exactly what GitHub does: a 302 on to its own download host. */
+      return { status: 302, headers: {
+        location: "https://codeload.github.com/meltface-80/MusicD-Server/legacy.tar.gz/refs/tags/v0.4.2"
+      } };
+    }
+    if (url.includes("codeload.github.com")) return { status: 200, headers: {}, body: gz };
+    return null;
+  }, async (asked) => {
+    const s = await createUpdater({
+      dir: ws.root, version: "0.4.1", exit: (c) => { exited = c; },
+      installDependencies: () => assert.fail("the dependencies did not change")
+    }).apply();
+
+    assert.strictEqual(s.apply.error, null, "it did not fail: " + s.apply.error);
+    assert.strictEqual(s.apply.phase, "restarting");
+    assert.ok(asked.some(a => a.url.includes("codeload")), "the redirect was followed");
+    assert.strictEqual(fs.readFileSync(path.join(ws.root, "index.js"), "utf8"),
+      "// MusicD Server 0.4.2\n", "and the whole tarball landed, not a truncated one");
+    assert.strictEqual(fs.readFileSync(path.join(ws.root, "data", "musicd.db"), "utf8"),
+      "the user's library");
+  });
+
+  await new Promise(r => setTimeout(r, 700));
+  assert.strictEqual(exited, updater.RESTART_EXIT_CODE);
+  rel.cleanup(); ws.cleanup();
+});
+
+test("a redirect off GitHub is refused mid-chain", async () => {
+  /* The first hop is GitHub and the second is wherever the answer says, so
+     every hop goes through the host check — not just the one that was typed. */
+  const ws = workspace();
+  installedAt(ws.root, "0.4.1");
+  await withFakeGitHub((url) => {
+    if (url.includes("/releases/latest")) return { status: 200, headers: {}, body: RELEASE("0.4.2") };
+    if (url.includes("/tarball/")) {
+      return { status: 302, headers: { location: "https://evil.example/payload.tar.gz" } };
+    }
+    return null;
+  }, async (asked) => {
+    const s = await createUpdater({
+      dir: ws.root, version: "0.4.1",
+      exit: () => assert.fail("nothing was installed, so nothing may restart")
+    }).apply();
+    assert.strictEqual(s.apply.phase, "error");
+    assert.match(s.apply.error, /refusing to fetch from evil\.example/);
+    assert.ok(!asked.some(a => a.url.includes("evil.example")), "and it was never opened");
+  });
+  ws.cleanup();
+});
+
+test("being rate-limited says so, rather than reporting a bare 403", async () => {
+  /* Sixty unauthenticated requests an hour PER ADDRESS, shared with every
+     phone in the house. It is the likeliest reason an update refuses to
+     install, and "GitHub answered 403" gives nobody anywhere to go. */
+  const ws = workspace();
+  const reset = Math.floor((Date.now() + 12 * 60000) / 1000);
+  await withFakeGitHub(() => ({
+    status: 403,
+    headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(reset) },
+    body: ""
+  }), async () => {
+    const s = await createUpdater({ dir: ws.root, version: "0.4.1" }).check();
+    assert.match(s.error, /rate-limiting/);
+    assert.match(s.error, /1[12] minutes/, "and roughly when it lifts");
+  });
+  ws.cleanup();
+});
+
+test("a failure says which step it died in, and what this machine can do", async () => {
+  /* "The update failed" is not a report anybody can act on, and the person who
+     has to act on it is rarely standing next to the container's log. */
+  const ws = workspace();
+  installedAt(ws.root, "0.4.1");
+  await withFakeGitHub((url) => {
+    if (url.includes("/releases/latest")) return { status: 200, headers: {}, body: RELEASE("0.4.2") };
+    return { status: 500, headers: {}, body: "" };   // the download falls over
+  }, async () => {
+    const s = await createUpdater({
+      dir: ws.root, version: "0.4.1",
+      exit: () => assert.fail("nothing was installed, so nothing may restart")
+    }).apply();
+
+    assert.strictEqual(s.apply.phase, "error");
+    assert.match(s.apply.error, /while downloading/, "the step it died in");
+    const d = s.apply.diagnosis;
+    assert.ok(d, "and what the machine could do at the time");
+    assert.strictEqual(d.step, "downloading");
+    assert.strictEqual(d.writable, true, "whether it can write where it installs");
+    assert.match(d.tar, /tar|missing/, "and whether tar is even there");
+    assert.ok(d.node.startsWith("v"));
+  });
+  ws.cleanup();
+});

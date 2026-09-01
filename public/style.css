@@ -91,6 +91,35 @@ html, body {
   overscroll-behavior-y: none;
 }
 
+/*
+ * NOTHING HERE IS TEXT TO BE SELECTED.
+ *
+ * A long press on a phone is how you scroll from a standstill, and how you
+ * hesitate before tapping. On a web page it is also how you select text — so
+ * resting a thumb on a menu item raised iOS's selection handles and its
+ * Copy / Look Up / Translate bar over the app. This is a remote control, not a
+ * document: every word on it is a label on a control.
+ *
+ * Selection is given back deliberately, and only where there is something
+ * worth taking away — see .share-frame img, which is the one thing here a
+ * long press is SUPPOSED to act on.
+ */
+* {
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  /* Separate from selection, and the half people forget: this is what stops
+     iOS raising its own sheet over a link or an image on a long press. */
+  -webkit-touch-callout: none;
+}
+
+/* A field is for typing in, so it keeps everything a field needs. */
+input, textarea {
+  -webkit-user-select: text;
+     -moz-user-select: text;
+          user-select: text;
+}
+
 button, input { font-family: inherit; }
 .hidden { display: none !important; }
 
@@ -1121,7 +1150,17 @@ main {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; overflow: hidden;
 }
-.share-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* THE ONE EXCEPTION. The card is an image the whole screen exists to give
+   away, and long-pressing it is how a phone saves or shares a picture — the
+   hint under it says so. Both properties come back: the callout raises the
+   sheet, and the selection is what iOS wants before it will. */
+.share-frame img {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  -webkit-touch-callout: default;
+  -webkit-user-select: auto;
+     -moz-user-select: auto;
+          user-select: auto;
+}
 .share-placeholder {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   color: var(--text-faint); font-size: 13.5px; text-align: center; padding: 16px;
