@@ -216,9 +216,12 @@ test("the card is drawn from the album row alone", () => {
   /* No lookup, no review, no label — the same rule the rest of the app
      follows, and what lets the card be drawn with the network down. */
   const render = sharecard.slice(sharecard.indexOf("async function render"));
-  for (const field of ["data.coverUrl", "data.title", "data.artist", "data.year", "data.meta"]) {
+  for (const field of ["data.coverUrl", "data.title", "data.artist", "data.year"]) {
     assert.ok(render.includes(field), field + " is used");
   }
+  /* The track count and length were dropped: a share card says what the record
+     IS, and how long it runs is a detail for the album screen. */
+  assert.ok(!sharecard.includes("data.meta"), "no length line");
   assert.ok(!/fetch\(/.test(sharecard), "the renderer makes no requests of its own");
 });
 
@@ -391,4 +394,90 @@ test("Now playing is a screen at every width, never a floating dialog", () => {
      height-driven artwork nothing to size against — it collapses to nothing
      and takes the view with it. */
   assert.match(css, /@media \(min-width: 720px\) \{\s*\.modal\.face-np \.modal-panel \{[^}]*height: 100%/s);
+});
+
+
+test("the card's type is MusicD Remote's, not a second scale", () => {
+  /* Sizes and spacing lifted from the reference so a card from either app is
+     recognisably the same object. */
+  assert.match(sharecard, /const YEAR_SIZE = 26;/);
+  assert.match(sharecard, /const TITLE_SIZES = \[56, 48, 42, 36, 31, 27\];/);
+  assert.match(sharecard, /const ARTIST_SIZES = \[37, 32, 28, 24, 21\];/);
+  assert.match(sharecard, /const TITLE_LH = 68 \/ 56;/);
+  assert.match(sharecard, /const ARTIST_LH = 48 \/ 37;/);
+  assert.match(sharecard, /const BLOCK_GAP = 18;/);
+  /* Both step down TOGETHER, so their relative scale holds. */
+  assert.match(sharecard, /TITLE_SIZES\[step\]/, "the title steps");
+  assert.match(sharecard, /ARTIST_SIZES\[Math\.min\(step, ARTIST_SIZES\.length - 1\)\]/,
+    "and the artist steps with it");
+});
+
+test("the wordmark is the real mark, drawn from the traced SVG", () => {
+  const svg = fs.readFileSync(path.join(PUBLIC, "icons", "wordmark.svg"), "utf8");
+  assert.match(svg, /<svg[^>]*viewBox="0 0 \d+ \d+"/, "it is a vector, not a wrapped bitmap");
+  assert.ok(!/<image\b/.test(svg), "no raster smuggled inside");
+  /* A presentation attribute, the lowest-priority way to colour it: white for
+     the canvas, where there is no CSS context and currentColor would come out
+     black, and overridable by any CSS rule when the mark is inlined. */
+  assert.match(svg, /<path fill="#ffffff"/, "white by default");
+  assert.ok(!/<rect[^>]*fill="#0|background/.test(svg), "and carries no background of its own");
+  assert.match(sharecard, /WORDMARK_URL = "\/icons\/wordmark\.svg"/);
+  /* Bigger than the reference's 110px: this mark carries the waveform too. */
+  const width = Number(/WORDMARK_W = (\d+)/.exec(sharecard)[1]);
+  assert.ok(width >= 200, "the mark is drawn large — was " + width);
+});
+
+test("the text knows the wordmark is under it", () => {
+  /* The mark sits at the bottom of the same column as the text. Fitting on
+     width alone was enough while it was small; at its real size a long title
+     ran straight through it. */
+  const render = sharecard.slice(sharecard.indexOf("async function render"));
+  assert.match(render, /const availH = PANE_H - PANE_PAD \* 2 - \(markH \? markH \+ 16 : 0\)/);
+  assert.match(render, /if \(blockH <= availH\) break;/,
+    "type steps down until the block fits the height it actually has");
+});
+
+/* ------------------------------------------------------------------ */
+/*  Keeping an installed app up to date                                */
+/* ------------------------------------------------------------------ */
+
+const sw = fs.readFileSync(path.join(PUBLIC, "sw.js"), "utf8");
+
+test("the service worker never serves the shell from cache while online", () => {
+  /* The opposite of the usual strategy, and deliberately so: this exists
+     because an installed app would not update, not to make a LAN round trip
+     faster. `cache: "reload"` bypasses the HTTP cache under the worker too. */
+  assert.match(sw, /cache: "reload"/);
+  assert.match(sw, /self\.skipWaiting\(\)/, "a new worker takes over at once");
+  assert.match(sw, /self\.clients\.claim\(\)/);
+  assert.match(sw, /caches\.delete\(name\)/, "and old caches go");
+});
+
+test("the worker leaves art, audio and the API alone", () => {
+  /* Audio is fetched by the SPEAKER, not this browser, and art is already
+     cached properly by its headers. Either one in here would fill a phone up
+     for nothing. */
+  assert.match(sw, /const SHELL = \[/);
+  const shell = /const SHELL = \[([^\]]+)\]/.exec(sw)[1];
+  assert.ok(!shell.includes("/stream"), "no audio");
+  assert.ok(!shell.includes("/api"), "no API");
+  assert.ok(shell.includes("/icons/wordmark.svg"), "the mark is cached, so a card works offline");
+  assert.match(sw, /if \(!navigation && !isShell\(url\)\) return;/);
+});
+
+test("the worker is registered from script, never from a head tag", () => {
+  /* iOS reads <head> at add-to-home-screen time and bakes the result into the
+     shortcut. A registration call runs after layout and changes nothing about
+     how the window is sized. */
+  assert.ok(!/rel="manifest"/.test(html), "no manifest link");
+  assert.match(js, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
+  assert.match(js, /"controllerchange"/, "and the page reloads when one takes over");
+  assert.match(js, /if \(reloading\) return;/, "once — a reload loop is worse than a stale page");
+});
+
+test("the worker carries the version, so a browser can see it changed", () => {
+  assert.match(sw, /const VERSION = "__BUILD_VERSION__"/);
+  const server = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.match(server, /replace\("__BUILD_VERSION__", BUILD\.version\)/);
+  assert.match(server, /Cache-Control", "no-cache"/);
 });

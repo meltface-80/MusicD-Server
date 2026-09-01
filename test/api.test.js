@@ -402,3 +402,23 @@ test("a deep link gets the same built shell, not the file on disk", async () => 
   assert.match(deep, /<meta name="musicd-build"/);
   assert.match(deep, /app\.js\?v=/);
 });
+
+test("the service worker is served with the version in it and never cached", async () => {
+  const res = await request("/sw.js");
+  assert.strictEqual(res.status, 200);
+  const body = res.body.toString();
+  assert.ok(body.includes(`const VERSION = "${require("../package.json").version}"`),
+    "the version is substituted — its changing is what makes a browser look for a new worker");
+  assert.ok(!body.includes("__BUILD_VERSION__"), "and the placeholder is gone");
+  assert.strictEqual(res.headers["cache-control"], "no-cache",
+    "a cached worker script is a cached update check");
+  assert.strictEqual(res.headers["service-worker-allowed"], "/");
+});
+
+test("the wordmark is served as a vector on a transparent ground", async () => {
+  const res = await request("/icons/wordmark.svg");
+  assert.strictEqual(res.status, 200);
+  const svg = res.body.toString();
+  assert.match(svg, /<svg[^>]*viewBox=/);
+  assert.ok(!/<image\b/.test(svg), "traced, not a wrapped bitmap");
+});
