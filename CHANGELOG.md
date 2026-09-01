@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2
+
+- **The page now says when it is out of date.** `index.html` is built by the
+  server rather than served from disk: the asset URLs carry `?v=<version>`, so
+  a browser holding an old `app.js` or `style.css` cannot serve it against the
+  new address, and a `<meta>` records which version the document itself is. If
+  that disagrees with what the server reports, a banner says so and offers a
+  Reload on a fresh URL — one a cache cannot answer.
+
+  This is the state nothing else could detect. A shell cached before 0.2.1
+  fixed the caching rules will not revalidate until its stored lifetime runs
+  out, so a correctly updated server goes on serving a previous release's
+  interface with no sign of it.
+
 ## 0.2.1
 
 - **The app shell is no longer cached for an hour.** `index.html`, `app.js` and

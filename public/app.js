@@ -1142,10 +1142,13 @@ async function refreshStatus() {
       `${status.sonos.rooms} Sonos room${status.sonos.rooms === 1 ? "" : "s"} · ` +
       `${status.time.zone}`;
 
-    /* Once per load, on the first status that comes back. */
+    /* Once per load, on the first status that comes back. A stale page takes
+       precedence over a new release: reloading is the thing to do first, and
+       two banners at once is one too many. */
     if (!state.checkedForUpdate) {
       state.checkedForUpdate = true;
-      checkForUpdate(status.build);
+      if (SHELL_VERSION && SHELL_VERSION !== status.version) showStaleShell(status.version);
+      else checkForUpdate(status.build);
     }
   } catch (e) {
     banner("Cannot reach the server: " + e.message, true);
@@ -1157,6 +1160,35 @@ async function refreshStatus() {
 /* ------------------------------------------------------------------ */
 
 const REPO = "meltface-80/MusicD-Server";
+
+/* Which version this DOCUMENT is, stamped in by the server when it built the
+   page. If it disagrees with what the server reports, the browser is showing a
+   shell it cached before the update. */
+const SHELL_VERSION = (() => {
+  const meta = document.querySelector('meta[name="musicd-build"]');
+  return meta ? meta.getAttribute("content") || "" : "";
+})();
+
+/*
+ * The page itself is out of date.
+ *
+ * Nothing else can detect this. A shell cached under the old rules will not
+ * revalidate until its stored lifetime runs out, so a correctly updated server
+ * goes on serving a previous release's interface with no sign of it — which is
+ * exactly how "I updated and nothing changed" happens twice in a row. The
+ * reload uses a fresh URL rather than location.reload(), because a reload can
+ * itself be answered from the very cache entry that is the problem.
+ */
+function showStaleShell(serverVersion) {
+  $("update-text").textContent =
+    `This page is from version ${SHELL_VERSION}; the server is running ${serverVersion}.`;
+  const link = $("update-link");
+  link.textContent = "Reload";
+  link.removeAttribute("target");
+  link.href = location.pathname + "?r=" + Date.now();
+  $("update-dismiss").onclick = () => $("update-banner").classList.add("hidden");
+  $("update-banner").classList.remove("hidden");
+}
 
 /* Compare two dotted versions numerically. "0.10.0" is newer than "0.9.0",
    which a string comparison gets backwards. */
