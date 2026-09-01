@@ -382,3 +382,39 @@ test("the queue is read back off the player, with our own titles", async () => {
       "resolved from our own library, not from what the player echoed back");
   } finally { await r.cleanup(); }
 });
+
+test("shuffle and repeat preserve each other on the player", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Hex"));
+    assert.strictEqual(r.fake.state.playMode, "NORMAL");
+
+    await r.playback.command(r.kitchen(), "shuffle");
+    assert.strictEqual(r.fake.state.playMode, "SHUFFLE_NOREPEAT", "shuffle on, repeat untouched");
+
+    /* Repeat cycles off → all → one, and must not clear shuffle on the way. */
+    await r.playback.command(r.kitchen(), "repeat");
+    assert.strictEqual(r.fake.state.playMode, "SHUFFLE");
+    await r.playback.command(r.kitchen(), "repeat");
+    assert.strictEqual(r.fake.state.playMode, "SHUFFLE_REPEAT_ONE");
+    await r.playback.command(r.kitchen(), "repeat");
+    assert.strictEqual(r.fake.state.playMode, "SHUFFLE_NOREPEAT", "and cycles back to off");
+
+    await r.playback.command(r.kitchen(), "shuffle");
+    assert.strictEqual(r.fake.state.playMode, "NORMAL", "shuffle off, repeat still off");
+  } finally { await r.cleanup(); }
+});
+
+test("now playing splits the play mode into the two switches the buttons drive", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Hex"));
+    r.fake.state.playMode = "SHUFFLE_REPEAT_ONE";
+    r.fake.playingAt(1, "0:00:10", "0:03:00");
+
+    const now = await r.playback.nowPlaying(r.kitchen());
+    assert.strictEqual(now.shuffle, true);
+    assert.strictEqual(now.repeat, "one");
+    assert.strictEqual(now.playMode, "SHUFFLE_REPEAT_ONE", "the raw mode is still reported");
+  } finally { await r.cleanup(); }
+});

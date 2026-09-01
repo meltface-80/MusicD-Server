@@ -146,27 +146,36 @@
   </main>
 
   <!-- ---------------------------------------------------------------- -->
-  <!--  Mini transport                                                   -->
+  <!--  Mini transport — play/pause, what is on, then room and volume     -->
   <!-- ---------------------------------------------------------------- -->
-  <div id="mini" class="mini-transport hidden">
-    <div class="mt-progress"><div id="mt-fill" class="mt-progress-fill"></div></div>
+  <div id="mini" class="mini-transport hidden" aria-label="Now playing">
+    <div class="mt-progress" aria-hidden="true"><div id="mt-fill" class="mt-progress-fill"></div></div>
+
+    <button class="mt-btn mt-playpause" id="mt-playpause" aria-label="Play or pause">
+      <svg id="mt-icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="mt-icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+    </button>
+
+    <!-- Tapping the cover of what you are listening to gets you to it. -->
     <button id="mt-open" class="mt-info" type="button" aria-label="Open Now playing">
-      <img id="mt-art" class="mt-art" alt="">
+      <img id="mt-art" class="mt-art" alt="" aria-hidden="true">
       <span class="mt-text">
         <span id="mt-title" class="mt-title">—</span>
         <span id="mt-artist" class="mt-artist"></span>
       </span>
     </button>
+
     <div class="mt-controls">
-      <button id="mt-prev" class="mt-btn" aria-label="Previous track">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3 6 9 6V6z"/></svg>
+      <button class="mt-btn" id="mt-zone" type="button" aria-label="Choose room">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="2.5" width="14" height="19" rx="2.5"/>
+          <circle cx="12" cy="14" r="3.4"/><circle cx="12" cy="6.4" r="1.1"/>
+        </svg>
       </button>
-      <button id="mt-playpause" class="mt-btn mt-playpause" aria-label="Play or pause">
-        <svg id="mt-icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-        <svg id="mt-icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
-      </button>
-      <button id="mt-next" class="mt-btn" aria-label="Next track">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l9-6-9-6z"/></svg>
+      <button class="mt-btn" id="mt-vol" type="button" aria-label="Volume" aria-expanded="false">
+        <svg id="mt-icon-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+        <svg id="mt-icon-mute" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.17v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73zM12 4 9.91 6.09 12 8.18z"/></svg>
       </button>
     </div>
   </div>
@@ -177,13 +186,28 @@
   <div id="album-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-backdrop" data-close-modal></div>
     <div class="modal-panel">
-      <button class="modal-close icon-btn" type="button" data-close-modal aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
+
+      <div class="modal-head">
+        <button class="icon-btn" id="modal-back" type="button" data-close-modal aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="icon-btn hidden" id="modal-home" type="button" aria-label="Go to Home screen" title="Home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/>
+          </svg>
+        </button>
+        <div class="modal-tabs hidden" id="modal-tabs">
+          <button class="modal-tab is-active" type="button" data-tab="np">Now playing</button>
+          <button class="modal-tab" type="button" data-tab="queue">Queue</button>
+        </div>
+        <!-- Keeps the tabs centred; the album face has nothing to put here. -->
+        <span class="modal-head-spacer" aria-hidden="true"></span>
+      </div>
 
       <div class="modal-body">
-        <!-- Album face -->
+        <!-- ---------------- Album face ---------------- -->
         <div id="album-face">
           <div class="modal-art"><img id="modal-img" alt=""></div>
           <div class="modal-info">
@@ -199,7 +223,7 @@
           </div>
         </div>
 
-        <!-- Now playing face -->
+        <!-- ---------------- Now playing ---------------- -->
         <div id="np-screen" class="np-screen hidden">
           <div class="np-art"><img id="np-img" alt=""></div>
           <div class="np-track" id="np-track">—</div>
@@ -207,8 +231,7 @@
           <button class="np-album" id="np-album" type="button"></button>
 
           <div class="np-progress">
-            <input type="range" id="np-seek" class="np-seek" min="0" max="100" step="1" value="0"
-                   aria-label="Seek">
+            <input type="range" id="np-seek" class="np-seek" min="0" max="100" step="1" value="0" aria-label="Seek">
             <div class="np-times">
               <span id="np-cur" class="np-time">0:00</span>
               <span id="np-tot" class="np-time">0:00</span>
@@ -216,32 +239,52 @@
           </div>
 
           <div class="np-transport">
-            <button class="np-btn" id="np-prev" aria-label="Previous track">
+            <button class="np-btn np-mode-btn" id="np-shuffle" type="button" aria-label="Shuffle" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17 3l4 4-4 4V8h-2.2l-2.5 3.2 2.5 3.2H17V12l4 4-4 4v-3h-3.2l-3-3.9-3 3.9H3v-2h3.8l3.4-4.4L6.8 6H3V4h4.8l3 3.9 3-3.9H17z"/></svg>
+            </button>
+            <button class="np-btn" id="np-prev" type="button" aria-label="Previous track">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h2v12H6zm3 6 9 6V6z"/></svg>
             </button>
-            <button class="np-btn np-playpause" id="np-playpause" aria-label="Play or pause">
+            <button class="np-btn np-playpause" id="np-playpause" type="button" aria-label="Play or pause">
               <svg id="np-icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
               <svg id="np-icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
             </button>
-            <button class="np-btn" id="np-next" aria-label="Next track">
+            <button class="np-btn" id="np-next" type="button" aria-label="Next track">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l9-6-9-6z"/></svg>
+            </button>
+            <button class="np-btn np-mode-btn" id="np-repeat" type="button" aria-label="Repeat off" aria-pressed="false">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z"/></svg>
+              <span class="np-mode-badge hidden" id="np-repeat-badge" aria-hidden="true">1</span>
             </button>
           </div>
 
-          <div class="np-mini-row">
-            <button class="np-mini-btn" id="np-room" type="button" aria-label="Choose room"></button>
-            <div class="np-vol">
-              <button class="np-mini-btn" id="np-mute" type="button" aria-label="Mute">
-                <svg id="np-icon-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 5V4L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
-                <svg id="np-icon-mute" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M4 9v6h4l5 5V4L8 9H4zm15 3-2 2-2-2-1.5 1.5 2 2-2 2L15 19l2-2 2 2 1.5-1.5-2-2 2-2z"/></svg>
-              </button>
-              <input type="range" id="np-volume" class="np-volume" min="0" max="100" step="1" value="30"
-                     aria-label="Volume">
-            </div>
+          <div class="np-secondary">
+            <button class="np-mini-btn" id="np-device" type="button" aria-label="Choose room">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="5" y="2.5" width="14" height="19" rx="2.5"/>
+                <circle cx="12" cy="14" r="3.4"/><circle cx="12" cy="6.4" r="1.1"/>
+              </svg>
+            </button>
+            <span class="np-room" id="np-room"></span>
+            <button class="np-mini-btn" id="np-volbtn" type="button" aria-label="Volume" aria-expanded="false">
+              <svg id="np-icon-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+              <svg id="np-icon-mute" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.17v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73zM12 4 9.91 6.09 12 8.18z"/></svg>
+            </button>
           </div>
 
-          <div class="section-label">Queue</div>
+          <div class="np-vol-sheet hidden" id="np-vol-sheet">
+            <span class="np-vol-value" id="np-vol-value">0</span>
+            <input type="range" id="np-volume" class="np-volume" min="0" max="100" step="1" value="30" aria-label="Volume">
+          </div>
+        </div>
+
+        <!-- ---------------- Queue ---------------- -->
+        <div id="queue-pane" class="queue-pane hidden">
+          <div class="queue-summary" id="queue-summary"></div>
+          <div class="queue-earlier" id="queue-earlier"></div>
           <ol id="queue-list" class="queue-list"></ol>
+          <div class="queue-empty hidden" id="queue-empty">Nothing is queued in this room.</div>
         </div>
       </div>
     </div>

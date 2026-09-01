@@ -57,9 +57,20 @@ First version. A local music server that plays to Sonos.
 ### Interface
 - MusicD Remote's palette, control sizing and section rhythm, in dark and light.
 - Album view with track list, play-from-any-track, and the album's own stats.
-- Now Playing with seek, volume, room switching and the live queue.
-- Search across albums, artists and tracks; an artists index.
-- Mini transport across the bottom of every screen.
+- Now playing and Queue as two tabs of one screen, matching MusicD Remote: a
+  Home control on the left, the tabs centred, and five transport buttons —
+  shuffle, previous, play/pause, next, repeat.
+- Shuffle and repeat drive Sonos' single play-mode enum, read before it is
+  written so that toggling one never clears the other. Repeat cycles
+  off → all → one.
+- The queue page summarises what is left to play, counts what was played
+  earlier rather than listing it, and marks the current track with a divider.
+  Tapping a later track jumps to it.
+- Search puts artists first, as chips above the album grid, and the search
+  field takes the whole top bar rather than sharing it with the screen title.
+- Mini transport with play/pause leading, then what is playing, then room and
+  volume. It sits above the album and queue screens and steps aside for Now
+  playing, which already has the full transport.
 
 ### Packaging
 - Docker image on host networking, with `TZ` documented as load-bearing: the

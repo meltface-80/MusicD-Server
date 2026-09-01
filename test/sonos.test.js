@@ -198,3 +198,34 @@ test("the advertised address is one a speaker could actually reach", () => {
   assert.match(auto, /^\d+\.\d+\.\d+\.\d+$/);
   assert.ok(!auto.startsWith("127."), "loopback is unreachable from a speaker");
 });
+
+/* ---------------------------------------------------------------- */
+/*  Play modes                                                       */
+/* ---------------------------------------------------------------- */
+
+test("every Sonos play mode round-trips through the two switches it means", () => {
+  for (const mode of Object.keys(sonos.PLAY_MODES)) {
+    const flags = sonos.parsePlayMode(mode);
+    assert.strictEqual(sonos.playModeFor(flags), mode, mode);
+  }
+});
+
+test("shuffle and repeat are independent, which the single enum hides", () => {
+  /* The naming does not follow: plain "SHUFFLE" means shuffle AND repeat-all,
+     while shuffle on its own is "SHUFFLE_NOREPEAT". Toggling one switch must
+     not clear the other. */
+  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "off" }), "SHUFFLE_NOREPEAT");
+  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "all" }), "SHUFFLE");
+  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "one" }), "SHUFFLE_REPEAT_ONE");
+  assert.strictEqual(sonos.playModeFor({ shuffle: false, repeat: "all" }), "REPEAT_ALL");
+
+  /* Turning shuffle on while repeat-all is set keeps repeat-all. */
+  const current = sonos.parsePlayMode("REPEAT_ALL");
+  assert.strictEqual(sonos.playModeFor({ ...current, shuffle: true }), "SHUFFLE");
+});
+
+test("a play mode the player invents is read as plain playback", () => {
+  assert.deepStrictEqual(sonos.parsePlayMode("SOMETHING_NEW"), { shuffle: false, repeat: "off" });
+  assert.deepStrictEqual(sonos.parsePlayMode(""), { shuffle: false, repeat: "off" });
+  assert.deepStrictEqual(sonos.parsePlayMode(null), { shuffle: false, repeat: "off" });
+});
