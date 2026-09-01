@@ -135,3 +135,50 @@ test("nothing left over from MusicD Remote that this server does not do", () => 
     }
   }
 });
+
+/* ------------------------------------------------------------------ */
+/*  Layout parity with MusicD Remote                                   */
+/* ------------------------------------------------------------------ */
+
+test("search puts artists above albums", () => {
+  /* An artist match is a place to GO. Rendered under a grid of album covers it
+     is the one tap that gets you their whole shelf, and the one you have to
+     scroll to find. */
+  const render = js.slice(js.indexOf("function renderSearch"));
+  const body = render.slice(0, render.indexOf("\n}"));
+  const artists = body.indexOf('"Artists"');
+  const albums = body.indexOf('"Albums"');
+  assert.ok(artists > -1 && albums > -1, "both sections are rendered");
+  assert.ok(artists < albums, "the Artists section is built before the Albums one");
+});
+
+test("the Now playing face carries five transport controls", () => {
+  const row = html.slice(html.indexOf('class="np-transport"'));
+  const ids = [...row.slice(0, row.indexOf("</div>")).matchAll(/id="(np-[a-z]+)"/g)].map(m => m[1]);
+  assert.deepStrictEqual(ids, ["np-shuffle", "np-prev", "np-playpause", "np-next", "np-repeat"]);
+});
+
+test("Now playing and Queue are tabs of one screen, each with a pane", () => {
+  const tabs = [...html.matchAll(/data-tab="([a-z]+)"/g)].map(m => m[1]);
+  assert.deepStrictEqual(tabs, ["np", "queue"]);
+  assert.ok(htmlIds.has("np-screen"), "the Now playing pane exists");
+  assert.ok(htmlIds.has("queue-pane"), "the Queue pane exists");
+  assert.ok(htmlIds.has("modal-tabs"));
+});
+
+test("the mini bar is play/pause, what is on, then room and volume", () => {
+  const bar = html.slice(html.indexOf('id="mini"'), html.indexOf('id="album-modal"'));
+  const ids = [...bar.matchAll(/id="(mt-[a-z]+)"/g)].map(m => m[1]);
+  assert.ok(ids.includes("mt-playpause"), "play/pause is on the bar");
+  assert.ok(ids.includes("mt-zone") && ids.includes("mt-vol"), "so are room and volume");
+  /* Prev and next are deliberately NOT here: the reference bar has three
+     controls, and skipping tracks belongs on the Now playing screen. */
+  assert.ok(!ids.includes("mt-prev") && !ids.includes("mt-next"));
+  assert.ok(bar.indexOf('id="mt-playpause"') < bar.indexOf('id="mt-open"'),
+    "play/pause leads, ahead of the title");
+});
+
+test("the screen title gives way to the search field rather than sharing the row", () => {
+  assert.match(css, /\.topbar-row\.searching \.screen-title \{ display: none; \}/);
+  assert.match(js, /classList\.add\("searching"\)/);
+});

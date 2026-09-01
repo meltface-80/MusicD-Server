@@ -84,7 +84,8 @@ const state = {
   zone: null,            // { uuid, name }
   rooms: [],
   album: null,           // the album open in the modal
-  face: "album",         // album | np
+  face: "album",         // album | np | queue
+  npTab: "np",           // which tab the Now playing face is showing
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
@@ -385,25 +386,29 @@ function renderSearch(results, term) {
     return;
   }
 
+  /* Artists come FIRST, as a row of chips above the albums. An artist match is
+     a place to go rather than a thing to look at, and burying it under a grid
+     of album covers means the one tap that gets you their whole shelf is the
+     one you have to scroll to find. */
+  if (results.artists.length) {
+    host.appendChild(el("div", "search-section-header", "Artists"));
+    const row = el("div", "search-chip-row");
+    for (const a of results.artists) {
+      const chip = el("button", "search-chip");
+      chip.type = "button";
+      chip.appendChild(document.createTextNode(a.name));
+      chip.appendChild(el("span", "chip-count", String(a.albums)));
+      chip.addEventListener("click", () => openArtist(a.name));
+      row.appendChild(chip);
+    }
+    host.appendChild(row);
+  }
+
   if (results.albums.length) {
     host.appendChild(el("div", "search-section-header", "Albums"));
     const grid = el("div", "album-grid");
     for (const album of results.albums) grid.appendChild(albumCard(album));
     host.appendChild(grid);
-  }
-
-  if (results.artists.length) {
-    host.appendChild(el("div", "search-section-header", "Artists"));
-    for (const a of results.artists) {
-      const row = el("button", "result-row");
-      row.type = "button";
-      const text = el("div", "result-text");
-      text.append(el("div", "result-title", a.name),
-                  el("div", "result-sub", `${a.albums} album${a.albums === 1 ? "" : "s"}`));
-      row.appendChild(text);
-      row.addEventListener("click", () => openArtist(a.name));
-      host.appendChild(row);
-    }
   }
 
   if (results.tracks.length) {
@@ -435,16 +440,60 @@ function b64url(s) {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/*
+ * Three faces share the one panel: the album, Now playing, and the queue.
+ *
+ * The album face is reached from a card and gets a Back control. Now playing
+ * and the queue are two TABS of one screen — they are the same thing seen two
+ * ways, which is why the tabs appear only for them, and why the left-hand
+ * control becomes Home there: you did not come from anywhere in particular.
+ */
 function setFace(face) {
   state.face = face;
+  const onNp = face === "np" || face === "queue";
+  if (onNp) state.npTab = face;
+
   $("album-face").classList.toggle("hidden", face !== "album");
   $("np-screen").classList.toggle("hidden", face !== "np");
+  $("queue-pane").classList.toggle("hidden", face !== "queue");
+
+  $("modal-tabs").classList.toggle("hidden", !onNp);
+  $("modal-back").classList.toggle("hidden", onNp);
+  $("modal-home").classList.toggle("hidden", !onNp);
+
+  for (const tab of document.querySelectorAll(".modal-tab")) {
+    tab.classList.toggle("is-active", tab.getAttribute("data-tab") === face);
+  }
+  $("album-modal").querySelector(".modal-panel").scrollTop = 0;
+  syncMini();
 }
 
-function openModal() { $("album-modal").classList.remove("hidden"); }
+/*
+ * Whether the mini bar is on screen.
+ *
+ * Two conditions, and they are decided together because they disagree: there
+ * has to be something playing, AND the Now playing face has to not be the one
+ * showing — that face carries the full transport, so the bar would be a second
+ * set of the same controls a centimetre below the first.
+ */
+function syncMini() {
+  const playing = state.now && (state.now.track || state.now.foreign);
+  const onNpFace = state.face === "np" && !$("album-modal").classList.contains("hidden");
+  $("mini").classList.toggle("hidden", !playing || onNpFace);
+}
+
+function openModal() { $("album-modal").classList.remove("hidden"); syncMini(); }
 function closeModal() {
   $("album-modal").classList.add("hidden");
+  closeVolSheet();
   setFace("album");
+  syncMini();
+}
+
+function closeVolSheet() {
+  $("np-vol-sheet").classList.add("hidden");
+  $("np-volbtn").classList.remove("is-open");
+  $("np-volbtn").setAttribute("aria-expanded", "false");
 }
 
 async function openAlbum(id) {
@@ -582,21 +631,23 @@ function fillRange(input, value, max) {
 
 function renderNow(now) {
   state.now = now;
-  const mini = $("mini");
 
   if (!now || (!now.track && !now.foreign)) {
-    mini.classList.add("hidden");
+    syncMini();
     return;
   }
-  mini.classList.remove("hidden");
+  syncMini();
 
   const title = now.track ? now.track.title : "Playing from another app";
   const artist = now.track ? (now.track.artist || "") : now.zone.name;
+  const album = now.album ? now.album.title : "";
   const art = now.album && now.album.art ? now.album.art : "";
   const playing = now.state === "PLAYING";
 
+  /* Mini bar: the artist line carries the album too, which is the only place
+     the bar has room to say what record this is. */
   $("mt-title").textContent = title;
-  $("mt-artist").textContent = artist;
+  $("mt-artist").textContent = [artist, album].filter(Boolean).join(" · ");
   if (art) { $("mt-art").src = art; $("mt-art").classList.remove("hidden"); }
   else $("mt-art").classList.add("hidden");
   $("mt-fill").style.width = now.duration ? `${(now.position / now.duration) * 100}%` : "0";
@@ -605,7 +656,7 @@ function renderNow(now) {
   /* Now playing face */
   $("np-track").textContent = title;
   $("np-artist").textContent = artist;
-  $("np-album").textContent = now.album ? now.album.title : "";
+  $("np-album").textContent = album;
   const npImg = $("np-img");
   if (art) { npImg.src = art; npImg.classList.remove("hidden"); }
   else { npImg.removeAttribute("src"); npImg.classList.add("hidden"); }
@@ -621,12 +672,27 @@ function renderNow(now) {
     ? `${now.coordinator.name} + ${now.members.length - 1}`
     : now.zone.name;
 
+  /* Shuffle and repeat come back from the server already split out of Sonos'
+     single play-mode enum. */
+  $("np-shuffle").classList.toggle("is-on", !!now.shuffle);
+  $("np-shuffle").setAttribute("aria-pressed", now.shuffle ? "true" : "false");
+
+  const repeat = now.repeat || "off";
+  $("np-repeat").classList.toggle("is-on", repeat !== "off");
+  $("np-repeat").setAttribute("aria-pressed", repeat !== "off" ? "true" : "false");
+  $("np-repeat").setAttribute("aria-label",
+    repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off");
+  $("np-repeat-badge").classList.toggle("hidden", repeat !== "one");
+
   if (now.volume !== null && !state.volumeHeld) {
     $("np-volume").value = now.volume;
+    $("np-vol-value").textContent = now.volume;
     fillRange($("np-volume"), now.volume, 100);
   }
-  $("np-icon-vol").classList.toggle("hidden", !!now.muted);
-  $("np-icon-mute").classList.toggle("hidden", !now.muted);
+  for (const [vol, mute] of [["np-icon-vol", "np-icon-mute"], ["mt-icon-vol", "mt-icon-mute"]]) {
+    $(vol).classList.toggle("hidden", !!now.muted);
+    $(mute).classList.toggle("hidden", !now.muted);
+  }
 }
 
 async function pollNow() {
@@ -649,38 +715,96 @@ function startPolling() {
   pollNow();
 }
 
-async function openNowPlaying() {
+async function openNowPlaying(tab = "np") {
   if (!state.zone) { await openZoneSheet(); return; }
-  setFace("np");
+  setFace(tab);
   openModal();
   await pollNow();
-  loadQueue();
+  if (tab === "queue") loadQueue();
 }
 
+/*
+ * The queue, as its own page.
+ *
+ * Sonos hands back the whole queue with a pointer at the current track, so
+ * what is above that pointer has already been played. It is summarised rather
+ * than listed: a queue that has run through two albums would otherwise open
+ * scrolled past everything you can still act on.
+ */
 async function loadQueue() {
   const list = $("queue-list");
+  const summary = $("queue-summary");
+  const earlier = $("queue-earlier");
+  const empty = $("queue-empty");
+
   list.textContent = "";
+  earlier.textContent = "";
+  empty.classList.add("hidden");
+  summary.textContent = "Loading queue…";
   if (!state.zone) return;
+
   try {
     const q = await api("/api/queue?zone=" + encodeURIComponent(state.zone.uuid));
-    for (const item of q.items) {
-      const li = el("li");
-      if (item.index === q.index) li.classList.add("is-now");
-      if (item.art) {
-        const img = el("img", "q-art");
-        img.src = item.art; img.alt = ""; img.loading = "lazy";
-        li.appendChild(img);
-      }
-      const text = el("div", "q-text");
-      text.append(el("div", "q-title", item.title),
-                  el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" — ")));
-      li.append(text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
-      li.addEventListener("click", () => transport("seek_track", item.index));
-      list.appendChild(li);
+    const current = Math.max(1, q.index || 1);
+    const upcoming = q.items.filter(i => i.index >= current);
+    const played = q.items.filter(i => i.index < current);
+
+    if (!q.items.length) {
+      summary.textContent = "";
+      empty.classList.remove("hidden");
+      return;
     }
-    if (!q.items.length) list.appendChild(el("li", "q-text", "The queue is empty."));
+
+    const remaining = upcoming.reduce((total, i) => total + (i.duration || 0), 0);
+    summary.textContent = upcoming.length
+      ? `${upcoming.length} track${upcoming.length === 1 ? "" : "s"} · ${mmss(remaining)} remaining`
+      : "Nothing more queued";
+    earlier.textContent = played.length
+      ? `· ${played.length} played earlier`
+      : "";
+
+    for (const item of upcoming) {
+      if (item.index === current) {
+        const divider = el("li", "q-divider");
+        divider.setAttribute("aria-hidden", "true");
+        divider.append(el("span", "q-divider-line"),
+                       el("span", "q-divider-label", "Now playing"),
+                       el("span", "q-divider-line"));
+        list.appendChild(divider);
+      }
+      list.appendChild(queueRow(item, item.index === current));
+    }
   } catch (e) {
-    list.appendChild(el("li", "q-text", e.message));
+    summary.textContent = "";
+    empty.textContent = e.message;
+    empty.classList.remove("hidden");
+  }
+}
+
+function queueRow(item, isNow) {
+  const li = el("li");
+  if (isNow) li.classList.add("is-now");
+
+  const img = el("img", "q-art");
+  img.alt = ""; img.loading = "lazy";
+  if (item.art) img.src = item.art; else img.style.visibility = "hidden";
+
+  const text = el("div", "q-text");
+  text.append(el("div", "q-title", item.title),
+              el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" · ")));
+
+  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
+  /* The track already playing is not a jump target. */
+  if (!isNow) li.addEventListener("click", () => jumpTo(item));
+  return li;
+}
+
+async function jumpTo(item) {
+  try {
+    await post("/api/transport", { zone: state.zone.uuid, action: "seek_track", value: item.index });
+    setTimeout(() => { pollNow(); loadQueue(); }, 700);
+  } catch (e) {
+    toast(e.message, true);
   }
 }
 
@@ -718,7 +842,7 @@ async function openZoneSheet(refresh = false) {
         $("zone-btn").title = room.name;
         closeSheet();
         startPolling();
-        loadQueue();
+        if (state.face === "queue") loadQueue();
       });
       list.appendChild(row);
     }
@@ -831,18 +955,21 @@ function wire() {
   $("topbar-back").addEventListener("click", () => {
     $("search-input").value = "";
     $("topbar-search").classList.remove("is-open");
+    document.querySelector(".topbar-row").classList.remove("searching");
     loadHome();
   });
 
   /* Search */
   $("search-open").addEventListener("click", () => {
     $("topbar-search").classList.add("is-open");
+    document.querySelector(".topbar-row").classList.add("searching");
     $("search-input").focus();
   });
   $("search-input").addEventListener("input", (e) => runSearch(e.target.value));
   $("search-clear").addEventListener("click", () => {
     $("search-input").value = "";
     $("topbar-search").classList.remove("is-open");
+    document.querySelector(".topbar-row").classList.remove("searching");
     if (state.view === "search") loadHome();
   });
 
@@ -856,12 +983,9 @@ function wire() {
     if (state.now && state.now.album) openAlbum(state.now.album.id);
   });
 
-  /* Transport — the two rows of controls drive the same four commands */
-  $("mt-open").addEventListener("click", openNowPlaying);
-  for (const [id, action] of [
-    ["mt-prev", "previous"], ["mt-next", "next"],
-    ["np-prev", "previous"], ["np-next", "next"]
-  ]) {
+  /* Transport */
+  $("mt-open").addEventListener("click", () => openNowPlaying("np"));
+  for (const [id, action] of [["np-prev", "previous"], ["np-next", "next"]]) {
     $(id).addEventListener("click", () => transport(action));
   }
   for (const id of ["mt-playpause", "np-playpause"]) {
@@ -871,6 +995,22 @@ function wire() {
       transport(playing ? "pause" : "play");
     });
   }
+
+  /* Shuffle toggles; repeat cycles off → all → one. Both are decided on the
+     server, which reads the player's current mode before writing the new one —
+     the two live in a single Sonos enum and would otherwise clear each other. */
+  $("np-shuffle").addEventListener("click", () => transport("shuffle"));
+  $("np-repeat").addEventListener("click", () => transport("repeat"));
+
+  /* Tabs, and the two controls that replace Back on the Now playing face. */
+  for (const tab of document.querySelectorAll(".modal-tab")) {
+    tab.addEventListener("click", () => {
+      const which = tab.getAttribute("data-tab");
+      setFace(which);
+      if (which === "queue") loadQueue();
+    });
+  }
+  $("modal-home").addEventListener("click", () => { closeModal(); loadHome(); });
 
   /* Seeking. The value is held while the thumb is down so an in-flight poll
      cannot yank it back under the finger. */
@@ -889,21 +1029,34 @@ function wire() {
 
   const vol = $("np-volume");
   vol.addEventListener("pointerdown", () => { state.volumeHeld = true; });
-  vol.addEventListener("input", () => fillRange(vol, Number(vol.value), 100));
+  vol.addEventListener("input", () => {
+    fillRange(vol, Number(vol.value), 100);
+    $("np-vol-value").textContent = vol.value;
+  });
   vol.addEventListener("change", async () => {
     state.volumeHeld = false;
     if (!state.zone) return;
     try { await post("/api/volume", { zone: state.zone.uuid, level: Number(vol.value) }); }
     catch (e) { toast(e.message, true); }
   });
-  $("np-mute").addEventListener("click", async () => {
-    if (!state.zone || !state.now) return;
-    try {
-      await post("/api/volume", { zone: state.zone.uuid, mute: !state.now.muted });
-      pollNow();
-    } catch (e) { toast(e.message, true); }
-  });
-  $("np-room").addEventListener("click", () => openZoneSheet());
+
+  /* One speaker button, two jobs: it opens the slider, and a long press mutes.
+     Keeping mute off the tap means the volume you were reaching for is never a
+     mistap away from silence. */
+  for (const id of ["np-volbtn", "mt-vol"]) {
+    $(id).addEventListener("click", () => {
+      const sheet = $("np-vol-sheet");
+      const opening = sheet.classList.contains("hidden");
+      if (id === "mt-vol" && opening) openNowPlaying("np");
+      sheet.classList.toggle("hidden", !opening);
+      $("np-volbtn").classList.toggle("is-open", opening);
+      $("np-volbtn").setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+  }
+
+  /* The room picker, from either bar. */
+  $("np-device").addEventListener("click", () => openZoneSheet());
+  $("mt-zone").addEventListener("click", () => openZoneSheet());
 
   /* Rooms */
   $("zone-btn").addEventListener("click", () => openZoneSheet());
@@ -916,6 +1069,7 @@ function wire() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!$("zone-sheet").classList.contains("hidden")) return closeSheet();
+    if (!$("np-vol-sheet").classList.contains("hidden")) return closeVolSheet();
     if (!$("album-modal").classList.contains("hidden")) return closeModal();
     if (!$("menu-overlay").classList.contains("hidden")) return $("menu-overlay").classList.add("hidden");
   });

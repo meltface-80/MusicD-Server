@@ -123,6 +123,9 @@ button, input { font-family: inherit; }
 .zone-btn.is-set { color: var(--accent-text); }
 
 .topbar-search { display: flex; align-items: center; flex: 0 0 auto; }
+/* The field takes the row when it opens. Sharing it with the screen title left
+   both truncated to a few characters each and neither of them readable. */
+.topbar-row.searching .screen-title { display: none; }
 .topbar-search.is-open { flex: 1 1 auto; min-width: 0; }
 .topbar-search.is-open #search-open { display: none; }
 .search-row { display: none; flex: 1 1 auto; min-width: 0; }
@@ -347,6 +350,22 @@ main {
   color: var(--text-faint); margin: 18px 2px 8px;
 }
 .search-section-header:first-child { margin-top: 0; }
+
+/* Artists are a row of chips above the albums, not a list beside them: an
+   artist match is a place to GO, and one tap wide is the right size for it. */
+.search-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.search-chip {
+  min-height: var(--ctl-h-sm); padding: 0 14px;
+  background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.search-chip:hover, .search-chip:active {
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+}
+.search-chip .chip-count { color: var(--text-faint); font-weight: 500; margin-left: 6px; }
+.search-chip:hover .chip-count, .search-chip:active .chip-count { color: inherit; opacity: .75; }
 .result-row {
   display: flex; align-items: center; gap: 12px; width: 100%;
   min-height: var(--tap-min); padding: 8px 4px;
@@ -372,7 +391,7 @@ main {
   position: absolute; inset: 0;
   background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: calc(env(safe-area-inset-top) + 56px) 16px
+  padding: calc(env(safe-area-inset-top) + 8px) 16px
            calc(var(--mini-h) + 28px + env(safe-area-inset-bottom));
 }
 @media (min-width: 720px) {
@@ -381,10 +400,34 @@ main {
     width: min(760px, 92vw); max-height: 88vh;
     border-radius: 16px; border: 1px solid var(--border);
     box-shadow: var(--shadow-modal);
-    padding: 56px 28px 28px;
+    padding: 10px 28px 28px;
   }
 }
-.modal-close { position: absolute; top: calc(env(safe-area-inset-top) + 8px); left: 8px; z-index: 2; }
+/* The panel's own header: a control on the left, the tabs centred, and a
+   spacer holding the right-hand third so the tabs stay centred on every face —
+   including the album one, which has nothing to put there. */
+.modal-head {
+  position: sticky; top: 0; z-index: 3;
+  display: grid; grid-template-columns: var(--tap-min) 1fr var(--tap-min);
+  align-items: center; gap: 8px;
+  margin: 0 0 8px;
+  background: var(--bg);
+}
+.modal-head-spacer { display: block; }
+
+.modal-tabs { display: flex; gap: 22px; justify-content: center; }
+.modal-tab {
+  position: relative;
+  background: none; border: 0; padding: 10px 2px;
+  font: 700 12px var(--font-sans); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-faint); cursor: pointer;
+}
+.modal-tab:hover { color: var(--text-dim); }
+.modal-tab.is-active { color: var(--text); }
+.modal-tab.is-active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 2px;
+  height: 2px; border-radius: 2px; background: var(--accent);
+}
 
 .modal-body { max-width: 640px; margin: 0 auto; }
 .modal-art {
@@ -526,22 +569,75 @@ main {
 .np-btn:hover  { background: var(--bg-elev-2); }
 .np-btn:active { transform: scale(.94); }
 .np-playpause { background: var(--bg-elev); }
+/* Shuffle and repeat sit either side of the three transport buttons, smaller
+   and dimmer until they are on — they change what happens next rather than
+   doing something now. */
+.np-mode-btn { position: relative; width: 44px; height: 44px; color: var(--text-faint); }
+.np-mode-btn svg { width: 22px; height: 22px; }
+.np-mode-btn:hover { color: var(--text-dim); }
+.np-mode-btn.is-on { color: var(--accent-text); }
+.np-mode-badge {
+  position: absolute; right: 4px; bottom: 4px;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 7px; background: var(--accent); color: var(--on-accent);
+  font: 700 10px/14px var(--font-sans); text-align: center;
+}
 
-.np-mini-row {
-  display: flex; align-items: center; gap: 14px;
-  width: 100%; margin-top: 18px;
+/* Room and volume, the two things you reach for without leaving the screen. */
+.np-secondary {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; margin-top: 20px;
+}
+.np-room {
+  flex: 1 1 auto; min-width: 0; text-align: left;
+  font-size: 13px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .np-mini-btn {
-  min-height: var(--ctl-h-sm); padding: 0 14px;
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--tap-min); height: var(--tap-min);
   background: var(--bg-elev); color: var(--text-dim);
-  border: 1px solid var(--border); border-radius: var(--ctl-radius);
-  font-size: 13px; font-weight: 600; cursor: pointer; flex: 0 0 auto;
+  border: 1px solid var(--border); border-radius: 12px;
+  cursor: pointer; transition: color .15s ease, border-color .15s ease;
 }
-.np-mini-btn svg { width: 18px; height: 18px; }
+.np-mini-btn svg { width: 20px; height: 20px; }
 .np-mini-btn:hover { color: var(--text); }
-.np-vol { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
-.np-vol .np-mini-btn { padding: 0 10px; }
+.np-mini-btn.is-open { color: var(--accent-text); border-color: var(--accent); }
+
+/* The volume slider is revealed by the speaker button rather than always on
+   screen, so the transport keeps its place when it opens. */
+.np-vol-sheet {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; margin-top: 12px;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 14px;
+}
+.np-vol-value {
+  flex: 0 0 auto; min-width: 2.5ch; text-align: right;
+  font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Queue page                                                         */
+/* ------------------------------------------------------------------ */
+
+.queue-pane { width: 100%; }
+.queue-summary { font-size: 14px; color: var(--text); margin: 4px 2px 2px; }
+.queue-earlier { font-size: 13px; color: var(--text-faint); margin: 0 2px 14px; }
+.queue-earlier:empty { display: none; }
+.queue-empty { color: var(--text-faint); font-size: 14px; padding: 24px 2px; }
+
+/* The line the queue is read against: everything below it is still to come. */
+.q-divider {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 0 8px; border-bottom: 0; cursor: default; min-height: 0;
+}
+.q-divider:hover { background: none; }
+.q-divider-line { flex: 1 1 auto; height: 1px; background: var(--border); }
+.q-divider-label {
+  flex: 0 0 auto; font-size: 11px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint);
+}
 
 .queue-list { list-style: none; margin: 0; padding: 0; width: 100%; text-align: left; }
 .queue-list li {
@@ -552,6 +648,7 @@ main {
 .queue-list li:last-child { border-bottom: 0; }
 .queue-list li:hover { background: var(--bg-elev); }
 .queue-list li.is-now { background: var(--accent-soft); }
+.queue-list li.is-past { opacity: .5; }
 .queue-list li.is-now .q-title { color: var(--accent-text); font-weight: 700; }
 .q-art { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; background: var(--bg-elev-2); }
 .q-text { flex: 1 1 auto; min-width: 0; }
@@ -564,7 +661,12 @@ main {
 /* ------------------------------------------------------------------ */
 
 .mini-transport {
-  position: fixed; z-index: 50;
+  /* Above the album panel, not under it. Something is playing while you browse
+     an album or read the queue, and the bar is how you pause it without
+     leaving the screen — the panel already reserves --mini-h at its foot so
+     nothing is covered. The one face that hides it is Now playing, which has
+     the full transport on it already. */
+  position: fixed; z-index: 75;
   left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
   height: var(--mini-h);
   display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px;
@@ -586,6 +688,10 @@ main {
   background: none; border: 0; padding: 0; color: inherit;
   text-align: left; cursor: pointer;
 }
+/* The play button leads, as it does on the reference bar: it is the control
+   most often wanted, and putting it at the start keeps it clear of the room
+   and volume buttons at the other end. */
+.mini-transport .mt-playpause { order: -1; margin-right: 2px; }
 .mt-art { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; background: var(--bg-elev-2); }
 .mt-text { min-width: 0; display: flex; flex-direction: column; }
 .mt-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

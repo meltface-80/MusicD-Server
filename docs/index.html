@@ -404,14 +404,14 @@
             </div>
 
             <label class="toggle-row">
-              <input type="checkbox" id="prebuilt">
+              <input type="checkbox" id="fromsource">
               <div>
-                <div class="t-title">Use the prebuilt image</div>
-                <div class="t-sub">Skips the build step and pulls from the GitHub Container
-                     Registry. The package has to have been made public once, under
-                     <i>Packages → musicd-server → Package settings</i> — until then an anonymous
-                     pull is refused with <code>denied</code>. Building from source needs none of
-                     that.</div>
+                <div class="t-title">Build it yourself instead</div>
+                <div class="t-sub">By default this pulls the published image, built for
+                     <code>amd64</code>, <code>arm64</code> and <code>arm/v7</code>. Ticking this
+                     clones the repository and builds on the spot instead — a few minutes on a Pi,
+                     because <code>better-sqlite3</code> compiles from source where there is no
+                     prebuild.</div>
               </div>
             </label>
 
@@ -459,6 +459,7 @@
           <p class="after-note" id="after-note"></p>
           <p class="after-note">If your user is not in the <code>docker</code> group, prefix the
              <code>docker</code> commands with <code>sudo</code>.</p>
+          <div class="note" id="update-note"></div>
           <div class="note"><b>Keep the data volume.</b> <code>musicd-server-data</code> holds your
              play history — when each album arrived, when you last played it, how often. Renaming it
              silently starts empty, and “Recently played”, “Not played in 6 months” and Smart Picks
@@ -587,7 +588,7 @@
     port:      document.getElementById("port"),
     sonoshost: document.getElementById("sonoshost"),
     fSonos:    document.getElementById("f-sonos"),
-    prebuilt:  document.getElementById("prebuilt"),
+    fromsource: document.getElementById("fromsource"),
     advanced:  document.getElementById("advanced"),
     advFields: document.getElementById("advanced-fields"),
     serverip:  document.getElementById("serverip"),
@@ -599,6 +600,7 @@
     tabCompose:document.getElementById("tab-compose"),
     modeNote:  document.getElementById("mode-note"),
     afterNote: document.getElementById("after-note"),
+    updateNote:document.getElementById("update-note"),
     verBadge:  document.getElementById("ver-badge")
   };
 
@@ -799,15 +801,15 @@
     return env;
   }
 
-  /* The image reference the run command ends on: either the tag built a moment
-     earlier, or the published one. */
+  /* The image reference the run command ends on: the published one, or the tag
+     built a moment earlier. */
   function imageRef() {
-    return els.prebuilt.checked ? "ghcr.io/" + REPO.toLowerCase() + ":latest" : IMAGE;
+    return els.fromsource.checked ? IMAGE : "ghcr.io/" + REPO.toLowerCase() + ":latest";
   }
 
   function buildRun(plan) {
     var out = [];
-    if (!els.prebuilt.checked) {
+    if (els.fromsource.checked) {
       out.push({ t: "# Build the image straight from GitHub — no download step", c: "c" });
       out.push({ t: "docker build -t " + IMAGE + " https://github.com/" + REPO + ".git", c: "" });
       out.push({ t: "", c: "" });
@@ -842,15 +844,17 @@
     /* Bare YAML pasted into a shell makes bash try to run every line
        ("services:: command not found"), so the file contents go in a heredoc
        and the up command is chained onto it — one paste, one result. */
-    y.push("# one paste: writes docker-compose.yml, then builds and starts it");
+    y.push(els.fromsource.checked
+      ? "# one paste: writes docker-compose.yml, then builds and starts it"
+      : "# one paste: writes docker-compose.yml, then pulls and starts it");
     y.push("cat > docker-compose.yml <<'EOF'");
     y.push("services:");
     y.push("  " + IMAGE + ":");
-    if (els.prebuilt.checked) {
-      y.push("    image: " + imageRef());
-    } else {
+    if (els.fromsource.checked) {
       y.push("    build: https://github.com/" + REPO + ".git");
       y.push("    image: " + IMAGE + ":latest");
+    } else {
+      y.push("    image: " + imageRef());
     }
     y.push("    container_name: " + IMAGE);
     y.push("    restart: unless-stopped");
@@ -908,6 +912,14 @@
     els.afterNote.innerHTML = "Then open <code>" + where + "</code>. The first scan starts by " +
       "itself — a large library takes a few minutes, and the home screen fills as it goes.";
 
+    els.updateNote.innerHTML = els.fromsource.checked
+      ? "<b>To update later,</b> run the <code>docker build</code> again with " +
+        "<code>--no-cache</code>, then <code>docker rm -f musicd-server</code> and the run command " +
+        "once more. Your library and play history are in the volume and are not touched."
+      : "<b>To update later,</b> <code>docker pull ghcr.io/" + REPO.toLowerCase() + ":latest</code>, " +
+        "then <code>docker rm -f musicd-server</code> and the run command once more. Your library " +
+        "and play history are in the volume and are not touched.";
+
     syncUrl();
   }
 
@@ -918,7 +930,7 @@
     if (state.mode !== "host") p.set("mode", state.mode);
     var paths = mountPaths();
     if (paths.length) p.set("music", paths.join("|"));
-    if (els.prebuilt.checked) p.set("image", "ghcr");
+    if (els.fromsource.checked) p.set("image", "build");
     if (els.tz.value.trim()) p.set("tz", els.tz.value.trim());
     if (portVal() !== "3400") p.set("port", portVal());
     if (els.sonoshost.value.trim()) p.set("sonos", els.sonoshost.value.trim());
@@ -964,7 +976,7 @@
     render();
   });
 
-  els.prebuilt.addEventListener("change", render);
+  els.fromsource.addEventListener("change", render);
 
   els.advanced.addEventListener("change", function () {
     els.advFields.classList.toggle("hidden", !els.advanced.checked);
@@ -1014,7 +1026,7 @@
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
     catch (e) { return ""; }      /* very old browsers have no resolvedOptions */
   })();
-  if (q.get("image") === "ghcr") els.prebuilt.checked = true;
+  if (q.get("image") === "build") els.fromsource.checked = true;
   if (q.get("port")) els.port.value = q.get("port");
   if (q.get("sonos")) els.sonoshost.value = q.get("sonos");
   if (q.get("ip")) els.serverip.value = q.get("ip");
