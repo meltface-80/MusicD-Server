@@ -118,7 +118,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.5` | that exact version, for pinning |
+| `:0.4.6` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -154,6 +154,12 @@ Six rows, each one a carousel that opens into a full grid when you tap its title
 | **Recently played** | Most recently played first. |
 | **Not played in 6 months** | Albums you played longer than six months ago, and albums that have sat in the library that long unplayed. Longest gap first. |
 | **Smart Picks** | Below. |
+
+**The rows are in the order you put them in.** Open the side menu: every row
+is listed there with a pad on the right. Hold the pad, drag the row where you
+want it, let go. The home screen follows, and so does every other phone in the
+house — the arrangement is kept in the library's own database rather than in
+one browser, so it survives a reinstalled shortcut and an update alike.
 
 **Not played in 6 months is empty to begin with, and that is correct.** Nothing
 in a library scanned last week can have gone six months unplayed. The row fills

@@ -50,12 +50,72 @@ test("no id is declared twice", () => {
 test("every data-go target is a screen app.js knows how to open", () => {
   const targets = [...html.matchAll(/data-go="([^"]+)"/g)].map(m => m[1]);
   assert.ok(targets.length, "the side menu has entries");
-  const rows = ["library", "random", "added", "played", "unplayed", "picks"];
   for (const target of targets) {
-    const known = target === "home" || target === "artists" ||
-                  (target.startsWith("row:") && rows.includes(target.slice(4)));
-    assert.ok(known, `the menu offers "${target}" and nothing opens it`);
+    assert.ok(target === "home" || target === "artists",
+      `the menu offers "${target}" and nothing opens it`);
   }
+  /* The rows are NOT here. They are built from /api/rows, because their order
+     is the user's and lives in the database — a list nailed into the markup
+     could only ever be one of the two, and the two have to agree. */
+  assert.ok(htmlIds.has("menu-rows"), "the rows have a container to be built into");
+  assert.ok(!/data-go="row:/.test(html), "and none of them is written out here");
+});
+
+/* ------------------------------------------------------------------ */
+/*  Arranging the home screen from the menu                            */
+/* ------------------------------------------------------------------ */
+
+test("the menu lists every row the home screen can show", () => {
+  /* Reordering the menu only means anything if the menu IS the home screen's
+     order — a list missing two of the rows would leave them stranded wherever
+     they happened to be. */
+  const server = require(path.join(__dirname, "..", "lib", "settings"));
+  assert.match(js, /api\("\/api\/rows"\)/, "the client asks the server which rows exist");
+  const render = js.slice(js.indexOf("function renderMenuRows("));
+  const body = render.slice(0, render.indexOf("\n}"));
+  assert.match(body, /state\.rowOrder/, "and builds the list from that order");
+  assert.strictEqual(server.DEFAULT_ROWS.length, 7);
+});
+
+test("a drag is a hold first, so scrolling the menu still scrolls", () => {
+  const hold = /const DRAG_HOLD_MS = (\d+);/.exec(js);
+  assert.ok(hold, "there is a hold before a drag starts");
+  const ms = Number(hold[1]);
+  assert.ok(ms >= 200 && ms <= 600, "long enough to mean it, short enough not to annoy — " + ms);
+  const begin = js.slice(js.indexOf("function beginRowDrag("));
+  const body = begin.slice(0, begin.indexOf("\n}\n"));
+  assert.match(body, /DRAG_SLOP/, "and moving before it elapses is a scroll, not a drag");
+});
+
+test("the drag follows the window, not the pad it started on", () => {
+  /* Capturing the pointer on the pad is the obvious way to keep a drag alive
+     and it is wrong here: moving the row to its new place moves the pad with
+     it, and re-inserting a captured element releases the capture — the pad
+     then receives nothing and the drag dies one pixel in. Measured:
+     lostpointercapture fired on the very first move. */
+  const begin = js.slice(js.indexOf("function beginRowDrag("));
+  const body = begin.slice(0, begin.indexOf("\nasync function"));
+  assert.match(body, /window\.addEventListener\("pointermove"/, "the window sees the drag");
+  assert.match(body, /window\.addEventListener\("pointerup"/);
+  assert.ok(!/setPointerCapture/.test(body),
+    "capture on the pad is released the moment the row is moved");
+  assert.match(body, /passive: false/, "and it can stop the menu scrolling under the drag");
+  /* Without this the browser claims the gesture as a scroll before the app
+     ever sees a move. */
+  assert.match(css, /\.menu-grip \{[^}]*touch-action: none/s);
+});
+
+test("releasing saves the order, and only when it changed", () => {
+  const up = js.slice(js.indexOf("const up = ()"));
+  const body = up.slice(0, up.indexOf("\n  };"));
+  assert.match(body, /saveRowOrder\(order\)/);
+  assert.match(body, /order\.join\(\) === state\.rowOrder\.join\(\)/,
+    "a row put back where it started is not a change worth a round trip");
+  const save = js.slice(js.indexOf("async function saveRowOrder("));
+  const saveBody = save.slice(0, save.indexOf("\n}"));
+  assert.match(saveBody, /post\("\/api\/rows"/, "it is saved on the server, not in the phone");
+  assert.match(saveBody, /loadHome\(\)|homeStale/, "and the home screen is told to follow");
+  assert.match(saveBody, /state\.rowOrder = previous/, "a failed save puts the list back");
 });
 
 test("the head carries exactly one viewport, set to cover the display", () => {

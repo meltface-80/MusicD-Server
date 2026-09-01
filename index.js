@@ -23,6 +23,7 @@ const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
 const { createUpdater } = require("./lib/updater");
+const settingsLib = require("./lib/settings");
 
 /* ------------------------------------------------------------------ */
 /*  Configuration                                                      */
@@ -43,6 +44,7 @@ const PUBLIC_DIR = process.env.MUSICD_PUBLIC_DIR || path.join(__dirname, "public
 fs.mkdirSync(ART_DIR, { recursive: true });
 
 const db = dbLib.open(DATA_DIR);
+const settings = settingsLib.open(db);
 const picks = picksLib.createCache(db);
 
 const household = new Household({
@@ -212,37 +214,71 @@ function bounded(value, fallback, max) {
    words "nothing here yet" is an instruction to go and use a feature, which is
    not what a home screen is for. Every other row describes the library and is
    worth a place even while empty. */
-function favouriteRow(n) {
-  const albums = library.favourites(db, n);
-  return albums.length ? [{ key: "favourites", title: "Favourites", albums }] : [];
+/*
+ * What each row is called and how it is filled. One table, so the home screen,
+ * the full-grid screen and the side menu cannot disagree about what a row is —
+ * and so the order they appear in is a list of keys rather than a shape
+ * repeated in three places.
+ */
+const ROW_DEFS = {
+  favourites: { title: "Favourites",
+                albums: (n, o) => library.favourites(db, n, o) },
+  library:    { title: "Library",
+                albums: (n, o) => library.library(db, n, o) },
+  random:     { title: "Random albums",
+                albums: (n)    => library.random(db, n) },
+  added:      { title: "Recently added",
+                albums: (n, o) => library.recentlyAdded(db, n, o) },
+  played:     { title: "Recently played",
+                albums: (n, o) => library.recentlyPlayed(db, n, o) },
+  unplayed:   { title: "Not played in 6 months",
+                albums: (n, o) => library.notPlayedIn6Months(db, n, o),
+                empty: "Nothing yet — this row fills once albums have gone six months unplayed." },
+  picks:      { title: "Smart Picks",
+                albums: ()     => picks.get().picks,
+                empty: () => picks.get().note }
+};
+
+/* Favourites is the one row that is ABSENT rather than empty when it has
+   nothing in it — a heading over "nothing here yet" is an instruction to go
+   and use a feature, which is not what a home screen is for. Every other row
+   describes the library and is worth a place even while empty. */
+function homeRows(n) {
+  return settingsLib.rowOrder(settings).map((key) => {
+    const def = ROW_DEFS[key];
+    const albums = def.albums(n, 0);
+    if (key === "favourites" && !albums.length) return null;
+    const empty = typeof def.empty === "function" ? def.empty() : def.empty;
+    return { key, title: def.title, albums, ...(empty ? { empty } : {}) };
+  }).filter(Boolean);
 }
 
 app.get("/api/home", api((req, res) => {
   const n = bounded(req.query.limit, 24, 60);
-  const p = picks.get();
-  res.json({
-    rows: favouriteRow(n).concat([
-      { key: "library",  title: "Library",                albums: library.library(db, n) },
-      { key: "random",   title: "Random albums",          albums: library.random(db, n) },
-      { key: "added",    title: "Recently added",         albums: library.recentlyAdded(db, n) },
-      { key: "played",   title: "Recently played",        albums: library.recentlyPlayed(db, n) },
-      { key: "unplayed", title: "Not played in 6 months", albums: library.notPlayedIn6Months(db, n),
-        empty: "Nothing yet — this row fills once albums have gone six months unplayed." },
-      { key: "picks",    title: "Smart Picks",            albums: p.picks, empty: p.note }
-    ]),
-    stats: library.stats(db)
-  });
+  res.json({ rows: homeRows(n), stats: library.stats(db) });
 }));
 
-const ROWS = {
-  favourites: (n, o) => library.favourites(db, n, o),
-  library:  (n, o) => library.library(db, n, o),
-  random:   (n)    => library.random(db, n),
-  added:    (n, o) => library.recentlyAdded(db, n, o),
-  played:   (n, o) => library.recentlyPlayed(db, n, o),
-  unplayed: (n, o) => library.notPlayedIn6Months(db, n, o),
-  picks:    ()     => picks.get().picks
-};
+/*
+ * The order of the home screen's rows, arranged from the side menu.
+ *
+ * Read and written whole rather than as moves: a phone that has been asleep
+ * sends the arrangement it can see, and the last one to finish dragging wins.
+ * Anything unrecognised is dropped and anything missing is put back — see
+ * lib/settings.js — so a bad list cannot leave somebody with a home screen
+ * missing a row.
+ */
+app.get("/api/rows", api((req, res) => res.json({
+  order: settingsLib.rowOrder(settings),
+  titles: Object.fromEntries(Object.entries(ROW_DEFS).map(([k, d]) => [k, d.title]))
+})));
+
+app.post("/api/rows", api((req, res) => {
+  const order = settingsLib.setRowOrder(settings, (req.body || {}).order);
+  res.json({ order });
+}));
+
+const ROWS = Object.fromEntries(
+  Object.entries(ROW_DEFS).map(([key, def]) => [key, def.albums]));
 
 app.get("/api/albums", api((req, res) => {
   const row = String(req.query.row || "library");

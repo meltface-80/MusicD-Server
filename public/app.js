@@ -112,6 +112,8 @@ const state = {
   updateTimer: null,     // the poll watching an update through its restart
   positionAt: 0,
   build: null,
+  rowOrder: [],          // the home screen's rows, as the user arranged them
+  rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
   afterModal: null,      // a screen to open once the panel has closed itself
   checkedForUpdate: false
@@ -295,6 +297,166 @@ function skeletonCard() {
     return m;
   })());
   return card;
+}
+
+/* ------------------------------------------------------------------ */
+/*  The home screen's rows, arranged from the side menu                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * How long the pad has to be held before a drag starts.
+ *
+ * Long enough that scrolling the menu with a thumb that happens to land on a
+ * pad still scrolls, short enough that it does not feel like the app is
+ * ignoring you. Moving before it elapses cancels — that was a scroll.
+ */
+const DRAG_HOLD_MS = 320;
+const DRAG_SLOP = 8;                     // movement that still counts as holding still
+
+/* Rebuild the menu's row list from the order the server holds. */
+async function loadMenuRows() {
+  try {
+    const { order, titles } = await api("/api/rows");
+    state.rowOrder = order;
+    state.rowTitles = titles;
+    renderMenuRows();
+  } catch (e) {
+    /* The menu still has Home and Artists, and every row is reachable from the
+       home screen itself, so this is a smaller loss than an empty menu. */
+    console.warn("[rows] could not read the row order: " + e.message);
+  }
+}
+
+function renderMenuRows() {
+  const host = $("menu-rows");
+  host.textContent = "";
+  for (const key of state.rowOrder) {
+    const row = el("div", "menu-row");
+    row.dataset.row = key;
+
+    /* The pad is its own control, and the only thing a drag starts from. The
+       rest of the entry stays a plain tap that opens the row, so arranging the
+       menu never gets in the way of using it. */
+    const pad = el("button", "menu-grip");
+    pad.type = "button";
+    pad.setAttribute("aria-label", `Move ${state.rowTitles[key] || key}`);
+    pad.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>' +
+      '<circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>' +
+      '<circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+    pad.addEventListener("pointerdown", (e) => beginRowDrag(e, row));
+
+    const open = el("button", "menu-item menu-row-open", state.rowTitles[key] || key);
+    open.type = "button";
+    open.addEventListener("click", () => {
+      $("menu-overlay").classList.add("hidden");
+      openRow(key);
+    });
+
+    /* The pad sits at the trailing edge, so every label in the menu — rows and
+       the plain entries above them — starts on the same line. */
+    row.append(open, pad);
+    host.appendChild(row);
+  }
+}
+
+/*
+ * Hold the pad, then drag.
+ *
+ * Pointer events rather than touch events, so one path covers a finger and a
+ * mouse. The rows are moved in the DOM as the pointer passes their midpoints,
+ * which is what makes the gap open where the row will land rather than after
+ * it lands — there is no separate preview to keep in step with the list.
+ */
+function beginRowDrag(event, row) {
+  if (event.button != null && event.button > 0) return;   // right-click is not a drag
+  const host = $("menu-rows");
+  const pad = event.currentTarget;
+  const startY = event.clientY;
+  let dragging = false;
+
+  const hold = setTimeout(() => {
+    dragging = true;
+    row.classList.add("is-dragging");
+    host.classList.add("is-arranging");
+    if (navigator.vibrate) navigator.vibrate(8);
+  }, DRAG_HOLD_MS);
+
+  const move = (e) => {
+    if (!dragging) {
+      /* Still deciding. Movement before the hold elapses was a scroll, not a
+         drag, so let the menu have it. */
+      if (Math.abs(e.clientY - startY) > DRAG_SLOP) cleanUp();
+      return;
+    }
+    e.preventDefault();
+    const over = [...host.querySelectorAll(".menu-row")].find((other) => {
+      if (other === row) return false;
+      const box = other.getBoundingClientRect();
+      return e.clientY >= box.top && e.clientY <= box.bottom;
+    });
+    if (!over) return;
+    const box = over.getBoundingClientRect();
+    const after = e.clientY > box.top + box.height / 2;
+    host.insertBefore(row, after ? over.nextSibling : over);
+  };
+
+  const up = () => {
+    const moved = dragging;
+    cleanUp();
+    if (!moved) return;
+    const order = [...host.querySelectorAll(".menu-row")].map((n) => n.dataset.row);
+    if (order.join() === state.rowOrder.join()) return;    // put back where it was
+    saveRowOrder(order);
+  };
+
+  function cleanUp() {
+    clearTimeout(hold);
+    dragging = false;
+    row.classList.remove("is-dragging");
+    host.classList.remove("is-arranging");
+    window.removeEventListener("pointermove", move, { capture: true });
+    window.removeEventListener("pointerup", up, true);
+    window.removeEventListener("pointercancel", up, true);
+  }
+
+  /*
+   * ON THE WINDOW, NOT ON THE PAD — and deliberately not with pointer capture.
+   *
+   * Capturing on the pad is the obvious way to keep a drag alive, and it is
+   * wrong here: moving the row to its new place moves the pad with it, and
+   * re-inserting a captured element releases the capture. The pad then stops
+   * receiving anything and the drag dies one pixel in, which is exactly what
+   * it did — lostpointercapture fired on the very first move. The window sees
+   * every pointer wherever the DOM has been rearranged to.
+   *
+   * Not passive, because a held drag has to stop the menu scrolling under it.
+   */
+  window.addEventListener("pointermove", move, { capture: true, passive: false });
+  window.addEventListener("pointerup", up, true);
+  window.addEventListener("pointercancel", up, true);
+  /* The pad itself is touch-action: none, so the gesture never becomes a
+     scroll in the first place; this stops the press selecting or dragging the
+     button on a desktop. */
+  event.preventDefault();
+}
+
+/* Saved where it was let go. The home screen behind the menu is now showing
+   the old order, so it is told to rebuild. */
+async function saveRowOrder(order) {
+  const previous = state.rowOrder;
+  state.rowOrder = order;
+  try {
+    const saved = await post("/api/rows", { order });
+    state.rowOrder = saved.order;
+    renderMenuRows();
+    state.homeStale = true;
+    if (state.view === "home") { state.homeStale = false; loadHome(); }
+  } catch (e) {
+    state.rowOrder = previous;
+    renderMenuRows();
+    toast(e.message, true);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -2080,6 +2242,7 @@ function wire() {
   state.zone = loadZone();
 
   wire();
+  loadMenuRows();
   startProgressTicker();
   registerServiceWorker();
   loadHome();
