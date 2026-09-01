@@ -1043,14 +1043,25 @@ main {
   font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The − and + are DRAWN, not typed.
+ *
+ * As text they sat off the centre of their circles, and by how much depended
+ * on which font in the stack the platform happened to resolve: flexbox centres
+ * the LINE BOX, and a glyph's ink sits wherever that font's metrics put it
+ * relative to the baseline — measured here at about a pixel out, and different
+ * again on iOS. Two lines through the middle of a 24×24 box are centred on
+ * every platform, in every font, for good.
+ */
 .vol-step {
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; width: var(--tap-min); height: var(--tap-min);
   border-radius: 50%;
   background: var(--bg-elev-2); border: 1px solid var(--border);
-  color: var(--text); font: 500 22px/1 var(--font-sans);
+  color: var(--text);
   cursor: pointer; transition: background .15s ease, transform .08s ease;
 }
+.vol-step svg { width: 22px; height: 22px; display: block; }
 .vol-step:hover  { background: var(--border); }
 .vol-step:active { transform: scale(.95); }
 

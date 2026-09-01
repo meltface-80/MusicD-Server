@@ -201,8 +201,20 @@ window.addEventListener("popstate", (event) => {
      one per event: a held Back, or a jump of several entries, arrives as a
      single popstate and must close every layer it passed. */
   const depth = (event.state && event.state.musicdDepth) || 0;
-  while (nav.length > depth) {
-    const layer = nav.pop();
+
+  /*
+   * TAKEN OFF THE STACK FIRST, CLOSED SECOND.
+   *
+   * A close callback is allowed to open something new — tapping an artist on
+   * the album panel closes the panel and opens that artist's screen, which
+   * pushes a layer of its own. A loop that re-read nav.length between closes
+   * saw that new layer as one more thing to unwind and closed it again, so the
+   * artist screen appeared and was immediately replaced by Home. Splicing
+   * decides the work before any of it runs, and anything opened during it is
+   * left alone.
+   */
+  const closing = nav.splice(depth).reverse();
+  for (const layer of closing) {
     try { layer.close(); }
     catch { /* a layer whose DOM has already gone — nothing left to close */ }
   }
@@ -211,6 +223,40 @@ window.addEventListener("popstate", (event) => {
 /* ------------------------------------------------------------------ */
 /*  Album cards                                                        */
 /* ------------------------------------------------------------------ */
+
+/*
+ * The artists named on one album line.
+ *
+ * Split on the separators tags actually use for a list — a semicolon, or a
+ * slash with space around it. NOT on "&" and NOT on a comma: those live inside
+ * real names, and splitting on them turns Earth, Wind & Fire into three
+ * artists who have never recorded anything, and Simon & Garfunkel into two.
+ * The cost of being conservative is a joined name occasionally left as one
+ * link, which is a link that works; the cost of being greedy is links to
+ * artists who do not exist.
+ */
+function splitArtists(artist) {
+  return String(artist || "")
+    .split(/\s*;\s*|\s+\/\s+/)
+    .map(name => name.trim())
+    .filter(Boolean);
+}
+
+/* Fill `host` with one tappable name per artist, and say how many there were
+   so a caller can decide what to put after them. */
+function renderArtistLinks(host, artist) {
+  host.textContent = "";
+  const names = splitArtists(artist);
+  names.forEach((name, i) => {
+    if (i) host.appendChild(document.createTextNode(", "));
+    const link = el("button", "artist-link", name);
+    link.type = "button";
+    link.addEventListener("click", () => openArtist(name));
+    host.appendChild(link);
+  });
+  return names;
+}
+
 
 function albumCard(album, { showReason = false } = {}) {
   const card = el("button", "album");
@@ -712,7 +758,10 @@ function renderNow(now) {
 
   /* Now playing face */
   $("np-track").textContent = title;
-  $("np-artist").textContent = artist;
+  /* Each artist is a way to the rest of their records, the same as on the
+     album screen — and built the same way, so the two cannot drift about what
+     counts as one artist. */
+  renderArtistLinks($("np-artist"), artist);
   $("np-album").textContent = album;
   const npImg = $("np-img");
   if (art) { npImg.src = art; npImg.classList.remove("hidden"); }
@@ -967,24 +1016,6 @@ async function openAlbum(id) {
   }
 }
 
-/*
- * The artists named on one album line.
- *
- * Split on the separators tags actually use for a list — a semicolon, or a
- * slash with space around it. NOT on "&" and NOT on a comma: those live inside
- * real names, and splitting on them turns Earth, Wind & Fire into three
- * artists who have never recorded anything, and Simon & Garfunkel into two.
- * The cost of being conservative is a joined name occasionally left as one
- * link, which is a link that works; the cost of being greedy is links to
- * artists who do not exist.
- */
-function splitArtists(artist) {
-  return String(artist || "")
-    .split(/\s*;\s*|\s+\/\s+/)
-    .map(name => name.trim())
-    .filter(Boolean);
-}
-
 /* ---- Favourites -------------------------------------------------- */
 
 function setFave(on) {
@@ -1029,15 +1060,7 @@ function renderAlbum(album) {
   $("modal-title").textContent = album.title;
 
   const subtitle = $("modal-subtitle");
-  subtitle.textContent = "";
-  const names = splitArtists(album.artist);
-  names.forEach((name, i) => {
-    if (i) subtitle.appendChild(document.createTextNode(", "));
-    const link = el("button", "artist-link", name);
-    link.type = "button";
-    link.addEventListener("click", () => openArtist(name));
-    subtitle.appendChild(link);
-  });
+  const names = renderArtistLinks(subtitle, album.artist);
   if (album.year) {
     subtitle.appendChild(document.createTextNode((names.length ? " · " : "") + album.year));
   }
