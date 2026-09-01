@@ -206,6 +206,25 @@ main {
 @media (min-width: 768px)  { main { padding: 18px; padding-top: calc(var(--topbar-h) + 18px); } }
 @media (min-width: 1200px) { main { padding: 22px; padding-top: calc(var(--topbar-h) + 22px); } }
 
+/* Quiet, and dismissible. An update notice that cannot be got rid of is a
+   nag; one that never appears is the reason somebody runs a build from three
+   weeks ago without knowing it. */
+.update-banner {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  border-radius: 10px; font-size: 13px; color: var(--text);
+}
+.update-text { flex: 1 1 auto; min-width: 0; }
+.update-link { flex: 0 0 auto; font-weight: 600; }
+.update-dismiss {
+  flex: 0 0 auto; min-height: var(--ctl-h-sm); padding: 0 12px;
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  font: 600 12.5px var(--font-sans); cursor: pointer;
+}
+.update-dismiss:hover { color: var(--text); }
+
 .status-banner {
   padding: 10px 14px; margin-bottom: 14px;
   background: var(--bg-elev); border: 1px solid var(--border);

@@ -37,6 +37,7 @@ NAS, a Raspberry Pi, a home server.
 ```bash
 docker run -d \
   --name musicd-server \
+  --pull always \
   --network host \
   --restart unless-stopped \
   -e TZ=Europe/London \
@@ -45,6 +46,12 @@ docker run -d \
   -v /etc/localtime:/etc/localtime:ro \
   ghcr.io/meltface-80/musicd-server:latest
 ```
+
+> **`--pull always` is what makes this the update command too.** Without it
+> `docker run` uses whatever copy of `:latest` is already on the machine and
+> never asks the registry — so stopping the container, removing it and running
+> the same line again gives you back the build you already had. It looks
+> exactly like an update that shipped nothing.
 
 That is the whole installation. Open `http://<host-ip>:3400/` — the first scan
 starts on its own, and the home screen fills as it goes.
@@ -75,12 +82,32 @@ is no prebuild for the platform.
 ### Updating
 
 ```bash
-docker pull ghcr.io/meltface-80/musicd-server:latest
 docker rm -f musicd-server
 ```
 
-then run the same `docker run` command again. Your library and play history live
-in the `musicd-server-data` volume and are untouched by this.
+then run the same `docker run` command again — `--pull always` fetches the new
+image. Your library and play history live in the `musicd-server-data` volume and
+are untouched.
+
+With compose it is `docker compose pull && docker compose up -d`.
+
+**Check it worked.** Open the side menu: the bottom entry shows the version, the
+commit it was built from and the date. Tap it to copy the line. The app also
+checks GitHub for a newer release when it loads and says so if there is one.
+
+### Versions
+
+`main` publishes on every push, so several tags point at the same build:
+
+| Tag | What it follows |
+| --- | --- |
+| `:latest` | the newest build of `main` |
+| `:0.2.0` | that exact version, for pinning |
+| `:0.2` | the newest patch of that minor version |
+| `:sha-abc1234` | one specific commit, for rolling back |
+
+A GitHub release is tagged automatically when the version in `package.json`
+changes on `main`, so the release notes and the images always agree.
 
 > **`--network host` is required.** Finding Sonos players is multicast (SSDP),
 > and multicast does not cross Docker's default bridge network. Host networking

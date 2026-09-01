@@ -289,7 +289,7 @@
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
      album identification, no streaming accounts.</p>
   <div class="badges">
-    <span class="badge" id="ver-badge">v0.1.0</span>
+    <span class="badge" id="ver-badge">v0.2.0</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT licence</span>
     <span class="badge plain">Your files, your speakers</span>
@@ -575,7 +575,7 @@
   var IMAGE = "musicd-server";
   var REPO  = "meltface-80/MusicD-Server";
   var VOLUME = "musicd-server-data";
-  var FALLBACK_VERSION = "0.1.0";
+  var FALLBACK_VERSION = "0.2.0";
 
   var els = {
     modes:     document.getElementById("modes"),
@@ -818,6 +818,11 @@
 
     var cmd = ["docker run -d \\"];
     cmd.push("  --name " + IMAGE + " \\");
+    /* Load-bearing, and the reason this doubles as the update command: without
+       it `docker run` uses whatever copy of the tag is already on the machine
+       and never asks the registry, so removing the container and running the
+       same line again hands back the build you already had. */
+    if (!els.fromsource.checked) cmd.push("  --pull always \\");
     cmd.push("  --restart unless-stopped \\");
     if (state.mode === "host") {
       cmd.push("  --network host \\");
@@ -858,6 +863,7 @@
     }
     y.push("    container_name: " + IMAGE);
     y.push("    restart: unless-stopped");
+    if (!els.fromsource.checked) y.push("    pull_policy: always");
     if (state.mode === "host") {
       y.push("    network_mode: host   # multicast discovery needs it");
     } else {
@@ -916,9 +922,10 @@
       ? "<b>To update later,</b> run the <code>docker build</code> again with " +
         "<code>--no-cache</code>, then <code>docker rm -f musicd-server</code> and the run command " +
         "once more. Your library and play history are in the volume and are not touched."
-      : "<b>To update later,</b> <code>docker pull ghcr.io/" + REPO.toLowerCase() + ":latest</code>, " +
-        "then <code>docker rm -f musicd-server</code> and the run command once more. Your library " +
-        "and play history are in the volume and are not touched.";
+      : "<b>This is the update command too.</b> <code>docker rm -f musicd-server</code>, then run " +
+        "it again — <code>--pull always</code> fetches the new image. Without that flag " +
+        "<code>docker run</code> reuses the copy already on the machine and you get the build you " +
+        "already had. Your library and play history are in the volume and are not touched.";
 
     syncUrl();
   }

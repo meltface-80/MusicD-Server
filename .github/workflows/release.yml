@@ -1,0 +1,64 @@
+name: Tag and release
+
+# A release happens when the version in package.json changes on main, so
+# cutting one is an ordinary part of merging rather than a step somebody has to
+# remember. The container images are published by docker-publish.yml on the
+# same push — a tag created here would NOT trigger that workflow, which is why
+# it tags the version itself rather than waiting for this one.
+on:
+  push:
+    branches: [main]
+    paths: ["package.json"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Has this version already been released?
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.pkg.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Take this version's notes out of the changelog
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            const text = fs.readFileSync("CHANGELOG.md", "utf8");
+            const start = text.indexOf(`\n## ${version}\n`);
+            if (start === -1) { fs.writeFileSync("RELEASE_NOTES.md", ""); process.exit(0); }
+            const after = text.indexOf("\n## ", start + 1);
+            const body = text.slice(start, after === -1 ? undefined : after).trim();
+            fs.writeFileSync("RELEASE_NOTES.md", body.replace(/^## .*\n/, "").trim() + "\n");
+          ' "${{ steps.pkg.outputs.version }}"
+          cat RELEASE_NOTES.md
+
+      - name: Tag and publish
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file RELEASE_NOTES.md

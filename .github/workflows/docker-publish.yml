@@ -33,6 +33,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read the version from package.json
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Derive image tags
         id: meta
         uses: docker/metadata-action@v5
@@ -44,6 +48,12 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
+            # The package.json version, on main builds. A tag push would give
+            # the same thing through type=semver, but a tag created by a
+            # workflow does not trigger another workflow — so the version tags
+            # are produced here, where the build actually happens, rather than
+            # depending on that.
+            type=raw,value=${{ steps.pkg.outputs.version }},enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -55,5 +65,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            BUILD_REF=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
