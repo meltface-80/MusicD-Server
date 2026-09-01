@@ -22,6 +22,7 @@ const picksLib = require("./lib/picks");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
+const { createUpdater } = require("./lib/updater");
 
 /* ------------------------------------------------------------------ */
 /*  Configuration                                                      */
@@ -158,6 +159,37 @@ app.get("/api/status", api((req, res) => {
     },
     time: { now: Date.now(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone }
   });
+}));
+
+/* ------------------------------------------------------------------ */
+/*  Updating                                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The app can install its own updates.
+ *
+ * The passive check stays in the BROWSER, where it has always been: nothing
+ * here reaches the internet while the server is simply running. These three
+ * endpoints only do anything when somebody asks, and the apply one re-reads
+ * the release from GitHub itself rather than trusting anything the request
+ * carried — see lib/updater.js, which is where the reasoning lives.
+ */
+const updater = createUpdater({ dir: __dirname, version: BUILD.version });
+
+app.get("/api/update", api((req, res) => res.json(updater.status())));
+
+app.post("/api/update/check", api(async (req, res) => res.json(await updater.check())));
+
+app.post("/api/update/apply", api((req, res) => {
+  if (updater.busy()) return res.json(updater.status());
+  /* Started, then answered — apply() marks itself busy before its first await,
+     so the reply already says what is happening. It is NOT awaited: an update
+     takes tens of seconds and ends by killing this process, so a request held
+     open until it finished would be cut off mid-flight every time and the
+     browser could not tell that from a failure. It polls /api/update instead. */
+  const started = updater.apply();
+  res.json(updater.status());
+  started.catch(e => console.error("[update] " + e.message));
 }));
 
 /*

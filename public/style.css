@@ -35,6 +35,7 @@
   --bg-veil:      rgba(29,33,37,.86);
   --glass-edge:   rgba(255,255,255,.10);
   --danger:       #e06464;
+  --danger-soft:  rgba(224,100,100,.14);
   --panel-hairline: rgba(255,255,255,.07);
   --shadow-card:  0 2px 6px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.35);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.6);
@@ -70,6 +71,7 @@
   --glass-edge:   rgba(26,39,64,.12);
   --panel-hairline: rgba(26,39,64,.12);
   --danger:       #c0392b;
+  --danger-soft:  rgba(192,57,43,.10);
   --shadow-card:  0 1px 2px rgba(0,0,0,.06), 0 6px 16px rgba(0,0,0,.08);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.18);
 }
@@ -223,6 +225,23 @@ main {
 }
 .update-text { flex: 1 1 auto; min-width: 0; }
 .update-link { flex: 0 0 auto; font-weight: 600; }
+/* The one thing on the banner that does something, so it is the one thing on
+   the banner that looks like a button rather than a link. */
+.update-now {
+  flex: 0 0 auto; min-height: var(--ctl-h-sm); padding: 0 14px;
+  background: var(--accent); color: var(--on-accent);
+  border: 0; border-radius: var(--ctl-radius);
+  font: 700 12.5px var(--font-sans); cursor: pointer;
+  transition: opacity .15s ease;
+}
+.update-now:hover { opacity: .88; }
+.update-now:disabled { opacity: .55; cursor: default; }
+/* While it is updating, the banner is a progress report and nothing on it is
+   worth tapping. */
+.update-banner.is-busy .update-now,
+.update-banner.is-busy .update-link,
+.update-banner.is-busy .update-dismiss { display: none; }
+.update-banner.is-error { background: var(--danger-soft); border-color: var(--danger); }
 .update-dismiss {
   flex: 0 0 auto; min-height: var(--ctl-h-sm); padding: 0 12px;
   background: transparent; color: var(--text-dim);

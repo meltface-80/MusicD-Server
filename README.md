@@ -81,19 +81,35 @@ is no prebuild for the platform.
 
 ### Updating
 
+**From the app.** When a new release exists the app says so, and the banner has
+an **Update now** button. Pressing it downloads that release, writes it over the
+running install, reinstalls dependencies if they changed, and restarts — which
+is why `--restart unless-stopped` is in the run command above. The page comes
+back on the new version and tells you which one. Your library and play history
+are in the `musicd-server-data` volume and are never touched.
+
+The side menu's **Check for updates** does the same from a standing start, and
+either way there is only ever one update running: a second phone opened during
+one joins it rather than starting another.
+
+It rewrites the container's files rather than pulling a new image — nothing here
+talks to Docker, and a music server that can start containers is a much larger
+thing than one that can keep itself current. That survives `docker restart`,
+because a container's writable layer does. The next `docker run --pull always`
+lands on the same release from the image, so the two ways of updating agree
+rather than fighting.
+
+**From the command line**, if you would rather:
+
 ```bash
 docker rm -f musicd-server
 ```
 
 then run the same `docker run` command again — `--pull always` fetches the new
-image. Your library and play history live in the `musicd-server-data` volume and
-are untouched.
-
-With compose it is `docker compose pull && docker compose up -d`.
+image. With compose it is `docker compose pull && docker compose up -d`.
 
 **Check it worked.** Open the side menu: the bottom entry shows the version, the
-commit it was built from and the date. Tap it to copy the line. The app also
-checks GitHub for a newer release when it loads and says so if there is one.
+commit it was built from and the date. Tap it to copy the line.
 
 ### Versions
 
@@ -102,7 +118,7 @@ checks GitHub for a newer release when it loads and says so if there is one.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.3.4` | that exact version, for pinning |
+| `:0.4.0` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 

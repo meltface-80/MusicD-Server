@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.0
+
+### The app installs its own updates
+- **The update banner has an Update now button.** It used to notice a new
+  release and then tell you to go and run Docker commands, which is a notice
+  rather than an update. Pressing it downloads that release, writes it over the
+  running install, reinstalls dependencies if they changed, and restarts. The
+  page comes back on the new version and says which one.
+- **Check for updates** in the side menu offers the same button when it finds
+  something.
+- Only one update ever runs. A second phone opened part-way through — or a
+  reload — joins the one in progress and watches it finish, rather than
+  offering to start another.
+- Your library and play history are never touched. Neither is `node_modules`,
+  which is built for this machine and is replaced only when the dependencies
+  actually changed — that step is minutes on a Pi, where `better-sqlite3`
+  compiles from source, and it is the step most likely to fail.
+- Nothing is written over the running install until the download has been
+  unpacked and checked to be a real MusicD Server build of the version it
+  claimed to be. A failure before that point leaves the running version exactly
+  as it was, and says what went wrong with a Try again.
+
+**What this does not do is pull a new image.** There is no Docker socket in the
+container and there should not be — a music server that can start containers is
+a far larger thing than one that can keep itself current. It rewrites the files
+of the running container instead, which survives `docker restart` because a
+container's writable layer does, and the next `docker run --pull always` lands
+on the same release from the image. The two ways of updating agree rather than
+fighting. `--restart unless-stopped`, already in the documented run command, is
+what starts the server again afterwards.
+
+The passive check still runs in the browser, so nothing here reaches the
+internet while the server is simply sitting there. The repository it updates
+from is fixed in code and never read from a request, and every address it opens
+— including each redirect — has to be one of GitHub's own hosts over TLS.
+
 ## 0.3.4
 
 ### The volume bar floats, and each bar has its own
