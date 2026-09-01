@@ -98,6 +98,7 @@ const state = {
   pollTimer: null,
   scanTimer: null,
   progressTimer: null,
+  updateTimer: null,     // the poll watching an update through its restart
   positionAt: 0,
   build: null,
   checkedForUpdate: false
@@ -1302,13 +1303,18 @@ async function refreshStatus() {
       `${status.sonos.rooms} Sonos room${status.sonos.rooms === 1 ? "" : "s"} · ` +
       `${status.time.zone}`;
 
-    /* Once per load, on the first status that comes back. A stale page takes
-       precedence over a new release: reloading is the thing to do first, and
-       two banners at once is one too many. */
+    /* Once per load, on the first status that comes back. There is an order to
+       these: an update already running is the most important thing the banner
+       could say, then a stale page — reloading is what to do first, and it is
+       what an update has just finished asking for — then a new release. Two
+       banners at once is one too many. */
     if (!state.checkedForUpdate) {
       state.checkedForUpdate = true;
-      if (SHELL_VERSION && SHELL_VERSION !== status.version) showStaleShell(status.version);
-      else checkForUpdate(status.build);
+      resumeUpdateIfRunning().then((running) => {
+        if (running) return;
+        if (SHELL_VERSION && SHELL_VERSION !== status.version) showStaleShell(status.version);
+        else checkForUpdate(status.build);
+      });
     }
   } catch (e) {
     banner("Cannot reach the server: " + e.message, true);
@@ -1399,25 +1405,196 @@ async function checkForUpdate(build, { manual = false } = {}) {
        check is asking to see the answer. */
     if (!manual && dismissed === latest) return;
 
-    $("update-text").textContent =
-      `Version ${latest} is out — you are running ${build.version}. ` +
-      `Pull the new image on your server, then restart the container.`;
-    const link = $("update-link");
-    link.textContent = "Release notes";
-    link.target = "_blank";
-    link.href = release.html_url || `https://github.com/${REPO}/releases`;
-    $("update-banner").classList.remove("hidden");
-    $("update-dismiss").onclick = () => {
-      $("update-banner").classList.add("hidden");
-      try { localStorage.setItem("musicd.dismissedUpdate", latest); }
-      catch { /* storage off — dismissing lasts for this visit only */ }
-    };
+    offerUpdate(latest, build.version, release.html_url || `https://github.com/${REPO}/releases`);
   } catch (e) {
     /* Offline, rate-limited, or no release yet. The automatic check says
        nothing — the app does not depend on the answer — but somebody who
        asked deserves to be told it could not be got. */
     if (manual) toast("Could not check for updates: " + e.message, true);
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Installing an update                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The banner does not just report a new version, it installs it.
+ *
+ * The server downloads the release, writes it over itself and restarts, so
+ * everything here is: ask it to start, then watch. The watching is the awkward
+ * part — the server goes away in the middle, on purpose, so a failed request
+ * is the expected halfway point rather than an error.
+ */
+const UPDATE_PHASES = {
+  checking:   "Checking the release…",
+  downloading: "Downloading…",
+  unpacking:  "Unpacking…",
+  installing: "Installing dependencies…",
+  restarting: "Restarting…"
+};
+
+const UPDATE_POLL_MS = 1500;
+/* Long enough for a Raspberry Pi to rebuild better-sqlite3 from source, which
+   is the slowest thing an update here can have to do. */
+const UPDATE_GIVE_UP_MS = 6 * 60 * 1000;
+
+function updateBanner() { return $("update-banner"); }
+
+function showUpdateProgress(phase) {
+  updateBanner().classList.remove("hidden", "is-error");
+  updateBanner().classList.add("is-busy");
+  $("update-text").textContent = UPDATE_PHASES[phase] || "Updating…";
+}
+
+function showUpdateFailed(message) {
+  updateBanner().classList.remove("is-busy");
+  updateBanner().classList.add("is-error");
+  $("update-text").textContent = "The update failed: " + message;
+  $("update-now").disabled = false;
+  $("update-now").textContent = "Try again";
+}
+
+/* Offer the update, with the button that takes it. */
+function offerUpdate(latest, running, notesUrl) {
+  const banner = updateBanner();
+  banner.classList.remove("hidden", "is-busy", "is-error");
+  $("update-text").textContent =
+    `Version ${latest} is out — you are running ${running}.`;
+  const link = $("update-link");
+  link.textContent = "Release notes";
+  link.target = "_blank";
+  link.href = notesUrl;
+
+  const button = $("update-now");
+  button.disabled = false;
+  button.textContent = "Update now";
+  button.onclick = () => startUpdate(running);
+
+  $("update-dismiss").onclick = () => {
+    banner.classList.add("hidden");
+    try { localStorage.setItem("musicd.dismissedUpdate", latest); }
+    catch { /* storage off — dismissing lasts for this visit only */ }
+  };
+}
+
+async function startUpdate(runningVersion) {
+  $("update-now").disabled = true;
+  showUpdateProgress("checking");
+  try {
+    await post("/api/update/apply", {});
+  } catch (e) {
+    /* The server may already have restarted under the request. That is a
+       successful start, not a failure, so watching begins either way and the
+       watch below is what decides which it was. */
+    console.warn("[update] the apply request did not come back: " + e.message);
+  }
+  watchUpdate(runningVersion);
+}
+
+/*
+ * Watch an update through to the other side.
+ *
+ * What ends the wait is the SERVER REPORTING A DIFFERENT VERSION, not the
+ * server going away and coming back. Watching for the outage looks like the
+ * obvious signal and is not one: a fast machine finishes the whole update
+ * inside a single poll interval, so there is no moment at which a request
+ * fails, and a watch waiting for one waits for ever on exactly the setups
+ * where the update went best. A failed request only changes what the banner
+ * says while it keeps waiting.
+ */
+function watchUpdate(runningVersion) {
+  clearInterval(state.updateTimer);
+  const startedAt = Date.now();
+
+  state.updateTimer = setInterval(async () => {
+    if (Date.now() - startedAt > UPDATE_GIVE_UP_MS) {
+      clearInterval(state.updateTimer);
+      showUpdateFailed("it is taking too long. Check the container's logs.");
+      return;
+    }
+    let status;
+    try {
+      status = await api("/api/update");
+    } catch {
+      /* Unreachable — the restart, most likely. Say so and keep waiting; the
+         version check above is what actually finishes this. */
+      showUpdateProgress("restarting");
+      return;
+    }
+
+    if (runningVersion && status.current && status.current !== runningVersion) {
+      /* A different build is answering: the update landed. Reloading with a
+         fresh URL rather than location.reload(), for the same reason the
+         stale-shell banner does — a reload can be answered from the very
+         cache entry holding the old shell. */
+      clearInterval(state.updateTimer);
+      location.replace(location.pathname + "?updated=" + status.current);
+      return;
+    }
+
+    const phase = (status.apply && status.apply.phase) || "idle";
+    if (phase === "error") {
+      clearInterval(state.updateTimer);
+      showUpdateFailed(status.apply.error || "no reason given");
+      return;
+    }
+    if (UPDATE_PHASES[phase]) showUpdateProgress(phase);
+  }, UPDATE_POLL_MS);
+}
+
+/* If the server was already updating when this page loaded — a second phone,
+   or a reload mid-update — join the watch rather than showing a stale offer. */
+async function resumeUpdateIfRunning() {
+  try {
+    const status = await api("/api/update");
+    const phase = (status.apply && status.apply.phase) || "idle";
+    if (!UPDATE_PHASES[phase]) return false;
+    showUpdateProgress(phase);
+    watchUpdate(status.current);
+    return true;
+  } catch {
+    /* Nothing to resume, or the server is not answering. Either way the
+       ordinary check runs next and reports what it finds. */
+    return false;
+  }
+}
+
+/*
+ * Say the update worked.
+ *
+ * The reload after an update carries the version it landed on, because that is
+ * the only moment the app can tell the difference between "you reloaded" and
+ * "you updated" — and after all the trouble this project has had with updates
+ * that appeared to do nothing, finishing one in silence is the wrong ending.
+ *
+ * It does not simply read the address bar and stop there. The new build ships a
+ * new service worker, which takes over and reloads the page a second time
+ * moments later — so a message shown once and forgotten is gone before it can
+ * be read. It moves into storage that survives that reload, and is cleared only
+ * once it has been on screen long enough to have been seen.
+ */
+const JUST_UPDATED_KEY = "musicd.justUpdated";
+
+function announceUpdateIfJustDone() {
+  let version = new URLSearchParams(location.search).get("updated");
+  if (version) {
+    /* Out of the address bar at once, so a bookmark or a share never carries
+       it and no ordinary reload repeats the message. */
+    history.replaceState(null, "", location.pathname);
+    try { sessionStorage.setItem(JUST_UPDATED_KEY, version); }
+    catch { /* storage off — the message shows now and only now */ }
+  } else {
+    try { version = sessionStorage.getItem(JUST_UPDATED_KEY) || ""; }
+    catch { /* storage off — nothing was kept, so there is nothing to say */ }
+  }
+  if (!version) return;
+
+  toast(`Updated to version ${version}.`);
+  setTimeout(() => {
+    try { sessionStorage.removeItem(JUST_UPDATED_KEY); }
+    catch { /* storage off — nothing was stored to remove */ }
+  }, 4000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1682,6 +1859,7 @@ function wire() {
   try { saved = localStorage.getItem("musicd.theme") || "dark"; } catch { /* storage off */ }
   applyTheme(saved);
 
+  announceUpdateIfJustDone();
   state.zone = loadZone();
 
   wire();

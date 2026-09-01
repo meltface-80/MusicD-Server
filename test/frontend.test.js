@@ -179,6 +179,65 @@ test("the mini bar is play/pause, what is on, then room and volume", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Updating                                                           */
+/* ------------------------------------------------------------------ */
+
+test("the banner carries a button that starts the update", () => {
+  /* Reporting a new version and leaving the user to go and run docker commands
+     is what this stopped doing. */
+  assert.ok(htmlIds.has("update-now"), "the banner has an Update now button");
+  const banner = html.slice(html.indexOf('id="update-banner"'),
+                            html.indexOf('id="status-banner"'));
+  assert.ok(/<button[^>]*id="update-now"/.test(banner), "and it is on the banner");
+  assert.match(js, /post\("\/api\/update\/apply"/, "which asks the server to install it");
+});
+
+test("an update finishes on the version changing, not on the server going away", () => {
+  /* The obvious signal is the outage — the server restarts in the middle, so
+     watch for a failed request. It is not a signal: a fast machine finishes
+     inside one poll interval and no request ever fails, so a watch waiting for
+     one waits for ever exactly where the update went best. */
+  const body = /function watchUpdate\([\s\S]*?\n\}/.exec(js);
+  assert.ok(body, "watchUpdate exists");
+  const fn = body[0];
+
+  assert.match(fn, /function watchUpdate\(runningVersion\)/,
+    "it is told which version was running");
+  assert.match(fn, /status\.current !== runningVersion/,
+    "and finishes when a different one answers");
+
+  /* The reload must not be reachable only from the failure path. */
+  const catchBlock = /\} catch \{[\s\S]*?\n    \}/.exec(fn);
+  assert.ok(catchBlock, "it handles the request failing");
+  assert.ok(!/location\.replace/.test(catchBlock[0]),
+    "a failed request does not itself mean the update finished");
+
+  const start = /async function startUpdate\([\s\S]*?\n\}/.exec(js);
+  assert.ok(start, "startUpdate exists");
+  assert.match(start[0], /watchUpdate\(runningVersion\)/,
+    "and hands the running version on to the watch");
+});
+
+test("the update endpoints are POSTs, so nothing can install by being linked to", () => {
+  const index = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.match(index, /app\.post\("\/api\/update\/apply"/, "applying is a POST");
+  assert.match(index, /app\.post\("\/api\/update\/check"/, "and so is re-checking");
+  assert.match(index, /app\.get\("\/api\/update"/, "reading the status is a GET");
+  assert.ok(!/app\.get\("\/api\/update\/apply"/.test(index),
+    "there is no way to start an update with a GET");
+});
+
+test("a running update is joined rather than talked over", () => {
+  /* A second phone, or a reload part-way through, must not be offered the
+     update that is already installing. */
+  assert.match(js, /resumeUpdateIfRunning/, "the page asks what is happening first");
+  const boot = js.slice(js.indexOf("if (!state.checkedForUpdate)"));
+  const block = boot.slice(0, boot.indexOf("\n    }"));
+  assert.ok(block.indexOf("resumeUpdateIfRunning") < block.indexOf("showStaleShell"),
+    "and that answer comes before the stale-page banner or a new offer");
+});
+
+/* ------------------------------------------------------------------ */
 /*  Volume sheet                                                       */
 /* ------------------------------------------------------------------ */
 
