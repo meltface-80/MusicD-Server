@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.5
+
+### The in-app update works
+- **Every update from the app since 0.4.0 failed with "GitHub answered 415".**
+  The download asked for the release archive with
+  `Accept: application/octet-stream`, which is the header for a release *asset*
+  — on the archive endpoint GitHub refuses it as an unsupported media type. It
+  asks for anything now, which is the honest request: what comes back is a gzip
+  from GitHub's download host, and it is checked after unpacking rather than by
+  its type.
+- The API version is pinned, so a change to what GitHub defaults to cannot
+  change what the updater gets back.
+- **The test that should have caught this now can.** Four tests covered the
+  transport and all four passed, because the stand-in for GitHub answered
+  whatever it was asked — a header nothing looks at is a header nothing can get
+  wrong. It refuses the way the real one does now: ask for an archive as
+  octet-stream and it answers 415, which turns the exact shipped bug red.
+
 ## 0.4.4
 
 ### Fixed

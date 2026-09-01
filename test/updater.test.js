@@ -437,6 +437,26 @@ const https = require("https");
 const { EventEmitter } = require("events");
 const { PassThrough } = require("stream");
 
+/*
+ * A stand-in that REFUSES THINGS, not one that says yes to everything.
+ *
+ * The 415 that broke every in-app update between 0.4.0 and 0.4.3 was an Accept
+ * header the archive endpoint does not take — a header a permissive fake never
+ * looks at, which is why four passing tests said the transport was fine. So
+ * this one checks the request the way GitHub does before it answers.
+ */
+function githubWouldRefuse(url, headers) {
+  const accept = String((headers && headers.Accept) || "");
+  if (url.includes("/tarball/") || url.includes("/zipball/")) {
+    /* octet-stream is for a RELEASE ASSET. On an archive it is a 415. */
+    if (/application\/octet-stream/.test(accept)) return 415;
+  }
+  if (url.includes("/releases/latest") && accept && !/vnd\.github|json|\*\/\*/.test(accept)) {
+    return 415;
+  }
+  return 0;
+}
+
 function withFakeGitHub(routes, run) {
   const asked = [];
   const real = https.get;
@@ -449,7 +469,10 @@ function withFakeGitHub(routes, run) {
     req.setTimeout = () => {};
     req.destroy = () => {};
     setImmediate(() => {
-      const answer = routes(url) || { status: 404, headers: {}, body: "" };
+      const refused = githubWouldRefuse(url, options.headers);
+      const answer = refused
+        ? { status: refused, headers: {}, body: "" }
+        : (routes(url) || { status: 404, headers: {}, body: "" });
       res.statusCode = answer.status;
       res.headers = answer.headers || {};
       cb(res);
@@ -508,6 +531,43 @@ test("an update installs over the REAL transport, redirect and all", async () =>
 
   await new Promise(r => setTimeout(r, 700));
   assert.strictEqual(exited, updater.RESTART_EXIT_CODE);
+  rel.cleanup(); ws.cleanup();
+});
+
+test("the archive is asked for with a header the archive endpoint takes", async () => {
+  /* THE BUG THIS FILE EXISTS TO HAVE CAUGHT. `Accept: application/octet-stream`
+     is what you send for a release asset; on the tarball endpoint GitHub
+     answers 415 Unsupported Media Type, and every in-app update from 0.4.0 to
+     0.4.3 died there. Nothing noticed because the fake here answered whatever
+     it was asked — it now refuses the same way. */
+  const ws = workspace();
+  installedAt(ws.root, "0.4.1");
+  const rel = releaseTarball("0.4.2");
+  const gz = fs.readFileSync(rel.tgz);
+
+  await withFakeGitHub((url) => {
+    if (url.includes("/releases/latest")) return { status: 200, headers: {}, body: RELEASE("0.4.2") };
+    if (url.includes("api.github.com") && url.includes("/tarball/")) {
+      return { status: 302, headers: {
+        location: "https://codeload.github.com/meltface-80/MusicD-Server/legacy.tar.gz/refs/tags/v0.4.2"
+      } };
+    }
+    if (url.includes("codeload.github.com")) return { status: 200, headers: {}, body: gz };
+    return null;
+  }, async (asked) => {
+    const s = await createUpdater({
+      dir: ws.root, version: "0.4.1", exit: () => {},
+      installDependencies: () => assert.fail("the dependencies did not change")
+    }).apply();
+    assert.strictEqual(s.apply.error, null, "it did not fail: " + s.apply.error);
+
+    const archive = asked.find(a => a.url.includes("/tarball/"));
+    assert.ok(archive, "the archive was asked for");
+    assert.ok(!/application\/octet-stream/.test(archive.headers.Accept),
+      "octet-stream on an archive is a 415 — was " + archive.headers.Accept);
+    assert.strictEqual(archive.headers["X-GitHub-Api-Version"], "2022-11-28",
+      "and the API version is pinned, so a future default cannot change the answer");
+  });
   rel.cleanup(); ws.cleanup();
 });
 
