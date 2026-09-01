@@ -102,7 +102,7 @@ test("the light theme redefines every token the dark one declares", () => {
 
   /* Sizing tokens are deliberately shared; only the colours have to be paired. */
   const shared = new Set(["--font-sans", "--ctl-h", "--ctl-h-sm", "--tap-min",
-                          "--ctl-radius", "--topbar-h", "--mini-h"]);
+                          "--ctl-radius", "--topbar-h", "--mini-h", "--np-pad-b"]);
   const missing = [...tokensIn(dark)].filter(t => !shared.has(t) && !tokensIn(light).has(t));
   assert.deepStrictEqual(missing, [], "these colours would stay dark in the light theme");
 });
@@ -176,6 +176,83 @@ test("the mini bar is play/pause, what is on, then room and volume", () => {
   assert.ok(!ids.includes("mt-prev") && !ids.includes("mt-next"));
   assert.ok(bar.indexOf('id="mt-playpause"') < bar.indexOf('id="mt-open"'),
     "play/pause leads, ahead of the title");
+});
+
+/* ------------------------------------------------------------------ */
+/*  Volume sheet                                                       */
+/* ------------------------------------------------------------------ */
+
+/* VOL_SHEETS is the one place the two sheets' ids are written down, so read it
+   out of app.js rather than repeating it here. */
+function volSheets() {
+  const block = /const VOL_SHEETS = \[([\s\S]*?)\n\];/.exec(js);
+  assert.ok(block, "app.js declares VOL_SHEETS");
+  return [...block[1].matchAll(/\{([\s\S]*?)\}/g)].map(m =>
+    [...m[1].matchAll(/(\w+):\s*"([^"]+)"/g)]
+      .reduce((o, kv) => { o[kv[1]] = kv[2]; return o; }, {}));
+}
+
+test("both volume sheets name only ids the markup has", () => {
+  /* The id check above reads $("literal") calls. These ids reach $ through a
+     variable, so nothing else would notice a rename that missed one. */
+  const sheets = volSheets();
+  assert.strictEqual(sheets.length, 2, "one sheet per bar");
+  for (const ids of sheets) {
+    for (const [part, id] of Object.entries(ids)) {
+      assert.ok(htmlIds.has(id), `${part} is "${id}", which the markup does not have`);
+    }
+  }
+});
+
+test("each bar's volume button opens that bar's own sheet", () => {
+  /* The mini bar's speaker used to open Now playing and show ITS slider, which
+     took you off the screen you were on to change the volume on it. */
+  const [mini, np] = volSheets();
+  assert.strictEqual(mini.button, "mt-vol");
+  assert.strictEqual(mini.sheet, "mt-vol-sheet");
+  assert.strictEqual(np.button, "np-volbtn");
+  assert.strictEqual(np.sheet, "np-vol-sheet");
+  const code = stripComments(js, "js");
+  const from = code.indexOf("for (const ids of VOL_SHEETS)");
+  assert.ok(from > -1, "the buttons are wired in one loop");
+  const loop = code.slice(from, code.indexOf("\n  }", from));
+  assert.ok(!/openNowPlaying|setFace|navOpen/.test(loop),
+    "opening a volume sheet never navigates anywhere");
+});
+
+test("the volume sheets float, so opening one moves nothing", () => {
+  /* In flow, the Now playing sheet pushed the screen up as it opened: that face
+     never scrolls, so the artwork shrank to make room for it. */
+  const sheet = /\.vol-sheet \{([\s\S]*?)\}/.exec(css);
+  assert.ok(sheet, "there is one shared .vol-sheet");
+  assert.match(sheet[1], /position:\s*fixed/, "it is taken out of the flow");
+  for (const cls of [".mt-vol-sheet", ".np-vol-sheet"]) {
+    assert.match(css, new RegExp("\\" + cls + " \\{[^}]*bottom:"),
+      cls + " is anchored to the bar that opens it");
+  }
+});
+
+test("both sheets carry the same controls, and both have a minus and a plus", () => {
+  for (const ids of volSheets()) {
+    const open = html.indexOf(`id="${ids.sheet}"`);
+    assert.ok(open > -1);
+    const sheet = html.slice(open, html.indexOf("</div>", html.indexOf(`id="${ids.plus}"`)));
+    for (const part of ["value", "range", "minus", "plus"]) {
+      assert.ok(sheet.includes(`id="${ids[part]}"`), `${ids.sheet} is missing its ${part}`);
+    }
+    assert.ok(sheet.includes("vol-scale"), `${ids.sheet} shows the ends of the scale`);
+  }
+});
+
+test("one writer paints both sheets, so they cannot disagree", () => {
+  /* They show the same speaker. A number written into one and not the other is
+     a stale reading the next person to open that sheet would believe. */
+  const body = /function syncVolume\([\s\S]*?\n\}/.exec(js);
+  assert.ok(body, "syncVolume exists");
+  assert.match(body[0], /for \(const ids of VOL_SHEETS\)/, "it writes every sheet");
+  const writes = [...js.matchAll(/\$\("(mt|np)-vol-(value|range)"\)/g)];
+  assert.deepStrictEqual(writes.map(m => m[0]), [],
+    "nothing addresses one sheet's readout or slider by name");
 });
 
 test("the screen title gives way to the search field rather than sharing the row", () => {

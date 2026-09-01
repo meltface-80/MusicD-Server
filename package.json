@@ -1,6 +1,6 @@
 {
   "name": "musicd-server",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "A simple local music server for Sonos. Scans your folders, shows your albums as they are, and plays them to your speakers.",
   "license": "MIT",
   "author": "Lewis Menzies (Music Duck / MusicD)",

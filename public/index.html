@@ -190,6 +190,41 @@
     </div>
   </div>
 
+
+  <!-- The mini bar's volume, just above the bar. Floating, not in flow: opening it must not move the screen
+       underneath, which is the whole reason it is not a panel. -->
+  <div class="vol-sheet mt-vol-sheet hidden" id="mt-vol-sheet" role="dialog" aria-label="Volume">
+    <span class="vol-readout" aria-hidden="true">
+      <span class="vol-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+      </span>
+      <span class="vol-value" id="mt-vol-value">0</span>
+    </span>
+    <span class="vol-slider-wrap">
+      <input type="range" id="mt-vol-range" class="vol-range" min="0" max="100" step="1" value="30" aria-label="Volume level">
+      <span class="vol-scale" aria-hidden="true"><span>0</span><span>100</span></span>
+    </span>
+    <button class="vol-step" id="mt-vol-minus" type="button" aria-label="Volume down">&#8722;</button>
+    <button class="vol-step" id="mt-vol-plus" type="button" aria-label="Volume up">+</button>
+  </div>
+
+  <!-- Now playing's volume, at the foot of that screen. Floating, not in flow: opening it must not move the screen
+       underneath, which is the whole reason it is not a panel. -->
+  <div class="vol-sheet np-vol-sheet hidden" id="np-vol-sheet" role="dialog" aria-label="Volume">
+    <span class="vol-readout" aria-hidden="true">
+      <span class="vol-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+      </span>
+      <span class="vol-value" id="np-vol-value">0</span>
+    </span>
+    <span class="vol-slider-wrap">
+      <input type="range" id="np-vol-range" class="vol-range" min="0" max="100" step="1" value="30" aria-label="Volume level">
+      <span class="vol-scale" aria-hidden="true"><span>0</span><span>100</span></span>
+    </span>
+    <button class="vol-step" id="np-vol-minus" type="button" aria-label="Volume down">&#8722;</button>
+    <button class="vol-step" id="np-vol-plus" type="button" aria-label="Volume up">+</button>
+  </div>
+
   <!-- ---------------------------------------------------------------- -->
   <!--  Album / Now playing panel                                        -->
   <!-- ---------------------------------------------------------------- -->
@@ -291,11 +326,6 @@
               <svg id="np-icon-vol" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
               <svg id="np-icon-mute" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="hidden"><path d="M4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.17v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73zM12 4 9.91 6.09 12 8.18z"/></svg>
             </button>
-          </div>
-
-          <div class="np-vol-sheet hidden" id="np-vol-sheet">
-            <span class="np-vol-value" id="np-vol-value">0</span>
-            <input type="range" id="np-volume" class="np-volume" min="0" max="100" step="1" value="30" aria-label="Volume">
           </div>
           </div><!-- /.np-info -->
         </div>

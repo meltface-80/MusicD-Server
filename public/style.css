@@ -46,6 +46,9 @@
 
   --topbar-h: calc(56px + env(safe-area-inset-top));
   --mini-h: 64px;
+  /* The gap under the last row of the Now playing face. The volume sheet has
+     to clear that row, so it reads this rather than repeating the number. */
+  --np-pad-b: 14px;
 }
 
 /* The light theme goes the other way round: the bar is already all but white,
@@ -556,7 +559,7 @@ main {
   overflow: hidden;
   display: flex; flex-direction: column;
   /* The mini bar is hidden on this face, so the room it reserves goes too. */
-  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--np-pad-b) + env(safe-area-inset-bottom));
 }
 .modal.face-np .modal-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .modal.face-np #np-screen { flex: 1 1 auto; min-height: 0; }
@@ -569,7 +572,7 @@ main {
     inset: 0; transform: none;
     width: 100%; max-height: 100%;
     border-radius: 0; border: 0;
-    padding: calc(env(safe-area-inset-top) + 8px) 16px calc(14px + env(safe-area-inset-bottom));
+    padding: calc(env(safe-area-inset-top) + 8px) 16px calc(var(--np-pad-b) + env(safe-area-inset-bottom));
   }
 }
 
@@ -668,25 +671,21 @@ main {
 .np-album:empty { display: none; }
 
 .np-progress { width: 100%; margin-top: 18px; }
-.np-seek, .np-volume {
+.np-seek {
   -webkit-appearance: none; appearance: none;
   display: block; width: 100%; height: 14px;
   background: transparent; cursor: pointer;
   --fill: var(--border);
 }
-.np-seek::-webkit-slider-runnable-track,
-.np-volume::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--fill); }
-.np-seek::-webkit-slider-thumb,
-.np-volume::-webkit-slider-thumb {
+.np-seek::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--fill); }
+.np-seek::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--text); border: 0; cursor: pointer;
   margin-top: -5px;                       /* (14px thumb - 4px track) / 2 */
 }
-.np-seek::-moz-range-track,
-.np-volume::-moz-range-track { height: 4px; border-radius: 999px; background: var(--fill); }
-.np-seek::-moz-range-thumb,
-.np-volume::-moz-range-thumb {
+.np-seek::-moz-range-track { height: 4px; border-radius: 999px; background: var(--fill); }
+.np-seek::-moz-range-thumb {
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--text); border: 0; cursor: pointer;
 }
@@ -743,18 +742,6 @@ main {
 .np-mini-btn:hover { color: var(--text); }
 .np-mini-btn.is-open { color: var(--accent-text); border-color: var(--accent); }
 
-/* The volume slider is revealed by the speaker button rather than always on
-   screen, so the transport keeps its place when it opens. */
-.np-vol-sheet {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; margin-top: 12px;
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px 14px;
-}
-.np-vol-value {
-  flex: 0 0 auto; min-width: 2.5ch; text-align: right;
-  font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums;
-}
 
 /* ------------------------------------------------------------------ */
 /*  Queue page                                                         */
@@ -851,6 +838,120 @@ main {
 .mt-btn svg { width: 22px; height: 22px; }
 .mt-btn:hover  { background: var(--bg-elev-2); }
 .mt-btn:active { transform: scale(.94); }
+/* The speaker stays lit while its sheet is open, so it is clear which bar the
+   floating sheet belongs to. */
+.mt-btn.is-open { color: var(--accent-text); background: var(--accent-soft); }
+
+/* ------------------------------------------------------------------ */
+/*  Volume sheet                                                       */
+/* ------------------------------------------------------------------ */
+
+/* One control, opened from two places: the mini bar's speaker and the one on
+   Now playing. Reading left to right it is [speaker + value] [slider, with the
+   ends of the scale under it] [− +].
+
+   It FLOATS. An earlier version sat in the flow of the Now playing screen and
+   pushed everything above it upward as it opened — and that screen never
+   scrolls, so the artwork shrank to make room and the whole thing jumped. Out
+   of flow, opening the volume moves nothing. */
+.vol-sheet {
+  position: fixed;
+  left: 10px; right: 10px;
+  z-index: 76;                  /* over the mini transport (75), which is over the panel */
+  display: flex; align-items: center; gap: 14px;
+  /* The bottom padding is room for the 0/100 scale, which is positioned rather
+     than stacked — see .vol-slider-wrap. */
+  padding: 16px 16px 30px;
+  border-radius: 16px;
+  /* Solid, like the room sheet, not the transport pill's veil. The pill can be
+     translucent because what shows through it is artwork; this sheet lands on
+     top of the transport buttons, and at 86% the prev and pause icons read
+     straight through the slider and the ends of the scale. */
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-modal);
+  animation: vol-in .14s ease-out;
+}
+.vol-sheet.hidden { display: none; }
+@media (min-width: 720px) { .vol-sheet { left: auto; right: 22px; width: 420px; } }
+
+@keyframes vol-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+/* A reduced-motion setting means the sheet appears rather than rises. */
+@media (prefers-reduced-motion: reduce) { .vol-sheet { animation: none; } }
+
+/* Each sheet clears the row that opens it, so neither hides the speaker button
+   you tapped or the transport beside it. The mini bar's sits on top of the bar;
+   Now playing's sits on top of that screen's room-and-volume row, which is the
+   last thing on it. Ten pixels of air in both cases. */
+.mt-vol-sheet { bottom: calc(10px + var(--mini-h) + 10px + env(safe-area-inset-bottom)); }
+.np-vol-sheet { bottom: calc(var(--np-pad-b) + var(--tap-min) + 10px + env(safe-area-inset-bottom)); }
+
+.vol-readout { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.vol-icon { display: inline-flex; color: var(--text); }
+.vol-icon svg { width: 26px; height: 26px; }
+.vol-value {
+  font-size: 26px; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums; min-width: 42px;
+}
+
+.vol-slider-wrap {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center;
+  /* The 0/100 scale is POSITIONED, not stacked. In flow it makes this wrapper
+     about twenty pixels taller than the slider, and `align-items: center` on
+     the row then centres the readout and the − + against slider-plus-scale, so
+     all of them sit visibly low against the track they belong to. */
+  position: relative;
+}
+.vol-scale {
+  position: absolute; left: 0; right: 0; top: 100%;
+  margin-top: 3px; padding: 0 4px;
+  display: flex; justify-content: space-between;
+  font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+
+.vol-step {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: var(--tap-min); height: var(--tap-min);
+  border-radius: 50%;
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  color: var(--text); font: 500 22px/1 var(--font-sans);
+  cursor: pointer; transition: background .15s ease, transform .08s ease;
+}
+.vol-step:hover  { background: var(--border); }
+.vol-step:active { transform: scale(.95); }
+
+/* A slider big enough for a thumb. The 4px hairline the seek bar uses is fine
+   for something you drag once; volume is adjusted mid-track, often one-handed.
+   WebKit has no ::-webkit-slider-runnable-progress, so the filled part left of
+   the thumb is a gradient driven by --vol-fill, kept in step from app.js. */
+.vol-range {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 30px; margin: 0;
+  background: transparent; cursor: pointer;
+}
+.vol-range::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg,
+    var(--accent) 0 var(--vol-fill, 50%), var(--border) var(--vol-fill, 50%) 100%);
+}
+.vol-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--text); border: 0; cursor: pointer;
+  margin-top: -10px;                      /* (26px thumb - 6px track) / 2 */
+  box-shadow: var(--shadow-card);
+}
+.vol-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--border); }
+.vol-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.vol-range::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--text); border: 0; cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Room sheet                                                         */

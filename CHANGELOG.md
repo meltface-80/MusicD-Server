@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.3.4
+
+### The volume bar floats, and each bar has its own
+- **Opening the volume on Now playing no longer pushes the screen upward.** The
+  slider sat in the flow of a screen that never scrolls, so making room for it
+  shrank the artwork and shifted everything above it. It floats over the screen
+  now, the way MusicD Remote's does, and opening it moves nothing.
+- **− and + buttons**, either side of the slider. The slider gets you roughly
+  there; the buttons are for the last step or two, and each one is a single
+  point of volume.
+- **The mini bar's speaker opens the mini bar's own volume.** It used to take
+  you to Now playing and open that screen's slider — leaving the screen you were
+  on in order to change the volume on it. Both bars now carry the same control,
+  and each one opens beside the bar it belongs to, clear of the buttons around
+  it.
+- The sheet reads [speaker and value] [slider, with the ends of the scale under
+  it] [− +], which is the shape MusicD Remote uses. The number is large enough
+  to read at arm's length, and the slider has a thumb big enough to catch.
+- A tap anywhere else puts it away, as does Escape, moving between screens, and
+  a second tap on the speaker — which stays lit while its sheet is open.
+
+### Fixed
+- **The volume no longer creeps back after you set it.** A tap of + painted the
+  new number and sent it, and then every poll in the second or two before the
+  speaker agreed wrote the old one straight back — the thumb sliding away from
+  the button just pressed. The value you asked for is now held until the speaker
+  echoes it, and the hold lapses on its own so a change made in the Sonos app
+  still reaches the slider.
+
 ## 0.3.3
 
 ### Multi-disc albums are one album again
