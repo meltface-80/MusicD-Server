@@ -169,6 +169,13 @@ part of the fix.
   build can undo it for a shortcut already created. `test/frontend.test.js`
   guards this by matching the TAG, not the word, so the comment explaining their
   absence does not trip it.
+- **A fixed element is not fixed while iOS is scrolling with the keyboard up.**
+  It gets re-anchored to the visual viewport, which lifts anything pinned to the
+  bottom onto the keys. Everything with a `bottom:` subtracts `--kb-inset`
+  (measured in `trackKeyboard()`) so it stays where it was put; the keyboard
+  covers it rather than moving it. `window.innerHeight` is the viewport that
+  does NOT change when the keyboard opens — measuring against `visualViewport`
+  alone yields zero for ever.
 - **A stale installed PWA looks exactly like a regression. Rule it out first.**
   Ask for a delete-and-re-add of the shortcut before diagnosing a
   "you broke X in version N" report.

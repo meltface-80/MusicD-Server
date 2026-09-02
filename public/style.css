@@ -1010,7 +1010,19 @@ main {
      hides it outright, having the full transport on it already, and the side
      menu covers it, being a modal drawer with a backdrop across the screen. */
   position: fixed; z-index: 75;
-  left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+  /*
+   * --kb-inset is how much of the bottom of the page the soft keyboard is
+   * covering, measured in app.js. SUBTRACTING it holds the bar where it was
+   * before the keyboard opened, which is behind it.
+   *
+   * That is the point. A fixed element is anchored to the layout viewport, but
+   * iOS re-anchors one to the VISUAL viewport while the page is scrolling — so
+   * with the keyboard up, scrolling lifted this bar out of the page and left
+   * it floating on top of the keys. The bar does not move for the keyboard;
+   * the keyboard covers it.
+   */
+  left: 10px; right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom) - var(--kb-inset, 0px));
   height: var(--mini-h);
   display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px;
   background: var(--bg-veil); border: 1px solid var(--glass-edge);
@@ -1103,7 +1115,10 @@ main {
    you tapped or the transport beside it. The mini bar's sits on top of the bar;
    Now playing's sits on top of that screen's room-and-volume row, which is the
    last thing on it. Ten pixels of air in both cases. */
-.mt-vol-sheet { bottom: calc(10px + var(--mini-h) + 10px + env(safe-area-inset-bottom)); }
+/* The same term as the bar it sits on, so the two never come apart. */
+.mt-vol-sheet {
+  bottom: calc(10px + var(--mini-h) + 10px + env(safe-area-inset-bottom) - var(--kb-inset, 0px));
+}
 .np-vol-sheet { bottom: calc(var(--np-pad-b) + var(--tap-min) + 10px + env(safe-area-inset-bottom)); }
 
 .vol-readout { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
