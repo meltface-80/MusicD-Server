@@ -661,6 +661,11 @@ main {
  * long names on them. Scrolls sideways rather than wrapping, so a wide set
  * cannot push the track list down the screen.
  */
+/* The cover-lookup row when the feature is switched off. Dimmed rather than
+   removed: the row is how it gets switched back on. */
+.menu-item.is-off { color: var(--text-faint); }
+.menu-item.is-off .menu-sub { color: var(--text-faint); }
+
 .version-tabs {
   display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
   margin: 4px 0 2px; padding: 6px 2px;

@@ -12,8 +12,12 @@ a decision, not a gap:
 
 - **No metadata fetching and no album identification.** The library shows albums
   as they are on disk. An album is a folder; its title and artist come from the
-  tags in it, and the folder name is the fallback.
-- **No record labels.** No Discogs, no FanArt.tv, no MusicBrainz, no Last.fm.
+  tags in it, and the folder name is the fallback. **One exception, added in
+  0.4.9 at the user's explicit request: a MISSING COVER.** An album with no
+  picture anywhere gets one found for it and nothing else — no title, no
+  artist, no year, no genre, no review, and never a tag rewritten. See the
+  cover rules below.
+- **No record labels.** No Discogs, no FanArt.tv.
 - **No streaming services.** No Qobuz, no TIDAL.
 - **No Pitchfork**, no reviews, no scores.
 - **No wall display.**
@@ -21,6 +25,31 @@ a decision, not a gap:
 Do not add any of them back, and do not add a "small" call to an external
 metadata API as a convenience. `test/frontend.test.js` fails the build if any of
 these names reappears in the client.
+
+## The one thing that reaches the internet
+
+`lib/covers.js` looks for a cover, and it is the only outbound request the
+server makes while it is simply running. Everything about it is a constraint
+the user set:
+
+- **No API keys and no accounts, ever.** MusicBrainz and the Cover Art Archive
+  need neither. If a source needs a key it is not a source for this project.
+- **Their terms are load-bearing, not advice.** One request a second through the
+  single gate in `covers.js`, a `User-Agent` naming the app, its version and a
+  contact URL, and a 503 or 429 STOPS the sweep rather than being retried. A
+  test's stand-in for MusicBrainz must refuse an unidentified client the way
+  the real one does — a permissive fake tests the happy path and nothing about
+  whether the caller is asking correctly.
+- **Covers only, and only missing ones.** An album with a picture in its folder
+  or embedded in its files is never looked up.
+- **Nothing is written next to the music.** The mount is very often read-only
+  and it is the user's. Fetched images live in `DATA_DIR`, and `art_fetched` is
+  a SEPARATE column from `art` because the scan rewrites `art` on every pass.
+- **A miss is written down.** Without `cover_lookups` a library of coverless
+  bootlegs re-asks about all of them every six hours forever.
+- **It is not a manual fetch.** No picker, no candidate grid, no per-album
+  button — one row in the side menu that says what is happening, and
+  `COVER_LOOKUP=false` to remove even that.
 
 ## Duplicates are a local match, not an identification
 

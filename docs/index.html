@@ -289,7 +289,7 @@
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
      album identification, no streaming accounts.</p>
   <div class="badges">
-    <span class="badge" id="ver-badge">v0.4.8</span>
+    <span class="badge" id="ver-badge">v0.4.9</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT licence</span>
     <span class="badge plain">Your files, your speakers</span>
@@ -517,6 +517,7 @@
           <tr><td>EXCLUDE_ZONES</td><td>—</td><td>Show everything except these rooms.</td></tr>
           <tr><td>SCAN_ON_START</td><td>true</td><td>Scan when the container starts.</td></tr>
           <tr><td>SCAN_INTERVAL_HOURS</td><td>6</td><td>Hours between automatic rescans. <code>0</code> turns them off.</td></tr>
+          <tr><td>COVER_LOOKUP</td><td>true</td><td>Look online for covers albums do not have. <code>false</code> switches it off for good.</td></tr>
         </tbody>
       </table>
     </div>
@@ -575,7 +576,7 @@
   var IMAGE = "musicd-server";
   var REPO  = "meltface-80/MusicD-Server";
   var VOLUME = "musicd-server-data";
-  var FALLBACK_VERSION = "0.4.8";
+  var FALLBACK_VERSION = "0.4.9";
 
   var els = {
     modes:     document.getElementById("modes"),
@@ -895,7 +896,7 @@
     return esc(text)
       .replace(/^(#.*)$/gm, '<span class="c">$1</span>')
       .replace(/(^|\s)(--?[a-z][a-zA-Z-]*)/g, '$1<span class="k">$2</span>')
-      .replace(/\b(TZ|MUSIC_DIRS|PORT|DATA_DIR|SERVER_IP|SONOS_HOSTS|INCLUDE_ZONES|EXCLUDE_ZONES|SCAN_ON_START|SCAN_INTERVAL_HOURS)([=:])/g,
+      .replace(/\b(TZ|MUSIC_DIRS|PORT|DATA_DIR|SERVER_IP|SONOS_HOSTS|INCLUDE_ZONES|EXCLUDE_ZONES|SCAN_ON_START|SCAN_INTERVAL_HOURS|COVER_LOOKUP)([=:])/g,
                '<span class="k">$1</span>$2');
   }
 

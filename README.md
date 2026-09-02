@@ -118,7 +118,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.8` | that exact version, for pinning |
+| `:0.4.9` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -225,6 +225,35 @@ Everything is optional except your music path.
 | `EXCLUDE_ZONES` | — | Show everything except these rooms. |
 | `SCAN_ON_START` | `true` | Scan when the container starts. |
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
+| `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |
+
+## Covers for albums that have none
+
+An album whose folder holds no picture and whose files carry no embedded one
+gets a cover found for it, once, in the background after a scan. Nothing is
+written next to your music — the image goes in `DATA_DIR` and the album row
+points at it — and an album that already has a cover is never touched.
+
+It uses two open services and **no API key or account**: [MusicBrainz] for
+"which release is this", and the [Cover Art Archive] for the picture. Their
+terms ask for a client that identifies itself and makes at most one request a
+second, and this does both.
+
+The match is the album title and the artist first. When that finds nothing, the
+**track names**: two of them, searched as recordings by the same artist, and the
+release they both point at is the record. A single track is on a dozen
+compilations, so one agreement proves nothing and two is the whole of the
+evidence.
+
+A miss is remembered for a week, so a library full of bootlegs and field
+recordings costs a handful of requests rather than hundreds every scan.
+
+Turn it off for a container with `COVER_LOOKUP=false`; it then does not appear
+in the app at all. Otherwise the side menu has a **Find missing covers** row —
+tap it to look now, hold it to switch it off.
+
+[MusicBrainz]: https://musicbrainz.org/
+[Cover Art Archive]: https://coverartarchive.org/
 
 ## Your files
 

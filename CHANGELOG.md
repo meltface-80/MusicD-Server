@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.9
+
+### A cover for albums that have none
+- **An album with no picture now gets one found for it**, once, in the
+  background after a scan. An album that already has a cover — in its folder or
+  embedded in its files — is never touched, and nothing is ever written next to
+  your music: the image goes in the data directory and the album points at it.
+- **No API key and no account.** MusicBrainz says which release it is and the
+  Cover Art Archive has the picture; both are open, and both are asked politely
+  — one request a second, a client that says who it is, and a full stop the
+  moment either says slow down.
+- **The album name and the artist first, then the track names.** Two tracks
+  searched as recordings by the same artist, and the release they both point at
+  is the record — which rescues an album whose album tag is blank or wrong. One
+  track is on a dozen compilations, so a single agreement is not evidence.
+- **It is not a manual fetch.** No picker and no per-album button. The side menu
+  has one row: tap it to look now, hold it to switch it off. A container started
+  with `COVER_LOOKUP=false` does not show the row at all.
+- **A miss is remembered for a week**, so a library full of bootlegs costs a
+  handful of requests rather than hundreds on every scan.
+
 ## 0.4.8
 
 ### One album, however many copies of it are on disk

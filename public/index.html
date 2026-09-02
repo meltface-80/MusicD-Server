@@ -113,6 +113,14 @@
         Theme
         <span class="menu-sub" id="theme-sub"></span>
       </button>
+      <!-- The one thing this server asks the internet about, so it is the one
+           thing with a switch. Hidden entirely when the container was started
+           with COVER_LOOKUP=false — a switch that cannot do anything is worse
+           than no switch. -->
+      <button class="menu-item hidden" type="button" id="menu-covers">
+        Find missing covers
+        <span class="menu-sub" id="covers-sub"></span>
+      </button>
 
       <button class="menu-item" type="button" id="menu-update">
         Check for updates

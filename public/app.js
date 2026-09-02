@@ -115,6 +115,8 @@ const state = {
   rowOrder: [],          // the home screen's rows, as the user arranged them
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
+  covers: null,          // what the server last said about looking for covers
+  coverHeld: false,      // the covers row was HELD, so ignore the click after it
   afterModal: null,      // a screen to open once the panel has closed itself
   checkedForUpdate: false
 };
@@ -1641,6 +1643,33 @@ function banner(text, isError = false) {
   node.classList.remove("hidden");
 }
 
+/*
+ * The cover-lookup row in the side menu.
+ *
+ * One line that says what is happening and one tap that turns it off, which is
+ * the whole of the interface — the point of this feature is that it is not a
+ * manual fetch, so there is no picker, no candidate grid and nothing to
+ * choose. An album whose folder has a picture in it is never touched.
+ *
+ * The row is absent, not disabled, when the container was started with cover
+ * lookup off: a switch that cannot do anything is a worse answer than no
+ * switch.
+ */
+function showCovers(covers) {
+  state.covers = covers;
+  const row = $("menu-covers");
+  row.classList.toggle("hidden", !covers.available);
+  if (!covers.available) return;
+
+  row.classList.toggle("is-off", !covers.enabled);
+  $("covers-sub").textContent =
+    !covers.enabled ? "Off — album art comes from your files only"
+    : covers.running ? `Looking — ${covers.done} of ${covers.total}`
+    : covers.missing ? `${covers.missing} album${covers.missing === 1 ? "" : "s"} still without one · tap to look now`
+    : covers.fetched ? `${covers.fetched} found · every album has a cover`
+    : "On — every album has a cover";
+}
+
 async function refreshStatus() {
   try {
     const status = await api("/api/status");
@@ -1671,6 +1700,8 @@ async function refreshStatus() {
         banner("");
       }
     }
+
+    if (status.covers) showCovers(status.covers);
 
     state.build = status.build;
     $("version-sub").textContent = describeBuild(status.build);
@@ -2127,6 +2158,48 @@ function wire() {
     /* The one thing anybody wants from a version line is to paste it into a
        message about something not working. */
     copyText("MusicD Server " + text, "Version copied.");
+  });
+
+  /*
+   * Tapping the row looks NOW; holding it turns the feature off and on.
+   *
+   * The tap is the thing anybody wants from it — "go and find the ones that
+   * are missing" — and burying that behind a switch would mean waiting for the
+   * next scan every time. The switch is the rarer intention, so it takes the
+   * more deliberate gesture, the same hold the row pads use.
+   */
+  let coverHold = null;
+  const holdCovers = () => {
+    coverHold = setTimeout(async () => {
+      coverHold = null;
+      /* The click that follows the finger coming back up must not then run the
+         tap action as well — it is one gesture, and it already did its job. */
+      state.coverHeld = true;
+      const on = !(state.covers && state.covers.enabled);
+      try {
+        showCovers({ ...await post("/api/covers", { enabled: on }), available: true });
+        toast(on ? "Looking for missing covers." : "Missing covers will not be looked for.");
+      } catch (e) { toast(e.message, true); }
+    }, 500);
+  };
+  const dropCovers = () => { if (coverHold) { clearTimeout(coverHold); coverHold = null; } };
+  $("menu-covers").addEventListener("pointerdown", holdCovers);
+  for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
+    $("menu-covers").addEventListener(event, dropCovers);
+  }
+  $("menu-covers").addEventListener("click", async () => {
+    /* The hold already did something; the click that follows it must not undo
+       the message it just showed. */
+    if (!coverHold && state.coverHeld) { state.coverHeld = false; return; }
+    dropCovers();
+    if (!state.covers || !state.covers.enabled) {
+      toast("Hold this row to turn cover lookup on.");
+      return;
+    }
+    try {
+      showCovers({ ...await post("/api/covers", {}), available: true });
+      toast(state.covers.missing ? "Looking for missing covers…" : "Every album already has a cover.");
+    } catch (e) { toast(e.message, true); }
   });
 
   $("menu-theme").addEventListener("click", () => {
