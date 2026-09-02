@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.16
+
+### The mini transport is a quarter taller
+- **88px instead of 70, and it grew upward.** The bar is fixed by its bottom
+  edge, so its underside is exactly where it was and the extra height could
+  only go up. Everything that sits against it — the foot of the page, the foot
+  of the album panel, the volume sheet and the toast — is worked out from that
+  one number rather than repeating it, so all of them moved with it.
+- **The cover, the type and the buttons grew with it**, because a taller bar
+  with the same contents in it is not a taller bar, it is the old bar with a
+  band of empty above and below. The sleeve goes from 44px to 56 and keeps the
+  share of the height it always had; the track title goes to 14px and the
+  artist line to 13; the three buttons go from 44 to 48 with 24px icons.
+- **The title is 14px rather than 15 for a measured reason.** The bar did not
+  get any wider, so the type is paid for out of the title's own column: at the
+  width of a standard phone that column is 138px, and the track this was asked
+  for — "Back in the Woods" — takes 125px at 14px and 134px at 15. Fifteen fits
+  by four pixels there and not at all on a 375pt phone. A title that starts
+  ellipsising a word early is a worse bar than a title one point smaller.
+- The play button is no longer squeezed. It is the one control in the row that
+  sits directly in the bar rather than in the group at the end, so it was the
+  only thing left able to shrink when the row ran out of width — and at 88px it
+  did, drawing a 46px target where 48 was asked for.
+
 ## 0.4.15
 
 ### An album's title and artist can be corrected by hand

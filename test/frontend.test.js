@@ -90,19 +90,55 @@ test("the side menu is the one thing allowed over the mini transport", () => {
   assert.match(css, /\.modal-panel \{[^}]*calc\(var\(--mini-h\)/s);
 });
 
-test("the mini transport is a tenth taller than it shipped", () => {
+test("the mini transport is a quarter taller than it was, and grows upward", () => {
   const height = /--mini-h:\s*(\d+)px/.exec(css);
   assert.ok(height, "the height is one token");
-  assert.strictEqual(Number(height[1]), 70, "64px plus a tenth, to the nearest pixel");
+  assert.strictEqual(Number(height[1]), 88, "70px plus a quarter, to the nearest pixel");
+
+  /* UPWARD, and nothing had to be told to do that: the bar is fixed by its
+     `bottom`, so its underside cannot move and the extra height can only go
+     up. A `top` here would have pinned the other edge instead and pushed the
+     bar down off the screen. */
+  const bar = css.slice(css.indexOf(".mini-transport {"));
+  const block = bar.slice(0, bar.indexOf("\n}"));
+  assert.match(block, /bottom: calc\(10px \+ env\(safe-area-inset-bottom\)/,
+    "it is anchored by its bottom edge");
+  assert.ok(!/^\s*top:/m.test(block), "and not by its top");
+
   /* Everything that clears the bar derives from that token rather than
      repeating the number, so the one change moves them all. */
   assert.match(css, /\.mini-transport \{[^}]*height: var\(--mini-h\)/s, "the bar itself");
   assert.match(css, /\.mt-vol-sheet \{[^}]*var\(--mini-h\)/s, "the sheet that clears it");
   assert.match(css, /\.modal-panel \{[^}]*var\(--mini-h\)/s, "the panel that reserves its room");
+  assert.match(css, /main \{[^}]*var\(--mini-h\)/s, "the page's own foot");
+  assert.match(css, /\.toast \{[^}]*var\(--mini-h\)/s, "and the toast that sits over it");
+
   /* A height or an offset written as a number is one the token cannot move. */
   const literal = [...stripComments(css, "css")
-    .matchAll(/(height|bottom|padding-bottom):[^;]*\b64px\b/g)];
-  assert.deepStrictEqual(literal.map(m => m[0]), [], "nothing hard-codes the old height");
+    .matchAll(/(height|bottom|padding-bottom):[^;]*\b(64|70)px\b/g)];
+  assert.deepStrictEqual(literal.map(m => m[0]), [], "nothing hard-codes a past height");
+});
+
+test("what is inside the bar grew with it", () => {
+  /* A taller bar with the same 44px cover and 13px type in it is not a taller
+     bar, it is the same bar with a band of empty above and below. */
+  assert.match(css, /\.mt-art \{[^}]*width: 56px; height: 56px/s, "the cover");
+  assert.match(css, /\.mt-title \{[^}]*font-size: 14px/s, "the track");
+  assert.match(css, /\.mt-artist \{[^}]*font-size: 13px/s, "and who it is by");
+
+  /* The buttons go up a little, and as an offset from the tap-target floor
+     rather than a number of their own — --tap-min is what every control in the
+     app stands on, and this is the one row with height to spare for more. */
+  const btn = css.slice(css.indexOf(".mt-btn {"));
+  const block = btn.slice(0, btn.indexOf("\n}"));
+  assert.match(block, /width: calc\(var\(--tap-min\) \+ 4px\)/);
+  assert.match(block, /height: calc\(var\(--tap-min\) \+ 4px\)/);
+  /* And cannot be squeezed back down. The play button is a direct child of the
+     bar rather than of .mt-controls, so it was the one thing in a row that had
+     run out of width still able to shrink — and it did, drawing 46px where 48
+     was asked for. */
+  assert.match(block, /flex: 0 0 auto/, "a tap target is not a spring");
+  assert.match(css, /\.mt-btn svg \{ width: 24px; height: 24px/, "the icons with them");
 });
 
 test("the menu lists every row the home screen can show", () => {
