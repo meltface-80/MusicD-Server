@@ -132,6 +132,16 @@ part of the fix.
 - **The time zone is load-bearing.** "Not played in 6 months" is a calendar
   boundary and Smart Picks rebuild once a local day. Anything date-shaped uses
   local time, and the Docker docs say so.
+- **`Accept: application/octet-stream` is for a RELEASE ASSET, not an archive.**
+  Ask for it on GitHub's tarball endpoint and the answer is 415, which is what
+  broke every in-app update from 0.4.0 to 0.4.3. The archive endpoint takes
+  `Accept: */*` and a pinned `X-GitHub-Api-Version`.
+- **A permissive fake proves nothing about what the caller ASKS FOR.** Four
+  transport tests passed through all three broken releases above because the
+  stand-in for GitHub answered whatever it was asked. Every fake external
+  service in `test/` now refuses the way the real one does — GitHub 415s an
+  octet-stream archive request, MusicBrainz 403s an unidentified client, and
+  Last.fm rejects a wrong signature. Keep it that way when adding another.
 
 ## Front end
 
