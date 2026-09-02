@@ -41,6 +41,18 @@
   --shadow-card:  0 2px 6px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.35);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.6);
 
+  /*
+   * A control sitting ON artwork.
+   *
+   * THE SAME IN BOTH THEMES, deliberately: a sleeve is a picture the listener
+   * chose, not a surface of this app, and it is exactly as light or as dark in
+   * the light theme as in the dark one. A disc that followed the theme would
+   * be a white button on a white sleeve every afternoon.
+   */
+  --scrim:        rgba(0,0,0,.46);
+  --scrim-strong: rgba(0,0,0,.66);
+  --on-scrim:     #ffffff;
+
   --ctl-h: 40px;
   --ctl-h-sm: 36px;
   --ctl-h-lg: 46px;
@@ -80,6 +92,12 @@
   --fave:         #e0323f;
   --shadow-card:  0 1px 2px rgba(0,0,0,.06), 0 6px 16px rgba(0,0,0,.08);
   --shadow-modal: 0 24px 64px rgba(0,0,0,.18);
+
+  /* Not lightened for the light theme — see the note beside these in the dark
+     palette. The artwork underneath does not change, so neither does this. */
+  --scrim:        rgba(0,0,0,.46);
+  --scrim-strong: rgba(0,0,0,.66);
+  --on-scrim:     #ffffff;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -556,6 +574,12 @@ main {
   position: absolute; inset: 0;
   background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
+  /* The panel's scroll ENDS at the panel. Without this, a flick carried past
+     the last track was handed to the page underneath, which scrolled — behind
+     a full-screen overlay, so the only thing to see was the page's own scroll
+     indicator appearing down the edge, and the home screen sitting somewhere
+     else when the panel closed. */
+  overscroll-behavior: contain;
   padding: 0 16px calc(var(--mini-h) + 28px + env(safe-area-inset-bottom));
 }
 @media (min-width: 720px) {
@@ -628,13 +652,77 @@ main {
 }
 
 .modal-body { max-width: 640px; margin: 0 auto; }
+
+/* The sleeve's box, and what the menu is positioned against. The size lives
+   here rather than on .modal-art because that one clips to its own rounded
+   corners — a menu inside it would be cut off by them. */
+.modal-art-wrap { position: relative; width: min(280px, 62vw); margin: 0 auto; }
 .modal-art {
-  width: min(280px, 62vw); aspect-ratio: 1 / 1; margin: 0 auto;
+  width: 100%; aspect-ratio: 1 / 1;
   border-radius: 12px; overflow: hidden;
   background: var(--bg-elev); border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
 }
 .modal-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/*
+ * The overflow control, on the sleeve's bottom-right corner.
+ *
+ * It sits ON the artwork, which is a picture nobody chose to have a button
+ * over, so it is as small as a target is allowed to be and carries its own
+ * ground: a translucent disc dark enough for three dots to read against a
+ * white sleeve and a black one alike. --tap-min is the target, not the disc —
+ * the padding does the reaching so the visible circle stays the size it looks.
+ */
+.art-more {
+  position: absolute; right: 6px; bottom: 6px;
+  width: var(--tap-min); height: var(--tap-min);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--on-scrim);
+}
+.art-more svg {
+  width: 32px; height: 32px; padding: 6px;
+  border-radius: 999px;
+  background: var(--scrim); backdrop-filter: blur(6px);
+  box-shadow: 0 1px 3px var(--scrim);
+}
+.art-more:active { transform: scale(.92); }
+.art-more[aria-expanded="true"] svg { background: var(--scrim-strong); }
+
+/* The menu and its catch are one layer, so neither can be on screen without
+   the other.
+
+   ABOVE THE PANEL'S STICKY HEAD (3), which is the only thing in the panel that
+   is raised at all. Under it, the head kept intercepting the taps meant for the
+   catch — so a tap on the top of the screen pressed Back and left the menu open
+   on a panel that was closing, instead of dismissing it. A menu is dismissed by
+   a tap ANYWHERE that is not on it. */
+.art-menu-layer { position: absolute; inset: 0; z-index: 4; }
+
+/* Anchored to the corner it was opened from and growing UP from it, because
+   the button is at the bottom of the sleeve and a menu below it would cover
+   the album's own name. */
+.art-menu {
+  position: absolute; right: 6px; bottom: calc(var(--tap-min) + 2px);
+  min-width: 168px;
+  padding: 6px; text-align: left;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow-modal);
+}
+.art-menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: var(--tap-min); padding: 0 12px;
+  background: none; border: 0; border-radius: 8px;
+  color: var(--text); font-size: 15px; text-align: left; cursor: pointer;
+}
+.art-menu-item:hover { background: var(--bg-elev-2); }
+.art-menu-item svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--text-dim); }
+
+/* The tap that closes the menu must not also land on whatever is under it —
+   a track row, or Play. Transparent, so the album stays fully visible: this
+   is a menu, not a modal, and it is dismissed by looking away from it. */
+.art-menu-catch { position: fixed; inset: 0; background: none; }
 .modal-info { margin-top: 18px; text-align: center; }
 .modal-info h2 {
   font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -.01em;
@@ -771,6 +859,21 @@ main {
  */
 .modal.face-np .modal-panel {
   overflow: hidden;
+  /*
+   * A DRAG HERE IS NOT A SCROLL, BECAUSE THERE IS NOTHING TO SCROLL.
+   *
+   * overflow: hidden stops this face scrolling, but it does not stop the
+   * gesture: a drag the panel had no use for was passed up the chain to the
+   * page behind, which is one long scrolling document. The panel is fixed, so
+   * nothing on screen moved — the only sign was the PAGE's scroll indicator
+   * appearing down the right-hand edge of a screen that never scrolls, which
+   * is what it was reported as. It also woke the infinite-scroll listener,
+   * which loads another grid page when the document nears its end.
+   *
+   * Declining the gesture outright is the fix. Nothing on this face pans, and
+   * the seek slider is not a pan — it drags more reliably for this, not less.
+   */
+  touch-action: none;
   display: flex; flex-direction: column;
   /* The mini bar is hidden on this face, so the room it reserves goes too. */
   padding-bottom: calc(var(--np-pad-b) + env(safe-area-inset-bottom));
@@ -843,7 +946,9 @@ main {
 /* A short window — a small desktop one; phone landscape is a different layout
    below — scrolls rather than clipping the transport out of reach. */
 @media (max-height: 520px) {
-  .modal.face-np .modal-panel { overflow-y: auto; }
+  /* The one window where this face DOES scroll, so the gesture is given back
+     along with the overflow it belongs to. */
+  .modal.face-np .modal-panel { overflow-y: auto; touch-action: auto; }
   .np-art { flex: 0 0 auto; height: 34vh; }
 }
 
@@ -1256,6 +1361,59 @@ main {
 .zone-row.is-active::after { content: "\2713"; margin-left: auto; }
 .zone-sub { font-size: 12px; color: var(--text-dim); display: block; }
 .zone-note { padding: 14px 18px 4px; font-size: 13px; color: var(--text-faint); line-height: 1.5; }
+
+/* ------------------------------------------------------------------ */
+/*  Correcting an album's name                                         */
+/* ------------------------------------------------------------------ */
+
+/* Above the album panel it was opened from (70) and the bar that floats over
+   that (75); below the toast (90), which reports whether the save landed. */
+.edit-overlay { position: fixed; inset: 0; z-index: 86; }
+.edit-backdrop { position: absolute; inset: 0; background: var(--scrim-strong); }
+
+/*
+ * NEAR THE TOP, NOT IN THE MIDDLE.
+ *
+ * The only panel in the app with a text field on it, and a phone puts the
+ * keyboard over the bottom half of the screen the moment one is focused. A
+ * centred dialog would be under it. Nothing here is pinned to the bottom, so
+ * there is no --kb-inset to subtract: the panel does not move, and the
+ * keyboard opens below it.
+ */
+.edit-panel {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top) + 24px);
+  width: min(440px, 92vw);
+  padding: 18px;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: var(--shadow-modal);
+}
+@media (min-width: 720px) { .edit-panel { top: 12vh; } }
+
+.edit-heading { margin: 0 0 14px; font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+
+.edit-field { display: block; margin-bottom: 12px; }
+.edit-label {
+  display: block; margin-bottom: 5px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.edit-field input {
+  width: 100%; min-height: var(--ctl-h-lg); padding: 0 12px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  /* 16px or iOS zooms the page in on focus and leaves it there. */
+  font-size: 16px;
+}
+.edit-field input:focus { outline: none; border-color: var(--accent); }
+.edit-field input::placeholder { color: var(--text-faint); }
+
+.edit-note { margin: 0 0 14px; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+.edit-err { margin: 0 0 12px; font-size: 13px; color: var(--danger); }
+.edit-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* The pair shares the row rather than each keeping the 132px floor a Play and
+   Queue pair needs — two full-width buttons in a 92vw panel do not fit. */
+.edit-actions .action-btn { min-width: 0; flex: 1 1 0; }
 
 /* ------------------------------------------------------------------ */
 /*  Share card                                                         */

@@ -335,7 +335,35 @@
       <div class="modal-body">
         <!-- ---------------- Album face ---------------- -->
         <div id="album-face">
-          <div class="modal-art"><img id="modal-img" alt=""></div>
+          <!-- The sleeve, and the one control that sits on it. The wrapper is
+               what the menu is positioned against: .modal-art clips to its own
+               rounded corners, so a menu inside it would be cut off by them. -->
+          <div class="modal-art-wrap">
+            <div class="modal-art"><img id="modal-img" alt=""></div>
+            <button class="art-more" id="album-more" type="button"
+                    aria-label="More for this album" aria-haspopup="true" aria-expanded="false"
+                    title="More">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/>
+                <circle cx="19" cy="12" r="1.9"/>
+              </svg>
+            </button>
+            <!-- The catch travels with the menu so the two cannot be shown
+                 separately: a tap that dismisses must not also land on the
+                 track row or the Play button underneath it. -->
+            <div class="art-menu-layer hidden" id="album-menu">
+              <div class="art-menu-catch" data-menu-close></div>
+              <div class="art-menu" role="menu" aria-labelledby="album-more">
+                <button class="art-menu-item" id="album-edit" type="button" role="menuitem">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 7.5 16.5 9.5"/>
+                  </svg>
+                  <span>Edit</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="modal-info">
             <h2 id="modal-title">—</h2>
             <div id="modal-subtitle" class="modal-subtitle"></div>
@@ -458,6 +486,46 @@
       <div class="share-actions" id="share-actions"></div>
       <p class="share-hint" id="share-hint"></p>
       <p class="share-err" id="share-err"></p>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Correcting an album's name                                       -->
+  <!-- ---------------------------------------------------------------- -->
+  <!-- Anchored near the TOP rather than centred, and deliberately: this is
+       the only screen in the app with a text field on it that is not the
+       search bar, and a panel in the middle of a phone is a panel under the
+       keyboard. Nothing here has a `bottom:`, so there is no --kb-inset to
+       subtract — the keyboard opens below it and covers nothing. -->
+  <div id="edit-overlay" class="edit-overlay hidden" role="dialog" aria-modal="true"
+       aria-labelledby="edit-heading">
+    <div class="edit-backdrop" data-edit-close></div>
+    <div class="edit-panel">
+      <h2 class="edit-heading" id="edit-heading">Edit album</h2>
+
+      <label class="edit-field">
+        <span class="edit-label">Album</span>
+        <input id="edit-title" type="text" autocomplete="off" autocapitalize="words"
+               autocorrect="off" spellcheck="false" enterkeyhint="done">
+      </label>
+
+      <label class="edit-field">
+        <span class="edit-label">Artist</span>
+        <input id="edit-artist" type="text" autocomplete="off" autocapitalize="words"
+               autocorrect="off" spellcheck="false" enterkeyhint="done">
+      </label>
+
+      <!-- Both halves matter. The first is how a correction is undone without a
+           third button to undo it; the second is the promise the whole app is
+           built on, said where somebody is about to doubt it. -->
+      <p class="edit-note">Clear a field to go back to what the file tags say.
+        Your music files are never changed.</p>
+      <p class="edit-err hidden" id="edit-err"></p>
+
+      <div class="edit-actions">
+        <button class="action-btn" type="button" id="edit-cancel" data-edit-close>Cancel</button>
+        <button class="action-btn primary" type="button" id="edit-save">Save</button>
+      </div>
     </div>
   </div>
 

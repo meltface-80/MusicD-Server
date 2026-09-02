@@ -1097,6 +1097,10 @@ function setFace(face) {
      A sheet left floating over a bar that is no longer there is the same
      mistake as the sheet being in flow, seen from the other side. */
   closeVolSheet();
+  /* And the sleeve's menu belongs to the album face. Closed here rather than
+     in both hideModal() and every opener: this runs on every face change,
+     opening an album included, so there is one place that ends it. */
+  closeAlbumMenu();
 
   /* The panel carries which face it is showing, because the Now playing
      layout is a different SHAPE, not just different contents — it fills the
@@ -1325,6 +1329,150 @@ function renderAlbum(album) {
   }
   $("tracks-label").textContent = album.multiDisc ? "Tracks" : `Tracks (${album.tracks.length})`;
   renderVersions(album);
+}
+
+/* ------------------------------------------------------------------ */
+/*  The overflow menu on the sleeve                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A MENU, NOT A PLACE YOU WENT.
+ *
+ * Off the navigation stack, for the same reason the side menu is: a history
+ * entry for it would mean the phone's Back gesture dismissed a popup instead
+ * of leaving the album — and choosing Edit would then have to unwind that
+ * entry and open a dialog in the same breath, which is exactly the ordering
+ * the artist link needed state.afterModal to get right. It is dismissed by its
+ * own catch, by Escape, or by picking something off it.
+ */
+function albumMenuOpen() { return !$("album-menu").classList.contains("hidden"); }
+
+function openAlbumMenu() {
+  $("album-menu").classList.remove("hidden");
+  $("album-more").setAttribute("aria-expanded", "true");
+}
+
+function closeAlbumMenu() {
+  $("album-menu").classList.add("hidden");
+  $("album-more").setAttribute("aria-expanded", "false");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Correcting the album's name                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The album the open dialog belongs to.
+ *
+ * Held here rather than read back off the panel when Save is pressed: the
+ * version tabs refetch in place, so what the screen is showing can change
+ * under a dialog that is already open.
+ */
+let editing = null;
+/* True from the moment Save is sent until the answer is back. Enter in a field
+   does not go through the button, so the button being disabled does not stop a
+   second press — see saveEdit(). */
+let savingEdit = false;
+
+function openEditDialog() {
+  const album = state.album;
+  if (!album) return;
+  closeAlbumMenu();
+  editing = album;
+
+  /* Prefilled with the name ON SHOW, which is the corrected one where there
+     is a correction — the field has to open saying what the screen says, or
+     the first thing it does is offer to undo an edit nobody asked to undo. */
+  const tags = album.tags || { title: album.title, artist: album.artist };
+  const title = $("edit-title"), artist = $("edit-artist");
+  title.value = album.title || "";
+  artist.value = album.artist || "";
+  /* The placeholder is what the field falls back to when it is left empty:
+     what the file tags say. An album whose files name no artist at all shows
+     the same two words the card shows rather than an empty hint. */
+  title.placeholder = tags.title || "";
+  artist.placeholder = tags.artist || "Unknown artist";
+
+  $("edit-err").classList.add("hidden");
+  $("edit-save").disabled = false;
+  $("edit-overlay").classList.remove("hidden");
+  navOpen("edit", hideEditDialog);
+  /* Focused on a pointer, never on a phone. The album's title is usually the
+     right one already — the artist is what people come here to fix — so a
+     keyboard raised over the fields before either has been chosen covers the
+     dialog to answer a question nobody asked. */
+  if (window.matchMedia("(min-width: 720px)").matches) title.focus();
+}
+
+function closeEditDialog() { navBack(); }
+
+/* The actual close, called only by the navigation stack. */
+function hideEditDialog() {
+  $("edit-overlay").classList.add("hidden");
+  editing = null;
+}
+
+/*
+ * SAVED, THEN RE-READ.
+ *
+ * The heart paints first and asks the server afterwards, because a heart that
+ * waits for a round trip feels broken. A name is the other way round: the
+ * server decides whether what was typed is a correction at all or the tags
+ * typed back, and painting a guess would show a correction that was never
+ * stored. So this waits, then refetches the album and repaints from the
+ * answer.
+ */
+async function saveEdit() {
+  /*
+   * TWO GUARDS, BECAUSE ENTER DOES NOT GO THROUGH THE BUTTON.
+   *
+   * Disabling the button stops a second tap and nothing else: a second Enter
+   * while the first save is still in flight would post the same correction
+   * twice and then call navBack() twice, which unwinds TWO layers — the
+   * dialog and the album screen behind it. So an in-flight save is refused,
+   * and a finished one has already let go of the album it belonged to.
+   */
+  if (!editing || savingEdit) return;
+  savingEdit = true;
+  const button = $("edit-save");
+  const err = $("edit-err");
+  button.disabled = true;
+  err.classList.add("hidden");
+  try {
+    await post("/api/album/name", {
+      album: b64url(editing.id),
+      title: $("edit-title").value,
+      artist: $("edit-artist").value
+    });
+    /* The panel may be showing a VERSION while the correction went to the
+       primary, so the refetch asks for what was on screen — the same call the
+       version tabs make, which returns the record with that version's tracks
+       and the primary's name. */
+    const next = await api("/api/album/" + b64url(playing(editing)));
+    state.album = next;
+    renderAlbum(next);
+    /* Let go before the close, not after it: the close is a history.back() and
+       the dialog is not actually hidden until the popstate arrives, which
+       leaves a window where a stray Enter would still find something to save. */
+    editing = null;
+    closeEditDialog();
+    /* Every row on Home carries this album's name on a card. Leaving a browse
+       screen already reloads Home; closing the panel does not, so it is told
+       to — the same reason the heart says it. */
+    state.homeStale = true;
+    toast("Saved.");
+  } catch (e) {
+    /* On the dialog rather than in a toast: the dialog stays open so the name
+       can be corrected and sent again, and a message that floats away from the
+       fields it is about is one the user has to remember. */
+    err.textContent = e.message;
+    err.classList.remove("hidden");
+  } finally {
+    /* Cleared whatever happened — a save that failed has to be retryable, and
+       `editing` is what says whether there is still anything to retry. */
+    savingEdit = false;
+    button.disabled = false;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -2526,6 +2674,26 @@ function wire() {
     node.addEventListener("click", closeSheet);
   }
 
+  /* The sleeve's overflow menu, and the one thing on it */
+  $("album-more").addEventListener("click", openAlbumMenu);
+  for (const node of document.querySelectorAll("[data-menu-close]")) {
+    node.addEventListener("click", closeAlbumMenu);
+  }
+  $("album-edit").addEventListener("click", openEditDialog);
+
+  /* Correcting a name */
+  $("edit-save").addEventListener("click", saveEdit);
+  for (const node of document.querySelectorAll("[data-edit-close]")) {
+    node.addEventListener("click", closeEditDialog);
+  }
+  /* Enter saves, from either field. A dialog of two short fields is one a
+     phone keyboard's Done key should be able to finish. */
+  for (const field of [$("edit-title"), $("edit-artist")]) {
+    field.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveEdit(); }
+    });
+  }
+
   /* Escape closes whatever is on top, innermost first. */
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
@@ -2537,6 +2705,10 @@ function wire() {
       if (!$("menu-settings").classList.contains("hidden")) return showMenuView("main");
       return closeMenu();
     }
+    /* The sleeve's menu, for the same reason and in the same way: it is not on
+       the stack, so it is closed here rather than unwound. It cannot be open
+       at the same time as the edit dialog — picking Edit closes it. */
+    if (albumMenuOpen()) return closeAlbumMenu();
     if (volSheetOpen()) return closeVolSheet();
     navBack();
   });

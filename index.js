@@ -390,6 +390,33 @@ app.post("/api/favourite", api((req, res) => {
   res.json({ ...result, count: library.favouriteCount(db) });
 }));
 
+/*
+ * Correcting an album's title or artist.
+ *
+ * The one place the library is told it is wrong. It writes to its own pair of
+ * columns, which no part of the scan mentions, so a rescan cannot undo it —
+ * and it never touches the files: the music folder is very often mounted
+ * read-only, and it is the user's.
+ *
+ * NOT an identification, and nothing here goes looking. It records what the
+ * person who owns the records says they are called.
+ */
+app.post("/api/album/name", api((req, res) => {
+  const { album, title, artist } = req.body || {};
+  /* Tested for BEFORE it is decoded. base64url has no invalid-input signal for
+     a word like "undefined" — it decodes to bytes and comes back a non-empty
+     string — so a request that names no album at all would otherwise reach the
+     lookup and be reported as an album that does not exist. */
+  const id = album ? decodeId(album) : null;
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  const result = library.setNames(db, id, { title, artist });
+  if (!result) return res.status(404).json({ error: "No such album." });
+  /* Smart Picks are matched by artist and built once a day from a cached
+     answer — one holding the name that was just corrected. */
+  picks.invalidate();
+  res.json(result);
+}));
+
 app.get("/api/artist/:name", api((req, res) => {
   /* Express has already decoded the route parameter. Decoding it a second time
      turns an artist with a percent sign in their name — "50% Off", or a folder
