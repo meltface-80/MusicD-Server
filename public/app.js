@@ -2151,7 +2151,59 @@ function applyTheme(theme) {
 /*  Wiring                                                             */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  The soft keyboard                                                  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * How much of the bottom of the page the keyboard is covering.
+ *
+ * A fixed element is anchored to the LAYOUT viewport, which does not shrink
+ * when the keyboard opens — so the mini transport correctly ends up behind the
+ * keys. But iOS re-anchors fixed elements to the VISUAL viewport while the
+ * page is scrolling, and with the search box focused that lifted the bar out
+ * of the page and left it floating on top of the keyboard.
+ *
+ * So everything pinned to the bottom subtracts this, which holds it where it
+ * was before the keyboard opened however the browser decides to paint it. The
+ * bar does not move for the keyboard; the keyboard covers it.
+ */
+const KB_MIN = 60;
+let keyboardInset = 0;
+
+function measureKeyboard(viewport) {
+  /* The bottom edge of the visual viewport, in layout-viewport coordinates,
+     against the bottom of the layout viewport. window.innerHeight is the one
+     that does NOT change when the keyboard opens, which is what makes the
+     difference the keyboard. */
+  const covered = window.innerHeight - (viewport.height + viewport.offsetTop);
+  /* No keyboard is 60 pixels tall. Anything smaller is browser chrome, a
+     rounding difference or a pinch-zoom, and moving the bar for it would be a
+     twitch with no cause the user can see. */
+  return covered >= KB_MIN ? Math.round(covered) : 0;
+}
+
+function trackKeyboard() {
+  const viewport = window.visualViewport;
+  /* Without it there is only one viewport, so there is nothing to correct and
+     the bar already stays where it is put. */
+  if (!viewport) return;
+  const apply = () => {
+    const next = measureKeyboard(viewport);
+    /* Written only on a change: these events fire on every frame of a visual
+       viewport scroll, and a style write per frame is a layout per frame. */
+    if (next === keyboardInset) return;
+    keyboardInset = next;
+    document.documentElement.style.setProperty("--kb-inset", next + "px");
+  };
+  viewport.addEventListener("resize", apply);
+  viewport.addEventListener("scroll", apply);
+  apply();
+}
+
 function wire() {
+  trackKeyboard();
+
   /* Menu */
   $("menu-toggle").addEventListener("click", () => $("menu-overlay").classList.remove("hidden"));
   for (const node of document.querySelectorAll("[data-close-menu]")) {

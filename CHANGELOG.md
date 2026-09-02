@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.13
+
+### The keyboard no longer pushes the mini transport around
+- **Search, scroll, and the transport bar climbed on top of the keyboard.** It
+  is fixed to the bottom of the page and belongs there — but iOS re-anchors a
+  fixed element to the visual viewport while the page is scrolling, and with
+  the keyboard open that lifted the bar out of the page and left it floating
+  over the keys.
+- **The bar now holds its place and the keyboard simply covers it**, which is
+  what it should have done: neither one is in the other's way, and closing the
+  keyboard puts the bar back exactly where it was. The volume sheet uses the
+  same measurement, so the two never come apart.
+- Nothing moves for anything that is not a keyboard — browser chrome and a
+  pinch-zoom are ignored — and on a browser with no visual viewport to ask,
+  behaviour is unchanged.
+
 ## 0.4.12
 
 ### The artwork is back on Now playing, the Queue and the mini bar

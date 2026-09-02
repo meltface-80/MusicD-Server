@@ -221,6 +221,48 @@ test("the six home rows are named the same in the client and the server", () => 
   assert.strictEqual(titles.picks, "Smart Picks");
 });
 
+/*
+ * The soft keyboard must not move the mini transport.
+ *
+ * A fixed element is anchored to the layout viewport, which does not shrink
+ * for the keyboard — but iOS re-anchors one to the VISUAL viewport while the
+ * page scrolls, which lifted the bar out of the page and left it floating on
+ * top of the keys whenever the search box had focus. Everything pinned to the
+ * bottom subtracts the covered amount so it stays where it was put.
+ */
+test("everything pinned to the bottom allows for the keyboard", () => {
+  const bar = css.slice(css.indexOf(".mini-transport {"));
+  assert.match(bar.slice(0, bar.indexOf("}")), /bottom:[^;]*var\(--kb-inset, 0px\)/,
+    "the mini transport holds its place when the keyboard opens");
+
+  const sheet = css.slice(css.indexOf(".mt-vol-sheet {"));
+  assert.match(sheet.slice(0, sheet.indexOf("}")), /bottom:[^;]*var\(--kb-inset, 0px\)/,
+    "and the volume sheet moves with the bar it sits on, rather than apart from it");
+
+  /* A fallback in every var() — the property only exists once app.js has
+     measured a keyboard, and until then these must still compute. */
+  for (const use of css.match(/var\(--kb-inset[^)]*\)/g) || []) {
+    assert.match(use, /var\(--kb-inset, 0px\)/, `${use} has no fallback`);
+  }
+});
+
+test("the keyboard is measured against the viewport that does not move", () => {
+  /* window.innerHeight is the layout viewport and stays put when the keyboard
+     opens; visualViewport is the one that shrinks. Measuring the difference
+     between them is the whole trick, and measuring against the wrong one
+     yields zero forever. */
+  assert.match(js, /window\.innerHeight - \(viewport\.height \+ viewport\.offsetTop\)/);
+  /* Both events: resize is the keyboard opening, scroll is the moment the bar
+     used to jump. */
+  assert.match(js, /viewport\.addEventListener\("resize", apply\)/);
+  assert.match(js, /viewport\.addEventListener\("scroll", apply\)/);
+  /* Absent on an old browser, where there is one viewport and nothing to fix. */
+  assert.match(js, /if \(!viewport\) return;/);
+  /* And a floor, so browser chrome or a pinch-zoom is not mistaken for a
+     keyboard and does not twitch the bar. */
+  assert.match(js, /const KB_MIN = \d+;/);
+});
+
 test("the version tabs belong to the album, not to the panel", () => {
   /* The panel header already has a tab strip — Now playing and Queue — and
      putting the version tabs there would show them over the Now playing
