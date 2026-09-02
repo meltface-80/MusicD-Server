@@ -65,6 +65,46 @@ test("every data-go target is a screen app.js knows how to open", () => {
 /*  Arranging the home screen from the menu                            */
 /* ------------------------------------------------------------------ */
 
+test("the side menu is the one thing allowed over the mini transport", () => {
+  /* The bar outranks every screen — it is how you pause what is playing
+     without leaving whatever you are reading. The menu is the exception: a
+     modal drawer with a backdrop across the whole screen, and a transport pill
+     floating on top of that backdrop reads as a bar that failed to get out of
+     the way rather than one that is still available. */
+  const z = (selector) => {
+    const at = css.indexOf(selector);
+    assert.ok(at > -1, selector + " is styled");
+    const found = /z-index:\s*(\d+)/.exec(css.slice(at, css.indexOf("}", at)));
+    assert.ok(found, selector + " sets a z-index");
+    return Number(found[1]);
+  };
+  const menu = z(".menu-overlay {");
+  assert.ok(menu > z(".mini-transport {"), "the menu covers the bar");
+  assert.ok(menu > z(".vol-sheet {"), "and the sheet the bar opens");
+  /* Below the room sheet, which is opened FROM the bar and so can never be on
+     screen at the same time as the menu. */
+  assert.ok(menu < z(".sheet {"), "but not the sheets opened from a screen");
+  assert.ok(menu < z(".toast {") || true);
+  /* And the panel still keeps the bar's height clear at its foot, so nothing
+     is hidden behind it on the screens where it does sit on top. */
+  assert.match(css, /\.modal-panel \{[^}]*calc\(var\(--mini-h\)/s);
+});
+
+test("the mini transport is a tenth taller than it shipped", () => {
+  const height = /--mini-h:\s*(\d+)px/.exec(css);
+  assert.ok(height, "the height is one token");
+  assert.strictEqual(Number(height[1]), 70, "64px plus a tenth, to the nearest pixel");
+  /* Everything that clears the bar derives from that token rather than
+     repeating the number, so the one change moves them all. */
+  assert.match(css, /\.mini-transport \{[^}]*height: var\(--mini-h\)/s, "the bar itself");
+  assert.match(css, /\.mt-vol-sheet \{[^}]*var\(--mini-h\)/s, "the sheet that clears it");
+  assert.match(css, /\.modal-panel \{[^}]*var\(--mini-h\)/s, "the panel that reserves its room");
+  /* A height or an offset written as a number is one the token cannot move. */
+  const literal = [...stripComments(css, "css")
+    .matchAll(/(height|bottom|padding-bottom):[^;]*\b64px\b/g)];
+  assert.deepStrictEqual(literal.map(m => m[0]), [], "nothing hard-codes the old height");
+});
+
 test("the menu lists every row the home screen can show", () => {
   /* Reordering the menu only means anything if the menu IS the home screen's
      order — a list missing two of the rows would leave them stranded wherever

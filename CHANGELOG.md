@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.7
+
+### The mini transport
+- **The side menu now covers it.** The bar outranks every screen in the app —
+  it is how you pause what is playing without leaving whatever you are reading,
+  so an album panel or a grid never hides it. The menu is the one exception: it
+  is a modal drawer with a backdrop across the whole screen, and a transport
+  pill floating on top of that backdrop read as a bar that had failed to get
+  out of the way rather than one still available.
+- **It is a tenth taller** — 64px to 70px. Everything that clears it or sits
+  against it, the album panel's foot and the volume sheet's anchor included, is
+  derived from that one number, so nothing had to be moved by hand and nothing
+  is hidden behind it.
+
 ## 0.4.6
 
 ### Arrange the home screen

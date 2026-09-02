@@ -48,7 +48,10 @@
   --ctl-radius: 999px;
 
   --topbar-h: calc(56px + env(safe-area-inset-top));
-  --mini-h: 64px;
+  /* A tenth taller than the 64px it shipped at. Everything that clears the bar
+     or sits against it — the panel's foot, the volume sheet's anchor — is
+     derived from this, so the one number moves them all. */
+  --mini-h: 70px;
   /* The gap under the last row of the Now playing face. The volume sheet has
      to clear that row, so it reads this rather than repeating the number. */
   --np-pad-b: 14px;
@@ -199,7 +202,19 @@ button, input { font-family: inherit; }
 /*  Side menu                                                          */
 /* ------------------------------------------------------------------ */
 
-.menu-overlay { position: fixed; inset: 0; z-index: 60; }
+/*
+ * THE ONE THING THAT GOES OVER THE MINI TRANSPORT.
+ *
+ * The bar outranks every screen in the app — it is how you pause what is
+ * playing without leaving whatever you are reading, so an album panel or a
+ * grid never covers it. The side menu is the exception: it is a modal drawer
+ * with a backdrop over the whole screen, and a transport pill floating on top
+ * of that backdrop reads as a bar that failed to get out of the way rather
+ * than one that is still available. Above the bar (75) and the volume sheet it
+ * opens (76), below the room sheet (80) — which is opened FROM the bar and so
+ * can never be on screen at the same time as this.
+ */
+.menu-overlay { position: fixed; inset: 0; z-index: 78; }
 .menu-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.5); }
 .menu-panel {
   position: absolute; top: 0; bottom: 0; left: 0;
@@ -957,8 +972,9 @@ main {
   /* Above the album panel, not under it. Something is playing while you browse
      an album or read the queue, and the bar is how you pause it without
      leaving the screen — the panel already reserves --mini-h at its foot so
-     nothing is covered. The one face that hides it is Now playing, which has
-     the full transport on it already. */
+     nothing is covered. Two things are allowed over it: the Now playing face
+     hides it outright, having the full transport on it already, and the side
+     menu covers it, being a modal drawer with a backdrop across the screen. */
   position: fixed; z-index: 75;
   left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
   height: var(--mini-h);
