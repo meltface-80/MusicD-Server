@@ -17,6 +17,12 @@ a decision, not a gap:
   picture anywhere gets one found for it and nothing else — no title, no
   artist, no year, no genre, no review, and never a tag rewritten. See the
   cover rules below.
+- **A name the USER types is not identification.** 0.4.15 lets an album's title
+  and artist be corrected by hand, because a record tagged with no artist shows
+  as "Unknown artist" and the person who owns it knows who made it. Nothing is
+  looked up, nothing is matched, no picker and no candidates — one field each,
+  typed. It does not open the door to fetching one: the user asked for the
+  editor and said the identification work needs planning first.
 - **No record labels.** No Discogs, no FanArt.tv.
 - **No streaming services.** No Qobuz, no TIDAL.
 - **No Pitchfork**, no reviews, no scores.
@@ -142,6 +148,18 @@ part of the fix.
   artwork for two releases. This is the "no partial migrations" rule with teeth:
   where several call sites ask the same question, give them one method to ask
   it through.
+- **What an album is CALLED is one of those questions.** `albumNames()` in
+  `lib/db.js` is the only place that decides between the name the user typed
+  and the tags, and every query that displays, sorts, searches or plays an
+  album asks through it. `lib/duplicates.js` is the one deliberate exception —
+  grouping matches what is ON DISK, because a match MOVES the demoted copy's
+  play counts and typing the name back would not bring them home.
+- **A fixed overlay does not stop the page behind it scrolling.** `overflow:
+  hidden` stops a panel scrolling, not the GESTURE: the drag goes up the chain
+  to the document, which scrolls invisibly under the overlay and paints its own
+  indicator down the edge of a screen that never moves. That was the Now
+  playing "scroll bar" in 0.4.14. A face that does not scroll says
+  `touch-action: none`; one that does says `overscroll-behavior: contain`.
 - **The transport payloads need their own assertions.** `/api/now` and
   `/api/queue` feed three screens that `/api/album` never touches, and nothing
   asserted on them — so the suite stayed green through a regression that was

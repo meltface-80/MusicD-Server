@@ -510,3 +510,89 @@ test("the wordmark is served as a vector on a transparent ground", async () => {
   assert.match(svg, /<svg[^>]*viewBox=/);
   assert.ok(!/<image\b/.test(svg), "traced, not a wrapped bitmap");
 });
+
+/* ------------------------------------------------------------------ */
+/*  Correcting an album's name                                         */
+/* ------------------------------------------------------------------ */
+
+/* Field Recordings is the fixture album whose files name no artist at all —
+   the "Unknown artist" the dialog exists to fix. */
+const FIELD = encodeId("a:Unknown/2001 - Field Recordings");
+
+test("an album screen says what the files say as well as what is shown", async () => {
+  const { body } = await json("/api/album/" + FIELD);
+  assert.strictEqual(body.artist, "", "no artist, which is the state being corrected");
+  assert.deepStrictEqual(body.tags, { title: "Field Recordings", artist: "" },
+    "the dialog needs the tags to offer them back");
+  assert.strictEqual(body.edited, false);
+});
+
+test("a name correction is stored and shown everywhere", async () => {
+  const saved = await json("/api/album/name", {
+    method: "POST", body: { album: FIELD, title: "Sea Nettles", artist: "Chris Watson" }
+  });
+  assert.strictEqual(saved.status, 200);
+  assert.deepStrictEqual(
+    { title: saved.body.title, artist: saved.body.artist, edited: saved.body.edited },
+    { title: "Sea Nettles", artist: "Chris Watson", edited: true });
+
+  const screen = await json("/api/album/" + FIELD);
+  assert.strictEqual(screen.body.title, "Sea Nettles");
+  assert.strictEqual(screen.body.artist, "Chris Watson");
+  assert.deepStrictEqual(screen.body.tags, { title: "Field Recordings", artist: "" },
+    "and the tags are still the tags — nothing was written to the files");
+
+  /* The rows and the searches, which are separate queries and the place a
+     half-finished rename shows up. */
+  const shelf = await json("/api/albums?row=library&limit=200");
+  assert.ok(shelf.body.albums.some(a => a.title === "Sea Nettles" && a.artist === "Chris Watson"),
+    "the library row");
+  const found = await json("/api/search?q=nettles");
+  assert.deepStrictEqual(found.body.albums.map(a => a.title), ["Sea Nettles"], "search by the new title");
+  const byArtist = await json("/api/search?q=watson");
+  assert.ok(byArtist.body.artists.some(a => a.name === "Chris Watson"), "and by the new artist");
+  const artists = await json("/api/artists");
+  assert.ok(artists.body.artists.some(a => a.name === "Chris Watson"), "the artist list");
+  const screenFor = await json("/api/artist/" + encodeURIComponent("Chris Watson"));
+  assert.deepStrictEqual(screenFor.body.albums.map(a => a.title), ["Sea Nettles"],
+    "and that artist's own screen");
+});
+
+test("a rescan leaves the correction alone", async () => {
+  await server.runScan("test-after-edit");
+  const screen = await json("/api/album/" + FIELD);
+  assert.strictEqual(screen.body.title, "Sea Nettles", "the scan rewrites the tag columns, not these");
+  assert.strictEqual(screen.body.artist, "Chris Watson");
+});
+
+test("clearing a field puts the tags back", async () => {
+  const back = await json("/api/album/name", {
+    method: "POST", body: { album: FIELD, title: "", artist: "" }
+  });
+  assert.strictEqual(back.status, 200);
+  assert.deepStrictEqual(
+    { title: back.body.title, artist: back.body.artist, edited: back.body.edited },
+    { title: "Field Recordings", artist: "", edited: false });
+  const screen = await json("/api/album/" + FIELD);
+  assert.strictEqual(screen.body.artist, "", "back to what the files say");
+});
+
+test("a correction needs an album that exists", async () => {
+  const none = await json("/api/album/name", { method: "POST", body: { title: "x" } });
+  assert.strictEqual(none.status, 400, "no album named at all");
+  assert.match(none.body.error, /Which album/);
+
+  const missing = await json("/api/album/name", {
+    method: "POST", body: { album: encodeId("a:nowhere/at all"), title: "x" }
+  });
+  assert.strictEqual(missing.status, 404);
+});
+
+test("correcting a name is a POST, so nothing can rename an album by being linked to", () => {
+  /* The same rule the update endpoints follow: anything that CHANGES the
+     library is a POST, or a crawler, a prefetch or an <img src> in a message
+     could do it. */
+  const source = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.match(source, /app\.post\("\/api\/album\/name"/);
+  assert.ok(!/app\.get\("\/api\/album\/name"/.test(source));
+});

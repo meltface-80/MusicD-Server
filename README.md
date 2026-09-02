@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.14` | that exact version, for pinning |
+| `:0.4.15` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -228,14 +228,15 @@ Play nothing and the row says so rather than sitting there empty.
 | Date last played | yes | yes |
 | Number of plays | yes | yes |
 | Marked a favourite | yes | — |
+| A corrected title or artist | yes | — |
 
-A favourite is the one thing in the library you typed rather than the files, so
-it is the one thing a rescan could destroy — and does not: nothing in the scan's
-upserts mentions it, the same way the date an album arrived is left alone. It
-survives an update too, by both routes. The database lives in `DATA_DIR`, which
-is a Docker volume the container's own lifetime does not touch and which the
-in-app updater is not allowed to write to; and opening an older database adds
-what is missing and changes nothing else.
+A favourite and a corrected name are the two things in the library you typed
+rather than the files, so they are the two a rescan could destroy — and does
+not: nothing in the scan's upserts mentions their columns, the same way the date
+an album arrived is left alone. They survive an update too, by both routes. The
+database lives in `DATA_DIR`, which is a Docker volume the container's own
+lifetime does not touch and which the in-app updater is not allowed to write to;
+and opening an older database adds what is missing and changes nothing else.
 
 A play is recorded when a track has actually been played — half way through, or
 four minutes in, whichever comes first. Skipping past a track does not count it,
@@ -246,6 +247,25 @@ queued and then skipped never shows up in "recently played".
 Nothing is ever deleted. A rescan that cannot see your NAS marks the albums
 absent rather than removing them; remount it, rescan, and they come back with
 their history intact.
+
+## Correcting a title or an artist
+
+Some records arrive with no artist tag at all and show as **Unknown artist**.
+The `…` button on the album's sleeve opens a menu with **Edit** on it, and the
+name you type is the name the app uses from then on — in the home rows, the
+shelf order, search, the artist list, Smart Picks, Now playing, the queue and
+on the speaker's own display.
+
+**Your music files are never written to.** The correction is kept in the
+database beside the tags, which are left exactly as they are, so it works on a
+read-only mount and a rescan cannot undo it. Clearing a field puts the tags
+back; the field shows you what that would be.
+
+This is not album identification. Nothing is looked up, nothing is fetched and
+nothing is matched against anything — it records what you say the record is
+called. Grouping two copies of one album into a version tab still goes on what
+is on disk, so a rename cannot fold two albums together and take one of their
+histories with it.
 
 ## Configuration
 

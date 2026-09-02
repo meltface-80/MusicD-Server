@@ -694,3 +694,162 @@ test("folding is idempotent — a second scan does not count the same plays twic
     "and none of them still name a disc");
   ws.cleanup();
 });
+
+/* ------------------------------------------------------------------ */
+/*  Correcting an album's name                                         */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The one thing in the library the user says rather than the files, after the
+ * heart. Everything here is about the two ways it can quietly stop working: a
+ * rescan putting the tags back, and one of the many queries that read a name
+ * being left behind on the raw column.
+ */
+
+test("a corrected name is what every row, sort and search reads", async () => {
+  const { ws, db } = await scannedLibrary();
+  const before = library.library(db, 100).find(a => a.title === "Field Recordings");
+  assert.strictEqual(before.artist, "", "the files name no artist — the case this is for");
+
+  library.setNames(db, before.id, { title: "Field Recordings", artist: "Chris Watson" });
+
+  /* Every reader, because there is no such thing as most of them agreeing. */
+  const shelf = library.library(db, 100).map(a => `${a.artist} — ${a.title}`);
+  assert.ok(shelf.includes("Chris Watson — Field Recordings"), "the library row");
+  assert.deepStrictEqual(library.search(db, "watson").albums.map(a => a.title),
+    ["Field Recordings"], "search by the new artist");
+  assert.ok(library.artists(db).some(a => a.name === "Chris Watson"), "the artist list");
+  assert.deepStrictEqual(library.byArtist(db, "Chris Watson").albums.map(a => a.title),
+    ["Field Recordings"], "that artist's screen");
+  assert.strictEqual(library.album(db, before.id).artist, "Chris Watson", "the album screen");
+
+  /* Filed under the new name too, not left where the blank artist put it. An
+     album that sorts under a name it does not show is one the user cannot
+     find by scrolling to where it says it is. */
+  const order = library.library(db, 100).map(a => a.artist);
+  assert.deepStrictEqual(order, [...order].sort((a, b) => a.localeCompare(b)),
+    "the shelf is still in artist order, with the correction in its place");
+  ws.cleanup();
+});
+
+test("a rescan does not put the tags back", async () => {
+  const { ws, db } = await scannedLibrary();
+  const album = library.library(db, 100).find(a => a.title === "Field Recordings");
+  library.setNames(db, album.id, { title: "Sea Nettles", artist: "Chris Watson" });
+
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+
+  const after = library.album(db, album.id);
+  assert.strictEqual(after.title, "Sea Nettles", "the title the user typed");
+  assert.strictEqual(after.artist, "Chris Watson", "and the artist");
+  /* The scan is still doing its job on the columns it owns — the correction
+     sits BESIDE the tags rather than on top of them. */
+  assert.strictEqual(after.tags.title, "Field Recordings", "the tags are untouched");
+  assert.strictEqual(after.tags.artist, "");
+  ws.cleanup();
+});
+
+test("clearing a field goes back to what the files say", async () => {
+  const { ws, db } = await scannedLibrary();
+  const album = library.library(db, 100).find(a => a.title === "Souvlaki");
+  library.setNames(db, album.id, { title: "Souvlaki Space Station", artist: "Slowdiv" });
+  assert.strictEqual(library.album(db, album.id).title, "Souvlaki Space Station");
+
+  /* The only way back, and the reason there is no third button for it. */
+  const reverted = library.setNames(db, album.id, { title: "", artist: "" });
+  assert.strictEqual(reverted.title, "Souvlaki");
+  assert.strictEqual(reverted.artist, "Slowdive");
+  assert.strictEqual(reverted.edited, false);
+  assert.strictEqual(
+    db.prepare("SELECT title_edit, artist_edit, sort_title_edit, sort_artist_edit FROM albums WHERE id = ?")
+      .get(album.id).sort_artist_edit, "",
+    "and the sort key goes with it, or the album files under a name it dropped");
+  ws.cleanup();
+});
+
+test("a name that only repeats the tags is not stored as a correction", async () => {
+  const { ws, db } = await scannedLibrary();
+  const album = library.library(db, 100).find(a => a.title === "Souvlaki");
+  /* Opening the dialog and pressing Save without typing. Storing that would
+     leave every album carrying a row that says what the files already say —
+     and would then survive a re-tag of the files it was copied from. */
+  const same = library.setNames(db, album.id, { title: " Souvlaki ", artist: "Slowdive" });
+  assert.strictEqual(same.edited, false, "surrounding space is not a correction either");
+  assert.strictEqual(
+    db.prepare("SELECT title_edit FROM albums WHERE id = ?").get(album.id).title_edit, "");
+  ws.cleanup();
+});
+
+test("a correction is written to the primary, whichever version was on screen", async () => {
+  const ws = workspace();
+  /* One record on disk twice: the album and its deluxe reissue. */
+  for (const [dir, extra] of [["Boards of Canada/Geogaddi", []],
+                              ["Boards of Canada/Geogaddi (Deluxe Edition)", ["Bonus"]]]) {
+    const full = path.join(ws.music, dir);
+    fs.mkdirSync(full, { recursive: true });
+    ["Ready Lets Go", "Gyroscope", ...extra].forEach((title, i) => {
+      fs.writeFileSync(path.join(full, `0${i + 1} ${title}.wav`), wav({
+        title, artist: "Boards of Canada", album: path.basename(dir), albumArtist: "Boards of Canada"
+      }));
+    });
+  }
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  require("../lib/duplicates").regroup(db);
+
+  const shown = library.library(db, 100).find(a => /Geogaddi/.test(a.title));
+  const deluxe = shown.id.includes("Deluxe")
+    ? shown.id : "a:Boards of Canada/Geogaddi (Deluxe Edition)";
+  const primary = db.prepare("SELECT id FROM albums WHERE version_of = '' AND present = 1").get().id;
+  assert.notStrictEqual(deluxe, primary, "the two really are one group");
+
+  /* Typed on the deluxe tab; the name belongs to the record. */
+  const saved = library.setNames(db, deluxe, { title: "Geogaddi", artist: "BoC" });
+  assert.strictEqual(saved.id, primary, "the correction went to the primary");
+  assert.strictEqual(library.album(db, deluxe).artist, "BoC",
+    "and the deluxe tab shows the record's name, as it did before");
+  ws.cleanup();
+});
+
+test("grouping copies of a record ignores the typed name", async () => {
+  const { ws, db } = await scannedLibrary();
+  const hex = library.library(db, 100).find(a => a.title === "Hex");
+  const souvlaki = library.library(db, 100).find(a => a.title === "Souvlaki");
+
+  /* Renaming one album to another's name must not fold them together: a match
+     MOVES the loser's play counts onto the primary, and typing the name back
+     would not bring them home. */
+  library.setNames(db, hex.id, { title: "Souvlaki", artist: "Slowdive" });
+  require("../lib/duplicates").regroup(db);
+
+  assert.strictEqual(db.prepare("SELECT version_of FROM albums WHERE id = ?").get(hex.id).version_of, "",
+    "still its own record");
+  assert.strictEqual(
+    db.prepare("SELECT version_of FROM albums WHERE id = ?").get(souvlaki.id).version_of, "");
+  ws.cleanup();
+});
+
+test("Smart Picks follow the corrected artist rather than the tag", async () => {
+  const { ws, db } = await scannedLibrary();
+  /* An album the files name no artist for at all — so before the correction it
+     is exactly what the row must never offer: something with no connection to
+     anything played. */
+  const field = library.library(db, 100).find(a => a.title === "Field Recordings");
+  /* Slowdive rather than Talk Talk: the row allows one album per artist, and
+     Talk Talk already has a second record in the fixture that would take the
+     slot on its own merits and prove nothing. */
+  library.setNames(db, field.id, { title: "Field Recordings", artist: "Slowdive" });
+
+  dbLib.recordAlbumPlay(db,
+    db.prepare("SELECT id FROM albums WHERE title = 'Souvlaki'").get().id, Date.now() - 3 * DAY);
+
+  /* The profile is built from the SEEDS and matched against the CANDIDATES. If
+     one side read the tags while the other read the correction, an album the
+     user has just told the library who made it would still never line up with
+     anything they had played. */
+  const picked = picks.build(db).picks.find(p => p.title === "Field Recordings");
+  assert.ok(picked, "the corrected album is now connected to what was played");
+  assert.match(picked.reason, /Slowdive/);
+  ws.cleanup();
+});

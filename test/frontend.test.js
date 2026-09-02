@@ -1164,3 +1164,154 @@ test("the update check can be run on demand", () => {
     "a dismissal only silences the automatic check");
   assert.match(js, /Could not check for updates/, "and a failed check says so");
 });
+
+/* ------------------------------------------------------------------ */
+/*  The Now playing scroll indicator                                   */
+/* ------------------------------------------------------------------ */
+
+test("a drag on Now playing is not handed to the page behind it", () => {
+  /*
+   * The bug this replaces: a screen that never scrolls, with a scroll bar down
+   * the right of it.
+   *
+   * overflow: hidden stops the face scrolling but not the GESTURE — a drag the
+   * panel had no use for went up the chain to the document, which is one long
+   * scrolling page. The panel is fixed, so nothing moved; the only sign was the
+   * PAGE's own indicator appearing over a screen that cannot scroll. It also
+   * woke the infinite-scroll listener, which loads another grid page whenever
+   * the document nears its end.
+   */
+  const np = css.slice(css.indexOf(".modal.face-np .modal-panel {"));
+  const block = np.slice(0, np.indexOf("\n}"));
+  assert.match(block, /overflow: hidden/, "the face still does not scroll");
+  assert.match(block, /touch-action: none/, "and declines the drag rather than passing it on");
+
+  /* Given back in the one window where the face really does scroll — a rule
+     that stayed behind there would make the transport unreachable. */
+  assert.match(css, /@media \(max-height: 520px\) \{[^@]*touch-action: auto/s);
+});
+
+test("the panel's scroll stops at the panel", () => {
+  /* The same defect from the other side: flicking past the end of the track
+     list chained to the document, which scrolled behind a full-screen overlay
+     and left Home somewhere else when the panel closed. */
+  const panel = css.slice(css.indexOf(".modal-panel {"));
+  const block = panel.slice(0, panel.indexOf("\n}"));
+  assert.match(block, /overscroll-behavior: contain/);
+});
+
+/* ------------------------------------------------------------------ */
+/*  The overflow menu and the edit dialog                              */
+/* ------------------------------------------------------------------ */
+
+test("the album's sleeve carries an overflow menu at its bottom right", () => {
+  assert.ok(htmlIds.has("album-more"), "the … button");
+  assert.ok(htmlIds.has("album-menu"), "the menu it opens");
+  assert.ok(htmlIds.has("album-edit"), "and the one thing on it");
+
+  /* Positioned against the WRAPPER, not the art: .modal-art clips to its own
+     rounded corners, so a menu inside it would be cut off by them. */
+  const more = css.slice(css.indexOf(".art-more {"));
+  const block = more.slice(0, more.indexOf("\n}"));
+  assert.match(block, /position: absolute/);
+  assert.match(block, /right: \d/, "at the right");
+  assert.match(block, /bottom: \d/, "and the bottom");
+  assert.match(css, /\.modal-art-wrap \{[^}]*position: relative/s, "of a box that anchors it");
+  assert.ok(!/\.modal-art-wrap \{[^}]*overflow: hidden/s.test(css), "and does not clip it");
+
+  /* A control ON artwork needs its own ground: a sleeve is as light in the
+     dark theme as in the light one, so the disc cannot follow either. */
+  assert.match(css, /--scrim:/, "the scrim is a token");
+  const dark = css.slice(css.indexOf(":root {"), css.indexOf('[data-theme="light"]'));
+  const light = css.slice(css.indexOf('[data-theme="light"]'), css.indexOf("*, *::before"));
+  for (const token of ["--scrim", "--scrim-strong", "--on-scrim"]) {
+    assert.ok(dark.includes(token + ":") && light.includes(token + ":"),
+      token + " is declared in both palettes");
+  }
+});
+
+test("the menu is dismissed by a tap anywhere, including the panel's own header", () => {
+  /* The head is sticky at z-index 3 and was intercepting the taps meant for
+     the catch, so a tap at the top of the screen pressed Back and left the
+     menu open on a panel that was closing. */
+  const layer = css.slice(css.indexOf(".art-menu-layer {"));
+  const block = layer.slice(0, layer.indexOf("}"));
+  const z = /z-index:\s*(\d+)/.exec(block);
+  assert.ok(z, "the menu layer sets a z-index");
+  const head = css.slice(css.indexOf(".modal-head {"));
+  const headZ = /z-index:\s*(\d+)/.exec(head.slice(0, head.indexOf("}")));
+  assert.ok(Number(z[1]) > Number(headZ[1]), "and it is above the panel's header");
+  /* The catch is what makes the tap land nowhere else. */
+  assert.match(css, /\.art-menu-catch \{[^}]*position: fixed/s);
+  assert.match(html, /data-menu-close/, "and something in the markup carries it");
+});
+
+test("the sleeve's menu is closed directly, never unwound", () => {
+  /* A menu, not a place you went — the same rule the side menu follows. A
+     history entry for it would mean the phone's Back gesture dismissed a popup
+     instead of leaving the album, and picking Edit would have to unwind that
+     entry and open a dialog in the same breath. */
+  assert.ok(!/navOpen\("menu"/.test(js), "it is not on the navigation stack");
+  assert.match(js, /if \(albumMenuOpen\(\)\) return closeAlbumMenu\(\);/,
+    "Escape closes it directly, innermost first");
+  /* And it cannot be left open on a face that is no longer showing. */
+  const face = js.slice(js.indexOf("function setFace(face)"));
+  assert.match(face.slice(0, face.indexOf("\n}")), /closeAlbumMenu\(\)/);
+});
+
+test("the edit dialog has every field the client writes into", () => {
+  for (const id of ["edit-overlay", "edit-title", "edit-artist", "edit-save",
+                    "edit-cancel", "edit-err", "edit-heading"]) {
+    assert.ok(htmlIds.has(id), id + " is in the markup");
+  }
+  /* It IS a place you went: it has to be dismissed, and the phone's Back
+     gesture is how a phone dismisses things. */
+  assert.match(js, /navOpen\("edit", hideEditDialog\)/);
+  assert.match(js, /data-edit-close/);
+});
+
+test("the dialog says how a correction is undone, and what it does not touch", () => {
+  /* The blank field IS the undo — there is no third button for it — so a
+     dialog that does not say so has a feature nobody can find. And the promise
+     the whole app rests on is worth repeating in the one place somebody is
+     about to doubt it. */
+  const note = /<p class="edit-note">([\s\S]*?)<\/p>/.exec(html);
+  assert.ok(note, "the dialog carries a note");
+  assert.match(note[1], /Clear a field/);
+  assert.match(note[1], /never changed/);
+  /* And the field says what it will fall back to, where the fallback happens. */
+  assert.match(js, /artist\.placeholder = tags\.artist \|\| "Unknown artist"/);
+});
+
+test("a second Enter cannot save twice, or unwind two screens", () => {
+  /*
+   * Enter in a field does not go through the Save button, so disabling the
+   * button stops a second TAP and nothing else. Two Enters in one tick — a
+   * held key, or a fast double press of a phone keyboard's Done — each started
+   * a save, and each finished with a navBack(): two of those unwind the dialog
+   * AND the album screen behind it.
+   */
+  const save = js.slice(js.indexOf("async function saveEdit()"));
+  const body = save.slice(0, save.indexOf("\n}"));
+  assert.match(body, /if \(!editing \|\| savingEdit\) return;/, "an in-flight save is refused");
+  assert.match(body, /savingEdit = true;/);
+  assert.match(body, /savingEdit = false;/, "and cleared, so a failed save can be retried");
+  /* And the finished one lets go BEFORE the close: closeEditDialog is a
+     history.back(), and the dialog is not hidden until the popstate lands. */
+  assert.ok(body.indexOf("editing = null;") < body.indexOf("closeEditDialog()"),
+    "the album is released before the close, not by it");
+});
+
+test("a correction is saved, then re-read, rather than painted on trust", () => {
+  /* The heart paints first and asks afterwards because a heart that waits for
+     a round trip feels broken. A name is the other way round: the server is
+     what decides whether what was typed is a correction at all or the tags
+     typed back, so painting a guess would show one that was never stored. */
+  const save = js.slice(js.indexOf("async function saveEdit()"));
+  const body = save.slice(0, save.indexOf("\n}"));
+  assert.match(body, /await post\("\/api\/album\/name"/, "it goes to the server");
+  assert.ok(body.indexOf('post("/api/album/name"') < body.indexOf("renderAlbum(next)"),
+    "and only repaints from the answer");
+  assert.match(body, /state\.homeStale = true/,
+    "every row on Home carries this album's name on a card");
+});

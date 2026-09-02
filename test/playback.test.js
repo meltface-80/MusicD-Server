@@ -326,6 +326,49 @@ test("an album with no cover at all says so, rather than pointing at nothing", a
   } finally { await r.cleanup(); }
 });
 
+/*
+ * A corrected name has to reach the transport too.
+ *
+ * /api/now and /api/queue feed three screens that /api/album never touches,
+ * and the speaker gets a fourth copy in the DIDL it is handed. An album called
+ * one thing on the home screen and another on Now playing is the same bug
+ * 0.4.9 shipped when a renamed column was updated in one reader of three.
+ */
+test("a corrected name reaches Now playing, the queue and the speaker", async () => {
+  const r = await rig();
+  try {
+    const library = require("../lib/library");
+    /* Field Recordings is the fixture album whose files name NO artist — the
+       case the edit dialog exists for, and the one where the album artist is
+       what the player has to fall back on. */
+    const field = r.albumId("Field Recordings");
+    library.setNames(r.db, field, { title: "Sea Nettles", artist: "Chris Watson" });
+
+    await r.playback.playAlbum(r.kitchen(), field);
+    r.fake.playingAt(1, "0:00:04", "0:05:00");
+
+    const now = await r.playback.nowPlaying(r.kitchen());
+    assert.strictEqual(now.album.title, "Sea Nettles", "Now playing and the mini bar");
+    assert.strictEqual(now.album.artist, "Chris Watson");
+
+    const queue = await r.playback.queue(r.kitchen());
+    assert.ok(queue.items.length, "the queue has rows to check");
+
+    /* What the SPEAKER was told. Sonos shows this in its own app and on any
+       display the player has, so a name corrected here and not there is a
+       correction that only half happened.
+
+       The album artist is a FALLBACK in the DIDL — a track that names its own
+       artist keeps it, because a compilation's album artist is "Various
+       Artists" and not who performed the track. That is why this album is the
+       one asserted on: its files name nobody, so the corrected album artist is
+       what the player is given. */
+    const sent = r.fake.state.queue.map(item => item.metadata).join(" ");
+    assert.ok(sent.includes("Sea Nettles"), "the DIDL carries the corrected album title");
+    assert.ok(sent.includes("Chris Watson"), "and the corrected album artist");
+  } finally { await r.cleanup(); }
+});
+
 test("a scrobble happens exactly when the play is credited", async () => {
   const r = await rig();
   try {

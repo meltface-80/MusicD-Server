@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.15
+
+### An album's title and artist can be corrected by hand
+- **A `…` button on the album's sleeve, with Edit on it.** Some records arrive
+  with no artist tag at all and show as "Unknown artist" when you know exactly
+  who made them. Typing the name in is now the answer, and it is the only thing
+  on the menu: this is not album identification, nothing is looked up and
+  nothing is matched against anything.
+- **Your music files are never written to.** The correction lives in its own
+  pair of columns beside the tags, which are left exactly as they are — the
+  mount is very often read-only, and it is yours. Nothing in the scan mentions
+  those columns, so a rescan cannot undo a correction, in the same way it
+  cannot undo a heart or reset the date an album arrived.
+- **Clearing a field puts the tags back**, which is the whole of the undo and
+  the reason there is no third button for it. The field says what it will fall
+  back to.
+- **The corrected name is the name everywhere** — the home rows, the shelf
+  order, search, the artist list, Smart Picks, Now playing, the queue, the
+  mini bar, the scrobble, and the display on the speaker itself. Every one of
+  them asks one place what an album is called rather than reading the column.
+- **Grouping two copies of a record still goes on what is on disk.** A match
+  moves the play counts of the copy it demotes, and typing a name back would
+  not bring them home — so a rename cannot fold two albums into one.
+- An album whose files name nobody can now be scrobbled once you have said who
+  made it. Before, a listen with no artist was one Last.fm could not be told
+  about.
+- **A track in the search results now shows a cover that was found online**, not
+  only one that was already in the folder. That row was the last reader still
+  asking the old question, and it was asking it a line away from the answer.
+
+### The scroll bar on a screen that does not scroll
+- **Now playing had a scroll indicator down its right-hand edge.** The face
+  never scrolls, and it was not its bar: a drag it had no use for was being
+  handed to the page behind it, which scrolled invisibly under a full-screen
+  overlay and showed its own indicator over the top. It was also quietly
+  loading another page of albums every time it reached the end.
+- The face now declines the drag outright, and the panel's own scroll stops at
+  the panel — so flicking past the end of a track list no longer leaves the
+  home screen somewhere else when you close it. The one short-window layout
+  that really does scroll still does.
+
 ## 0.4.14
 
 ### The side menu is places first, settings behind one button
