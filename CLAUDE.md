@@ -136,6 +136,22 @@ part of the fix.
   Ask for it on GitHub's tarball endpoint and the answer is 415, which is what
   broke every in-app update from 0.4.0 to 0.4.3. The archive endpoint takes
   `Accept: */*` and a pinned `X-GitHub-Api-Version`.
+- **Rename a column and grep for EVERY reader before moving on.** 0.4.9 swapped
+  `art` for `has_art` in the transport's album query and updated one of the
+  three places that read it; Now playing, the Queue and the mini bar lost their
+  artwork for two releases. This is the "no partial migrations" rule with teeth:
+  where several call sites ask the same question, give them one method to ask
+  it through.
+- **The transport payloads need their own assertions.** `/api/now` and
+  `/api/queue` feed three screens that `/api/album` never touches, and nothing
+  asserted on them — so the suite stayed green through a regression that was
+  visible the moment anybody pressed play.
+- **A renderer fed a hand-made object proves nothing about the wiring.** The
+  0.4.9 covers row was tested by calling `showCovers({available: true, ...})`
+  from a browser check: every branch of the wording was verified and the row
+  was invisible on every real install, because the server never sent
+  `available` in `/api/status`. Drive a UI check from the REAL endpoint the
+  screen reads, then assert on what it painted.
 - **A permissive fake proves nothing about what the caller ASKS FOR.** Four
   transport tests passed through all three broken releases above because the
   stand-in for GitHub answered whatever it was asked. Every fake external

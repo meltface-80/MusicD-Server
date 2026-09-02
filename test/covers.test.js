@@ -296,6 +296,43 @@ test("being asked to slow down stops the sweep rather than grinding on", async (
   ws.cleanup();
 });
 
+/*
+ * The two answers the side menu needs, and the bug that hid the whole feature.
+ *
+ * `available` is the container's (COVER_LOOKUP) and `enabled` is the switch.
+ * The client hides the row on the first and dims it on the second, so both
+ * have to be in status() — in 0.4.9 `available` was only added to the
+ * /api/covers replies, the menu never saw it, and the row stayed hidden on
+ * every install.
+ */
+test("the status says both whether it is allowed and whether it is on", async () => {
+  const { ws, db } = await scanned((w) => putAlbum(w.music, "Slowdive/Souvlaki",
+    { album: "Souvlaki", artist: "Slowdive", year: 1993, tracks: SOUVLAKI }));
+  const net = fakeInternet({});
+
+  const normal = coversFor(db, ws, net).status();
+  assert.strictEqual(normal.available, true, "the container allows it");
+  assert.strictEqual(normal.enabled, true);
+
+  const off = coversFor(db, ws, net, { available: false });
+  assert.strictEqual(off.status().available, false);
+  assert.strictEqual(off.status().enabled, false,
+    "a container that said no is not merely switched off, it is unavailable");
+
+  /* And a phone cannot talk it round. COVER_LOOKUP is the one answer the app
+     must not be able to override. */
+  off.setEnabled(true);
+  assert.strictEqual(off.status().enabled, false);
+  await off.sweep();
+  assert.strictEqual(net.calls.length, 0);
+
+  const paused = coversFor(db, ws, net, { enabled: false });
+  assert.strictEqual(paused.status().available, true,
+    "still allowed — the row shows, dimmed, which is how it gets switched on");
+  assert.strictEqual(paused.status().enabled, false);
+  ws.cleanup();
+});
+
 test("switched off, it asks nothing", async () => {
   const { ws, db } = await scanned((w) => putAlbum(w.music, "Slowdive/Souvlaki",
     { album: "Souvlaki", artist: "Slowdive", year: 1993, tracks: SOUVLAKI }));

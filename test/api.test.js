@@ -78,6 +78,13 @@ async function json(pathname, options) {
 test("cover lookup reports itself off when the container says so", async () => {
   const status = await json("/api/status");
   assert.strictEqual(status.body.covers.enabled, false);
+  /* `available` has to travel in the STATUS, not only in the /api/covers
+     replies: the side menu is painted from /api/status, and a status without
+     it left the row hidden for ever in 0.4.9 — the feature shipped and could
+     not be reached. */
+  assert.ok("available" in status.body.covers,
+    "the status says whether the container allows this at all");
+  assert.strictEqual(status.body.covers.available, false);
 
   const covers = await json("/api/covers");
   assert.strictEqual(covers.body.available, false,

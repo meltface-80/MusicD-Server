@@ -2206,7 +2206,7 @@ function wire() {
       state.coverHeld = true;
       const on = !(state.covers && state.covers.enabled);
       try {
-        showCovers({ ...await post("/api/covers", { enabled: on }), available: true });
+        showCovers(await post("/api/covers", { enabled: on }));
         toast(on ? "Looking for missing covers." : "Missing covers will not be looked for.");
       } catch (e) { toast(e.message, true); }
     }, 500);
@@ -2226,7 +2226,7 @@ function wire() {
       return;
     }
     try {
-      showCovers({ ...await post("/api/covers", {}), available: true });
+      showCovers(await post("/api/covers", {}));
       toast(state.covers.missing ? "Looking for missing covers…" : "Every album already has a cover.");
     } catch (e) { toast(e.message, true); }
   });

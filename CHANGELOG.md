@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.12
+
+### The artwork is back on Now playing, the Queue and the mini bar
+- **A cover was showing everywhere except the three screens that matter while
+  something is playing.** Making the transport aware of covers that had been
+  found online meant renaming the field it reads, and two of the three readers
+  were left on the old name — so Now playing, every Queue row and the mini
+  transport got an empty string for every album, whether its cover came from
+  the folder or not. All three read one method now, so a reader cannot fall out
+  of step with the query that feeds it again.
+- The oddly tall empty box on Now playing was that same bug: it is the
+  no-artwork placeholder filling the space the cover should have had. With the
+  cover back it is a square, uncropped, exactly as before.
+
+## 0.4.11
+
+### Two things 0.4.9 and 0.4.10 got wrong
+- **"Find missing covers" was missing from the side menu.** The row is hidden
+  unless the server says cover lookup is available, and the server only said so
+  on its own endpoint — never in the status the menu is actually painted from.
+  So the row was hidden on every install and the whole feature was
+  unreachable. It appears now.
+- **Two rips of one album stayed two albums when only one of them was
+  tagged.** Track titles are the second opinion that decides whether two
+  same-named albums really are the same record, and a file with no title tag
+  falls back to its filename — so one copy's tracks read "01 Wasting the Dawn"
+  where the other's read "Wasting the Dawn", they matched on nothing, and the
+  pair stayed on the shelf. A leading track number is no longer treated as part
+  of a track's name. Different records are still different: dropping the number
+  cannot make two albums match that share no track names.
+
 ## 0.4.10
 
 ### Scrobbling to Last.fm

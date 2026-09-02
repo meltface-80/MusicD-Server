@@ -62,10 +62,14 @@ const settings = settingsLib.open(db);
 const COVERS_KEY = "covers.enabled";
 const covers = createCovers({
   db, dataDir: DATA_DIR, version: require("./package.json").version,
+  /* Two separate answers: what the container allows, and what the switch in
+     the side menu says. Both travel in the status — the menu row is hidden by
+     the first and dimmed by the second. */
+  available: COVER_LOOKUP,
   /* On unless somebody said otherwise. An album with no picture is the thing
      the feature exists for, and a switch nobody knows to look for is a feature
      nobody has. */
-  enabled: COVER_LOOKUP && settings.get(COVERS_KEY) !== "0"
+  enabled: settings.get(COVERS_KEY) !== "0"
 });
 
 /* Once at startup as well as after every scan. A library upgraded from a
@@ -403,9 +407,7 @@ app.get("/api/picks", api((req, res) => res.json(picks.get())));
  * manual fetch. An album with a picture in its folder is never touched, so
  * there is nothing here to choose between.
  */
-app.get("/api/covers", api((req, res) => res.json({
-  ...covers.status(), available: COVER_LOOKUP
-})));
+app.get("/api/covers", api((req, res) => res.json(covers.status())));
 
 app.post("/api/covers", api((req, res) => {
   if (!COVER_LOOKUP) {
@@ -419,7 +421,7 @@ app.post("/api/covers", api((req, res) => {
   /* Asking to look now is the same sweep the scan runs, so a switch turned
      back on does not have to wait six hours to mean anything. */
   if (body.sweep !== false && covers.status().enabled) sweepCovers();
-  res.json({ ...covers.status(), available: COVER_LOOKUP });
+  res.json(covers.status());
 }));
 
 app.post("/api/rescan", api(async (req, res) => {
