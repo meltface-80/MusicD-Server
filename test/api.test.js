@@ -18,6 +18,10 @@ const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-api-"));
 process.env.MUSIC_DIRS = path.join(ROOT, "music");
 process.env.DATA_DIR = path.join(ROOT, "data");
 process.env.SCAN_ON_START = "false";
+/* Nothing in a test run reaches the internet. lib/covers.js is exercised
+   against a stand-in in test/covers.test.js; here the switch is off so that a
+   rescan or a status poll cannot start a real lookup. */
+process.env.COVER_LOOKUP = "false";
 process.env.SERVER_IP = "192.168.1.9";
 process.env.PORT = "3400";   // the advertised port, not the one the test binds
 buildLibrary(process.env.MUSIC_DIRS);
@@ -70,6 +74,35 @@ async function json(pathname, options) {
 /* ---------------------------------------------------------------- */
 /*  Status and home                                                  */
 /* ---------------------------------------------------------------- */
+
+test("cover lookup reports itself off when the container says so", async () => {
+  const status = await json("/api/status");
+  assert.strictEqual(status.body.covers.enabled, false);
+
+  const covers = await json("/api/covers");
+  assert.strictEqual(covers.body.available, false,
+    "the switch is absent from the app, not merely off");
+
+  /* And it cannot be talked into it from a phone. COVER_LOOKUP is the one
+     answer a browser must not be able to override. */
+  const refused = await json("/api/covers", { method: "POST", body: { enabled: true } });
+  assert.strictEqual(refused.status, 409);
+  assert.match(String(refused.body.error || ""), /switched off/);
+  assert.strictEqual((await json("/api/covers")).body.enabled, false);
+});
+
+test("Last.fm is absent from a server that was given no key", async () => {
+  /* Last.fm has no anonymous mode and no OAuth 2 — every call carries an
+     api_key — so a container without one has nothing to offer, and says so
+     rather than showing a row that cannot work. */
+  const status = await json("/api/status");
+  assert.strictEqual(status.body.lastfm.configured, false);
+  assert.strictEqual(status.body.lastfm.connected, false);
+
+  const started = await json("/api/lastfm/start", { method: "POST", body: {} });
+  assert.strictEqual(started.status, 500);
+  assert.match(String(started.body.error || ""), /not set up/);
+});
 
 test("status reports the library, the scan and the time zone", async () => {
   const { status, body } = await json("/api/status");

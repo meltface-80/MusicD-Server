@@ -651,6 +651,40 @@ main {
 .action-btn:active { transform: scale(.97); }
 .action-btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 .action-btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+
+/*
+ * The version tabs — one record, more than one copy of it on disk.
+ *
+ * A row of pills rather than the underlined tabs the panel header uses: those
+ * sit in a bar of their own and there are always exactly two of them, while
+ * these sit in the middle of the album and there can be three or four with
+ * long names on them. Scrolls sideways rather than wrapping, so a wide set
+ * cannot push the track list down the screen.
+ */
+/* The cover-lookup row when the feature is switched off. Dimmed rather than
+   removed: the row is how it gets switched back on. */
+.menu-item.is-off { color: var(--text-faint); }
+.menu-item.is-off .menu-sub { color: var(--text-faint); }
+
+.version-tabs {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
+  margin: 4px 0 2px; padding: 6px 2px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.version-tabs::-webkit-scrollbar { display: none; }
+.version-tab {
+  flex: 0 0 auto;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-elev);
+  color: var(--text-dim); font: 600 12px var(--font-sans);
+  white-space: nowrap; cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.version-tab:hover { background: var(--bg-elev-2); color: var(--text); }
+.version-tab.is-active {
+  background: var(--accent); color: var(--on-accent); border-color: transparent;
+  cursor: default;
+}
 .action-btn[disabled] { opacity: .55; cursor: not-allowed; }
 
 .section-label {

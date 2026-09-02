@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.4.10
+
+### Scrobbling to Last.fm
+- **Every track this server counts as played now goes to Last.fm**, if you
+  connect an account. It is the same event: half way through, or four minutes
+  in, whichever comes first — which is Last.fm's own rule, so a skipped track
+  is never scrobbled and a play count and a scrobble can never disagree about
+  what you listened to.
+- **Connect from the side menu.** It opens Last.fm's own approval page; MusicD
+  never sees your password. Tap the row again to finish, hold it to
+  disconnect. A compilation scrobbles the track's artist, not "Various
+  Artists".
+- **Last.fm needs an API key, and there is no way around it** — it has no
+  OAuth 2 and no anonymous mode. It is a developer key you make once, free, at
+  last.fm/api/account/create, and it goes in the container as
+  `LASTFM_API_KEY` and `LASTFM_API_SECRET`. Nothing is typed into the app, and
+  without both values the row does not appear at all.
+- **Nothing is lost to a bad network.** A listen is written to the database
+  before it is sent and deleted only once Last.fm has accepted it, so a router
+  reboot, a restart or an update never costs you one. A weekend offline goes
+  back fifty at a time.
+
+## 0.4.9
+
+### A cover for albums that have none
+- **An album with no picture now gets one found for it**, once, in the
+  background after a scan. An album that already has a cover — in its folder or
+  embedded in its files — is never touched, and nothing is ever written next to
+  your music: the image goes in the data directory and the album points at it.
+- **No API key and no account.** MusicBrainz says which release it is and the
+  Cover Art Archive has the picture; both are open, and both are asked politely
+  — one request a second, a client that says who it is, and a full stop the
+  moment either says slow down.
+- **The album name and the artist first, then the track names.** Two tracks
+  searched as recordings by the same artist, and the release they both point at
+  is the record — which rescues an album whose album tag is blank or wrong. One
+  track is on a dozen compilations, so a single agreement is not evidence.
+- **It is not a manual fetch.** No picker and no per-album button. The side menu
+  has one row: tap it to look now, hold it to switch it off. A container started
+  with `COVER_LOOKUP=false` does not show the row at all.
+- **A miss is remembered for a week**, so a library full of bootlegs costs a
+  handful of requests rather than hundreds on every scan.
+
+## 0.4.8
+
+### One album, however many copies of it are on disk
+- **A deluxe edition is now a version of the album rather than a second
+  album.** The home screen, the grids, the search results and the artist pages
+  show the record once; the album screen carries a tab for each copy, and
+  tapping one swaps the track list, the cover and the runtime without leaving
+  the screen.
+- **The one without the edition marker in its title is the album.** "Souvlaki"
+  wins over "Souvlaki (Deluxe Edition)" even though the deluxe has more tracks
+  on it. Ties between two equally plain titles go to the fuller copy.
+- **The grouping is local and it is careful.** An artist name, the title with
+  its edition marker taken off, and the track titles as a second opinion —
+  nothing is asked of the internet and nothing is identified against a
+  catalogue. A bracket the vocabulary does not recognise stays part of the
+  title, so "(Live)", "(Instrumental)" and "(feat. …)" never fold, and the four
+  different albums called "Weezer" stay four albums.
+- **A group has one history and it follows the album.** Playing the bonus track
+  on the deluxe edition is playing the album; a heart tapped on any tab is the
+  album's. Delete the standard edition and the deluxe becomes the album, plays
+  and all.
+
 ## 0.4.7
 
 ### The mini transport

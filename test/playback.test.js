@@ -43,12 +43,21 @@ async function rig({ zones } = {}) {
   await household.refresh({ force: true });
 
   let invalidated = 0;
+  /* A scrobbler that only writes down what it was asked to do. The point of
+     the tests below is not that Last.fm accepted anything — lib/lastfm.js has
+     its own suite for that — but that this loop hands it exactly the listens
+     it credits, and nothing else. */
+  const scrobbled = [], announced = [];
+  const scrobbler = {
+    scrobble: async (listen) => { scrobbled.push(listen); return true; },
+    nowPlaying: async (listen) => { announced.push(listen); return true; }
+  };
   const playback = new Playback({
-    db, household, baseUrl: () => BASE, onLibraryChange: () => { invalidated++; }
+    db, household, baseUrl: () => BASE, onLibraryChange: () => { invalidated++; }, scrobbler
   });
 
   return {
-    db, fake, household, playback, music,
+    db, fake, household, playback, music, scrobbled, announced,
     kitchen: () => household.rooms().find(r => r.name === "Kitchen").uuid,
     albumId: (title) => db.prepare("SELECT id FROM albums WHERE title = ?").get(title).id,
     invalidations: () => invalidated,
@@ -247,6 +256,76 @@ test("a skipped track is never counted", async () => {
     }
     assert.strictEqual(r.db.prepare("SELECT SUM(play_count) n FROM tracks").get().n, 0);
     assert.strictEqual(r.db.prepare("SELECT COUNT(*) n FROM plays").get().n, 0);
+  } finally { await r.cleanup(); }
+});
+
+/*
+ * A scrobble and a play count are the same event.
+ *
+ * This loop's half-way rule IS Last.fm's rule, so hooking the scrobbler
+ * anywhere else — the Play button, the queue builder — would let the two
+ * disagree about what was listened to. These tests exist to keep them the
+ * same event rather than two events that currently agree.
+ */
+test("a scrobble happens exactly when the play is credited", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+
+    r.fake.playingAt(1, "0:00:04", "0:05:00");
+    await r.playback.poll();
+    assert.strictEqual(r.scrobbled.length, 0, "four seconds in is not a listen");
+    assert.strictEqual(r.announced.length, 1, "but it IS what is playing now");
+
+    r.fake.playingAt(1, "0:02:40", "0:05:00");
+    await r.playback.poll();
+    assert.strictEqual(r.scrobbled.length, 1);
+    assert.strictEqual(r.scrobbled[0].track, "The Rainbow");
+    assert.strictEqual(r.scrobbled[0].artist, "Talk Talk");
+    assert.strictEqual(r.scrobbled[0].album, "Spirit of Eden");
+    /* The moment it STARTED — 160 seconds before this poll — not the moment it
+       passed the half-way mark. A history is a list of start times. */
+    const startedAgo = Date.now() - r.scrobbled[0].at;
+    assert.ok(startedAgo > 150000 && startedAgo < 175000,
+      `started roughly 160s ago, got ${Math.round(startedAgo / 1000)}s`);
+  } finally { await r.cleanup(); }
+});
+
+test("a skipped track is never scrobbled", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    for (const track of [1, 2, 3]) {
+      r.fake.playingAt(track, "0:00:12", "0:05:00");
+      await r.playback.poll();
+    }
+    assert.strictEqual(r.scrobbled.length, 0,
+      "counting on the way out would credit an album that was queued and skipped");
+    assert.strictEqual(r.announced.length, 3, "each one was on, briefly");
+  } finally { await r.cleanup(); }
+});
+
+test("a track playing on is scrobbled once, not once per poll", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    r.fake.playingAt(1, "0:03:00", "0:05:00");
+    for (let i = 0; i < 5; i++) await r.playback.poll();
+    assert.strictEqual(r.scrobbled.length, 1);
+    assert.strictEqual(r.announced.length, 1, "and announced once, when it started");
+  } finally { await r.cleanup(); }
+});
+
+test("a compilation scrobbles the track's artist, not Various Artists", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Late Night Tales"));
+    r.fake.playingAt(1, "0:03:00", "0:05:00");
+    await r.playback.poll();
+    assert.strictEqual(r.scrobbled.length, 1);
+    assert.strictEqual(r.scrobbled[0].artist, "Nina Simone",
+      "nobody listened to a band called Various Artists");
+    assert.strictEqual(r.scrobbled[0].albumArtist, "Various Artists");
   } finally { await r.cleanup(); }
 });
 

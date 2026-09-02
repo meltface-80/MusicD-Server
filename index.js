@@ -19,6 +19,9 @@ const dbLib = require("./lib/db");
 const scanner = require("./lib/scanner");
 const library = require("./lib/library");
 const picksLib = require("./lib/picks");
+const duplicates = require("./lib/duplicates");
+const { createCovers } = require("./lib/covers");
+const { createLastfm } = require("./lib/lastfm");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -43,8 +46,33 @@ const PUBLIC_DIR = process.env.MUSICD_PUBLIC_DIR || path.join(__dirname, "public
 
 fs.mkdirSync(ART_DIR, { recursive: true });
 
+/*
+ * Looking online for a cover an album does not have.
+ *
+ * Off entirely when COVER_LOOKUP=false, whatever the switch in the app says —
+ * this is the only thing in the server that reaches the internet while it is
+ * simply running, so there has to be a way to say no that a phone cannot
+ * undo. Otherwise the switch in the side menu decides, and it is remembered in
+ * the database like every other arrangement.
+ */
+const COVER_LOOKUP = process.env.COVER_LOOKUP !== "false";
+
 const db = dbLib.open(DATA_DIR);
 const settings = settingsLib.open(db);
+const COVERS_KEY = "covers.enabled";
+const covers = createCovers({
+  db, dataDir: DATA_DIR, version: require("./package.json").version,
+  /* On unless somebody said otherwise. An album with no picture is the thing
+     the feature exists for, and a switch nobody knows to look for is a feature
+     nobody has. */
+  enabled: COVER_LOOKUP && settings.get(COVERS_KEY) !== "0"
+});
+
+/* Once at startup as well as after every scan. A library upgraded from a
+   version that had no notion of album versions has never been grouped, and
+   SCAN_ON_START can be off — so without this the feature would arrive only
+   for people who happen to rescan. */
+duplicates.regroup(db);
 const picks = picksLib.createCache(db);
 
 const household = new Household({
@@ -65,9 +93,25 @@ function baseUrl() {
   return advertisedOrigin;
 }
 
+/*
+ * Scrobbling to Last.fm.
+ *
+ * The key and secret are a DEVELOPER registration in the container's
+ * environment, not something anybody types into the app — Last.fm has no
+ * OAuth 2 and no anonymous mode, so there is no keyless way to do this at all
+ * (see lib/lastfm.js). With neither set the feature reports itself unavailable
+ * and nothing in the app offers it.
+ */
+const lastfm = createLastfm({
+  db, settings,
+  apiKey: process.env.LASTFM_API_KEY || "",
+  apiSecret: process.env.LASTFM_API_SECRET || ""
+});
+
 const playback = new Playback({
   db, household, baseUrl,
-  onLibraryChange: () => picks.invalidate()
+  onLibraryChange: () => picks.invalidate(),
+  scrobbler: lastfm
 });
 
 /* ------------------------------------------------------------------ */
@@ -85,8 +129,21 @@ async function runScan(reason = "manual") {
       artDir: ART_DIR,
       onProgress: p => { scanState.done = p.done; scanState.total = p.total; scanState.dir = p.dir; }
     });
-    scanState.last = { ...stats, at: Date.now() };
+    /* Grouping is derived from what the scan just wrote, so it runs on the way
+       out of every scan rather than on a timer of its own — a rescan that
+       finds a new deluxe edition must not leave it sitting on the home screen
+       as a second album until something else happens to trigger a regroup. */
+    const folded = duplicates.regroup(db);
+    if (folded.collapsed) {
+      console.log(`[scan] ${folded.collapsed} album(s) folded into another version`);
+    }
+    scanState.last = { ...stats, versions: folded.collapsed, at: Date.now() };
     picks.invalidate();
+    /* Deliberately not awaited. A hundred missing covers is a hundred seconds
+       of politely spaced requests, and the scan is finished — holding it open
+       would leave the progress bar up and the rescan button disabled for as
+       long as the lookups took. */
+    sweepCovers();
   } catch (e) {
     console.error("[scan] failed: " + e.stack);
     scanState.error = e.message;
@@ -94,6 +151,19 @@ async function runScan(reason = "manual") {
     scanState.running = false;
   }
   return scanState;
+}
+
+/*
+ * Fill in the covers that are missing.
+ *
+ * The row a new cover belongs to changes the moment it arrives, so the home
+ * screen is stale from then on — but only in the sense that a picture appeared
+ * where a placeholder was, which is worth a repaint on the next visit and not
+ * worth interrupting anyone for.
+ */
+function sweepCovers() {
+  return covers.sweep({ onFound: () => picks.invalidate() })
+    .catch(e => console.error("[covers] " + e.message));
 }
 
 /* ------------------------------------------------------------------ */
@@ -154,6 +224,8 @@ app.get("/api/status", api((req, res) => {
       running: scanState.running, done: scanState.done, total: scanState.total,
       last: scanState.last, error: scanState.error
     },
+    covers: covers.status(),
+    lastfm: lastfm.status(),
     sonos: {
       rooms: household.rooms().length,
       error: household.lastError,
@@ -324,10 +396,65 @@ app.get("/api/artist/:name", api((req, res) => {
 }));
 app.get("/api/picks", api((req, res) => res.json(picks.get())));
 
+/*
+ * Covers found online, for albums that have none.
+ *
+ * A status and a switch, and no picker: the whole point is that it is not a
+ * manual fetch. An album with a picture in its folder is never touched, so
+ * there is nothing here to choose between.
+ */
+app.get("/api/covers", api((req, res) => res.json({
+  ...covers.status(), available: COVER_LOOKUP
+})));
+
+app.post("/api/covers", api((req, res) => {
+  if (!COVER_LOOKUP) {
+    return res.status(409).json({ error: "Cover lookup is switched off for this server." });
+  }
+  const body = req.body || {};
+  if (body.enabled !== undefined) {
+    covers.setEnabled(!!body.enabled);
+    settings.set(COVERS_KEY, body.enabled ? "1" : "0");
+  }
+  /* Asking to look now is the same sweep the scan runs, so a switch turned
+     back on does not have to wait six hours to mean anything. */
+  if (body.sweep !== false && covers.status().enabled) sweepCovers();
+  res.json({ ...covers.status(), available: COVER_LOOKUP });
+}));
+
 app.post("/api/rescan", api(async (req, res) => {
   if (scanState.running) return res.json({ running: true, already: true });
   runScan("requested");                      // deliberately not awaited
   res.json({ running: true });
+}));
+
+/* ------------------------------------------------------------------ */
+/*  Last.fm                                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Connecting an account, in the two steps Last.fm's flow has.
+ *
+ * The password is never seen here: /start asks Last.fm for a token and hands
+ * back the approval page on last.fm's own domain, and /finish exchanges the
+ * approved token for a session key. That key is not a password and cannot be
+ * used to read anything about the account.
+ */
+app.get("/api/lastfm", api((req, res) => res.json(lastfm.status())));
+
+app.post("/api/lastfm/start", api(async (req, res) => res.json(await lastfm.start())));
+
+app.post("/api/lastfm/finish", api(async (req, res) => {
+  const result = await lastfm.finish((req.body || {}).token);
+  /* Anything that was listened to before the account was connected is still
+     in the queue and is still a listen. */
+  lastfm.flush().catch(e => console.error("[lastfm] " + e.message));
+  res.json({ ...result, ...lastfm.status() });
+}));
+
+app.post("/api/lastfm/disconnect", api((req, res) => {
+  lastfm.disconnect();
+  res.json(lastfm.status());
 }));
 
 /* ------------------------------------------------------------------ */
@@ -462,15 +589,19 @@ const ART_MIME = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/p
 
 app.get("/art/:token", (req, res) => {
   const id = decodeId(req.params.token);
-  const row = id && db.prepare("SELECT art FROM albums WHERE id = ?").get(id);
-  if (!row || !row.art) return res.status(404).end();
-  const ext = path.extname(row.art).toLowerCase();
+  const row = id && db.prepare("SELECT art, art_fetched FROM albums WHERE id = ?").get(id);
+  /* The folder's own cover first, always. A picture sitting next to the files
+     is what the owner chose; a fetched one is what this app could find when
+     there was nothing to choose. */
+  const file = row && (row.art || row.art_fetched);
+  if (!file) return res.status(404).end();
+  const ext = path.extname(file).toLowerCase();
   res.setHeader("Content-Type", ART_MIME[ext] || "image/jpeg");
   /* Cover art for a given album id never changes without a rescan, and the
      rescan rewrites the file in place — a day is a fair trade for a grid that
      does not refetch a hundred images on every visit. */
   res.setHeader("Cache-Control", "public, max-age=86400");
-  fs.createReadStream(row.art)
+  fs.createReadStream(file)
     .on("error", () => { if (!res.headersSent) res.status(404).end(); else res.destroy(); })
     .pipe(res);
 });
@@ -589,6 +720,21 @@ function start() {
       .catch(e => console.error("  sonos   : discovery failed — " + e.message));
 
     if (SCAN_ON_START) runScan("startup");
+    /* A scan sweeps for covers on its way out. Without one there is nothing to
+       start it, and a container told not to scan on boot would never look for
+       a missing cover again — the delay is only so the first request after a
+       restart is not queued behind a lookup. */
+    else setTimeout(sweepCovers, 5000).unref();
+    /* Anything that could not be sent when it happened — the router was down,
+       Last.fm was having a moment — goes out on its own quarter hour rather
+       than waiting for the next track to finish. The queue is in the database,
+       so this also picks up whatever a restart interrupted. */
+    if (lastfm.status().configured) {
+      const drain = () => lastfm.flush().catch(e => console.error("[lastfm] " + e.message));
+      setTimeout(drain, 10000).unref();
+      setInterval(drain, 15 * 60 * 1000).unref();
+    }
+
     if (SCAN_INTERVAL_HOURS > 0) {
       setInterval(() => runScan("scheduled"), SCAN_INTERVAL_HOURS * 3600 * 1000).unref();
     }

@@ -115,6 +115,10 @@ const state = {
   rowOrder: [],          // the home screen's rows, as the user arranged them
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
+  covers: null,          // what the server last said about looking for covers
+  coverHeld: false,      // the covers row was HELD, so ignore the click after it
+  lastfm: null,          // what the server last said about the Last.fm account
+  lastfmHeld: false,     // ditto, for the Last.fm row
   afterModal: null,      // a screen to open once the panel has closed itself
   checkedForUpdate: false
 };
@@ -1214,6 +1218,51 @@ async function toggleFave(album) {
   }
 }
 
+/* The copy of the record whose track list is on screen. An album with only
+   one version answers with itself, which is why nothing else has to ask. */
+function playing(album) {
+  return (album && (album.selected || album.id)) || null;
+}
+
+/*
+ * The version tabs.
+ *
+ * Switching one is NOT a navigation: the screen stays the same album, so this
+ * refetches in place rather than pushing a layer, and Back still leaves the
+ * album rather than walking through every version that was looked at. The
+ * request is the same /api/album call the screen opened with — asking for a
+ * version returns the same record with that version's track list, so one code
+ * path paints both.
+ */
+function renderVersions(album) {
+  const host = $("album-versions");
+  host.textContent = "";
+  const versions = album.versions || [];
+  host.classList.toggle("hidden", versions.length < 2);
+  if (versions.length < 2) return;
+
+  const current = playing(album);
+  for (const version of versions) {
+    const tab = el("button", "version-tab", version.label);
+    tab.type = "button";
+    tab.setAttribute("role", "tab");
+    const on = version.id === current;
+    tab.classList.toggle("is-active", on);
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+    tab.title = version.title;
+    if (!on) {
+      tab.addEventListener("click", async () => {
+        try {
+          const next = await api("/api/album/" + b64url(version.id));
+          state.album = next;
+          renderAlbum(next);
+        } catch (e) { toast(e.message, true); }
+      });
+    }
+    host.appendChild(tab);
+  }
+}
+
 function renderAlbum(album) {
   const img = $("modal-img");
   if (album.art) { img.src = album.art; img.classList.remove("hidden"); }
@@ -1271,10 +1320,11 @@ function renderAlbum(album) {
 
     /* Tapping a track plays the album FROM that track rather than the track
        alone — an album you started in the middle should keep going. */
-    li.addEventListener("click", () => playAlbum(album.id, album.tracks.indexOf(track)));
+    li.addEventListener("click", () => playAlbum(playing(album), album.tracks.indexOf(track)));
     list.appendChild(li);
   }
   $("tracks-label").textContent = album.multiDisc ? "Tracks" : `Tracks (${album.tracks.length})`;
+  renderVersions(album);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1595,6 +1645,59 @@ function banner(text, isError = false) {
   node.classList.remove("hidden");
 }
 
+/*
+ * The cover-lookup row in the side menu.
+ *
+ * One line that says what is happening and one tap that turns it off, which is
+ * the whole of the interface — the point of this feature is that it is not a
+ * manual fetch, so there is no picker, no candidate grid and nothing to
+ * choose. An album whose folder has a picture in it is never touched.
+ *
+ * The row is absent, not disabled, when the container was started with cover
+ * lookup off: a switch that cannot do anything is a worse answer than no
+ * switch.
+ */
+function showCovers(covers) {
+  state.covers = covers;
+  const row = $("menu-covers");
+  row.classList.toggle("hidden", !covers.available);
+  if (!covers.available) return;
+
+  row.classList.toggle("is-off", !covers.enabled);
+  $("covers-sub").textContent =
+    !covers.enabled ? "Off — album art comes from your files only"
+    : covers.running ? `Looking — ${covers.done} of ${covers.total}`
+    : covers.missing ? `${covers.missing} album${covers.missing === 1 ? "" : "s"} still without one · tap to look now`
+    : covers.fetched ? `${covers.fetched} found · every album has a cover`
+    : "On — every album has a cover";
+}
+
+/*
+ * The Last.fm row.
+ *
+ * Absent unless the container was given a key: Last.fm has no anonymous mode
+ * and no OAuth 2, so a server without one has nothing this row could do, and a
+ * row that explains why it cannot work is worse than no row.
+ *
+ * Connecting is two taps because Last.fm's flow is two steps — approve MusicD
+ * on last.fm's own page, then come back — and the row says which tap it is
+ * waiting for. Holding it disconnects, the same gesture as the covers row.
+ */
+function showLastfm(lastfm) {
+  state.lastfm = lastfm;
+  const row = $("menu-lastfm");
+  row.classList.toggle("hidden", !lastfm.configured);
+  if (!lastfm.configured) return;
+
+  row.classList.toggle("is-off", !lastfm.connected);
+  const waiting = lastfm.queued
+    ? ` · ${lastfm.queued} waiting to send` : "";
+  $("lastfm-sub").textContent =
+    lastfm.connected ? `Scrobbling as ${lastfm.user}${waiting} · hold to disconnect`
+    : lastfm.pending ? "Approve MusicD in the tab that opened, then tap to finish"
+    : "Not connected · tap to connect";
+}
+
 async function refreshStatus() {
   try {
     const status = await api("/api/status");
@@ -1625,6 +1728,9 @@ async function refreshStatus() {
         banner("");
       }
     }
+
+    if (status.covers) showCovers(status.covers);
+    if (status.lastfm) showLastfm(status.lastfm);
 
     state.build = status.build;
     $("version-sub").textContent = describeBuild(status.build);
@@ -2083,6 +2189,104 @@ function wire() {
     copyText("MusicD Server " + text, "Version copied.");
   });
 
+  /*
+   * Tapping the row looks NOW; holding it turns the feature off and on.
+   *
+   * The tap is the thing anybody wants from it — "go and find the ones that
+   * are missing" — and burying that behind a switch would mean waiting for the
+   * next scan every time. The switch is the rarer intention, so it takes the
+   * more deliberate gesture, the same hold the row pads use.
+   */
+  let coverHold = null;
+  const holdCovers = () => {
+    coverHold = setTimeout(async () => {
+      coverHold = null;
+      /* The click that follows the finger coming back up must not then run the
+         tap action as well — it is one gesture, and it already did its job. */
+      state.coverHeld = true;
+      const on = !(state.covers && state.covers.enabled);
+      try {
+        showCovers({ ...await post("/api/covers", { enabled: on }), available: true });
+        toast(on ? "Looking for missing covers." : "Missing covers will not be looked for.");
+      } catch (e) { toast(e.message, true); }
+    }, 500);
+  };
+  const dropCovers = () => { if (coverHold) { clearTimeout(coverHold); coverHold = null; } };
+  $("menu-covers").addEventListener("pointerdown", holdCovers);
+  for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
+    $("menu-covers").addEventListener(event, dropCovers);
+  }
+  $("menu-covers").addEventListener("click", async () => {
+    /* The hold already did something; the click that follows it must not undo
+       the message it just showed. */
+    if (!coverHold && state.coverHeld) { state.coverHeld = false; return; }
+    dropCovers();
+    if (!state.covers || !state.covers.enabled) {
+      toast("Hold this row to turn cover lookup on.");
+      return;
+    }
+    try {
+      showCovers({ ...await post("/api/covers", {}), available: true });
+      toast(state.covers.missing ? "Looking for missing covers…" : "Every album already has a cover.");
+    } catch (e) { toast(e.message, true); }
+  });
+
+  /* Held to disconnect, tapped to move the connection along — the same pair
+     of gestures as the covers row above, for the same reason: the rarer and
+     less reversible intention takes the more deliberate one. */
+  let lastfmHold = null;
+  $("menu-lastfm").addEventListener("pointerdown", () => {
+    lastfmHold = setTimeout(async () => {
+      lastfmHold = null;
+      state.lastfmHeld = true;
+      if (!state.lastfm || !state.lastfm.connected) return;
+      try {
+        showLastfm(await post("/api/lastfm/disconnect", {}));
+        toast("Disconnected from Last.fm. Anything not yet sent is kept.");
+      } catch (e) { toast(e.message, true); }
+    }, 500);
+  });
+  for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
+    $("menu-lastfm").addEventListener(event, () => {
+      if (lastfmHold) { clearTimeout(lastfmHold); lastfmHold = null; }
+    });
+  }
+  $("menu-lastfm").addEventListener("click", async () => {
+    if (state.lastfmHeld) { state.lastfmHeld = false; return; }
+    const lastfm = state.lastfm;
+    if (!lastfm) return;
+    if (lastfm.connected) { toast(`Scrobbling as ${lastfm.user}.`); return; }
+    try {
+      if (lastfm.pending) {
+        showLastfm(await post("/api/lastfm/finish", {}));
+        toast(state.lastfm.connected
+          ? `Connected to Last.fm as ${state.lastfm.user}.`
+          : "Last.fm did not confirm that yet — approve it and tap again.");
+        return;
+      }
+      /* Opened EMPTY and synchronously, inside the tap, then pointed at the
+         page once the token comes back. A window opened after an await has
+         lost the gesture that justified it and is blocked as a pop-up on
+         every phone — which looked exactly like the connection failing. */
+      const tab = window.open("", "_blank");
+      let begun;
+      try { begun = await post("/api/lastfm/start", {}); }
+      catch (e) { if (tab) tab.close(); throw e; }
+      if (tab) {
+        tab.opener = null;                       // the new page gets no handle back
+        tab.location.replace(begun.url);
+      } else {
+        /* Pop-ups are blocked outright. Going there in this tab is worse —
+           it leaves the app — but it is the only way left to approve it, and
+           Back returns. */
+        window.location.href = begun.url;
+        return;
+      }
+      showLastfm({ ...lastfm, pending: true });
+      toast("Approve MusicD on the Last.fm page, then tap Last.fm again.");
+    } catch (e) { toast(e.message, true); }
+  });
+
   $("menu-theme").addEventListener("click", () => {
     applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
   });
@@ -2108,8 +2312,10 @@ function wire() {
   for (const node of document.querySelectorAll("[data-close-modal]")) {
     node.addEventListener("click", closeModal);
   }
-  $("btn-play").addEventListener("click", () => state.album && playAlbum(state.album.id, 0));
-  $("btn-queue").addEventListener("click", () => state.album && queueAlbum(state.album.id));
+  /* playing() rather than .id — the album screen can be showing a version of
+     the record, and Play means the one whose track list is on screen. */
+  $("btn-play").addEventListener("click", () => state.album && playAlbum(playing(state.album), 0));
+  $("btn-queue").addEventListener("click", () => state.album && queueAlbum(playing(state.album)));
   $("np-album").addEventListener("click", () => {
     if (state.now && state.now.album) openAlbum(state.now.album.id);
   });

@@ -113,6 +113,20 @@
         Theme
         <span class="menu-sub" id="theme-sub"></span>
       </button>
+      <!-- The one thing this server asks the internet about, so it is the one
+           thing with a switch. Hidden entirely when the container was started
+           with COVER_LOOKUP=false — a switch that cannot do anything is worse
+           than no switch. -->
+      <button class="menu-item hidden" type="button" id="menu-covers">
+        Find missing covers
+        <span class="menu-sub" id="covers-sub"></span>
+      </button>
+      <!-- Hidden unless this container was given a Last.fm key. Last.fm has no
+           anonymous mode, so without one there is nothing this row could do. -->
+      <button class="menu-item hidden" type="button" id="menu-lastfm">
+        Last.fm
+        <span class="menu-sub" id="lastfm-sub"></span>
+      </button>
 
       <button class="menu-item" type="button" id="menu-update">
         Check for updates
@@ -298,6 +312,12 @@
               <button id="btn-play" class="action-btn primary" type="button">Play</button>
               <button id="btn-queue" class="action-btn" type="button">Queue</button>
             </div>
+            <!-- One record the library holds more than one copy of: the
+                 standard album and its deluxe reissue are one screen with a
+                 tab each. Built by app.js from the album's versions and
+                 hidden when there is only one, which is nearly always. -->
+            <div id="album-versions" class="version-tabs hidden" role="tablist"
+                 aria-label="Versions of this album"></div>
             <div class="section-label" id="tracks-label">Tracks</div>
             <ol id="track-list" class="track-list"></ol>
           </div>
