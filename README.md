@@ -67,6 +67,36 @@ starts on its own, and the home screen fills as it goes.
 Or with compose — copy `docker-compose.yml`, set your music path and time zone,
 and `docker compose up -d`.
 
+### Optional extras
+
+Two settings are worth knowing about at install time. Add them as extra `-e`
+flags on the `docker run` above, or under `environment:` in compose. Neither is
+required and the full list is in [Configuration](#configuration).
+
+**Scrobbling to Last.fm** is absent from the app until you supply a key —
+Last.fm has no anonymous mode, so there is no way around it. It is a free
+developer key you make once at
+[last.fm/api/account/create](https://www.last.fm/api/account/create), not
+something anyone types into the app:
+
+```bash
+  -e LASTFM_API_KEY=your-key \
+  -e LASTFM_API_SECRET=your-secret \
+```
+
+Both are needed or neither works. The account itself is connected from the
+app's side menu afterwards — see [Scrobbling to Last.fm](#scrobbling-to-lastfm).
+
+**Looking online for covers** is on by default, for albums that have none. This
+switches it off for good and removes its row from the side menu:
+
+```bash
+  -e COVER_LOOKUP=false \
+```
+
+The [install site](https://meltface-80.github.io/MusicD-Server/) has a box for
+each of these and writes the finished command for you.
+
 Images are published for `amd64`, `arm64` and `arm/v7`, so the same command
 works on an x86 NAS, a 64-bit Raspberry Pi and a 32-bit one alike. Every push to
 `main` rebuilds them; `:latest` follows `main`, and version tags get their own.
