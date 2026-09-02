@@ -60,10 +60,17 @@
   --ctl-radius: 999px;
 
   --topbar-h: calc(56px + env(safe-area-inset-top));
-  /* A tenth taller than the 64px it shipped at. Everything that clears the bar
-     or sits against it — the panel's foot, the volume sheet's anchor — is
-     derived from this, so the one number moves them all. */
-  --mini-h: 70px;
+  /*
+   * The mini transport's height: 64px at launch, 70px in 0.4.12, and a QUARTER
+   * taller again here.
+   *
+   * It grows UPWARD and nothing had to be told to. The bar is fixed by its
+   * `bottom`, so its underside stays exactly where it was and the extra height
+   * can only go up; everything that clears it or sits against it — the page's
+   * foot, the panel's foot, the volume sheet's anchor, the toast — is derived
+   * from this one number rather than repeating it, so they all moved with it.
+   */
+  --mini-h: 88px;
   /* The gap under the last row of the Now playing face. The volume sheet has
      to clear that row, so it reads this rather than repeating the number. */
   --np-pad-b: 14px;
@@ -1147,7 +1154,12 @@ main {
   left: 10px; right: 10px;
   bottom: calc(10px + env(safe-area-inset-bottom) - var(--kb-inset, 0px));
   height: var(--mini-h);
-  display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px;
+  /* Tighter at the ends than it was. The row got a bigger cover, bigger type
+     and bigger buttons without getting any wider, and the only part that can
+     pay for that is the title — so the padding pays instead. The buttons are
+     circles with their own generous inside, which is where the optical margin
+     at each end actually comes from. */
+  display: flex; align-items: center; gap: 4px; padding: 0 4px 0 6px;
   background: var(--bg-veil); border: 1px solid var(--glass-edge);
   border-radius: 14px; box-shadow: var(--shadow-card);
   overflow: hidden;
@@ -1170,24 +1182,48 @@ main {
    most often wanted, and putting it at the start keeps it clear of the room
    and volume buttons at the other end. */
 .mini-transport .mt-playpause { order: -1; margin-right: 2px; }
-.mt-art { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; background: var(--bg-elev-2); }
+/* Grown with the bar rather than left rattling around in it: the cover keeps
+   the share of the height it had at 70px, so the air above and below it is the
+   same band it always was. */
+.mt-art { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; background: var(--bg-elev-2); }
 .mt-text { min-width: 0; display: flex; flex-direction: column; }
-.mt-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mt-artist { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/*
+ * Bigger, but NOT by the full quarter, and the reason is measured rather than
+ * felt. The two lines share one row with a cover and three buttons inside a
+ * bar that did not get any wider, so every point the type gains comes off the
+ * title's own column. At the width of a standard phone that column is 138px,
+ * and "Back in the Woods" — the track that was playing when this was asked
+ * for — takes 117px at 13px, 125px at 14px and 134px at 15px.
+ *
+ * So 15px fits by four pixels on that phone and not at all on a 375pt one,
+ * where the column is 123px. A title that starts ellipsising a word early is a
+ * worse bar than a title one point smaller, so this is 14 and not 15.
+ */
+.mt-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-artist { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Nothing playing. The bar keeps its place and its room button; only the
    parts that describe a track step back. */
 .mini-transport.is-idle .mt-title { color: var(--text-dim); font-weight: 500; }
 .mini-transport.is-idle .mt-progress { opacity: 0; }
 
-.mt-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.mt-controls { display: flex; align-items: center; gap: 0; flex: 0 0 auto; }
 .mt-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: var(--tap-min); height: var(--tap-min);
+  /* A little over the minimum target rather than a new number: --tap-min is
+     the floor every control in the app stands on, and this is the one row
+     where there is height to spare for a bit more than the floor. Written as
+     an offset from the token so it still moves if the floor does. */
+  width: calc(var(--tap-min) + 4px); height: calc(var(--tap-min) + 4px);
   background: transparent; color: var(--text); border: 0; border-radius: 50%;
   cursor: pointer; transition: background .15s ease, transform .08s ease;
+  /* Never squeezed. The play button is a direct child of the bar rather than
+     of .mt-controls, so it was the one thing in the row still able to shrink —
+     and at 88px it duly did, drawing a 46px target where 48 was asked for.
+     A tap target is not a spring. */
+  flex: 0 0 auto;
 }
-.mt-btn svg { width: 22px; height: 22px; }
+.mt-btn svg { width: 24px; height: 24px; }
 .mt-btn:hover  { background: var(--bg-elev-2); }
 .mt-btn:active { transform: scale(.94); }
 /* The speaker stays lit while its sheet is open, so it is clear which bar the
