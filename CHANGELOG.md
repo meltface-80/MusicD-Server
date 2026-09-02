@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.14
+
+### The side menu is places first, settings behind one button
+- **Everything below the home screen's rows moved into Settings** — rescanning,
+  theme, finding covers, Last.fm, updates and the version. The menu is now the
+  seven places you can go plus one way into the preferences, instead of a list
+  of sixteen things to read.
+- **The library's counters stayed put.** How many albums and tracks it holds and
+  how many Sonos rooms are on the network sit at the foot of the menu in both
+  views, outside the part that scrolls — so they are a glance rather than a
+  scroll to the end.
+- The Settings line names what is actually behind it, so a container without
+  Last.fm or with cover lookup switched off does not advertise a setting that
+  is not there. Escape steps out of Settings before it closes the menu, and
+  reopening always lands on the first view.
+
 ## 0.4.13
 
 ### The keyboard no longer pushes the mini transport around

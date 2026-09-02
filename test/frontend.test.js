@@ -230,6 +230,62 @@ test("the six home rows are named the same in the client and the server", () => 
  * top of the keys whenever the search box had focus. Everything pinned to the
  * bottom subtracts the covered amount so it stays where it was put.
  */
+/*
+ * The side menu is destinations first, settings behind one button.
+ *
+ * A menu that is seven places and nine preferences in one list is a menu you
+ * have to read rather than glance at. What each view holds is asserted here so
+ * a later addition lands on the right side of that split by decision rather
+ * than by whichever line it was pasted next to.
+ */
+test("the menu keeps places and settings apart", () => {
+  const main = html.slice(html.indexOf('<div id="menu-main">'),
+                          html.indexOf('<div id="menu-settings"'));
+  const settings = html.slice(html.indexOf('<div id="menu-settings"'),
+                              html.indexOf('</div>\n      </div>\n\n      <div class="menu-sep">'));
+
+  for (const place of ['data-go="home"', 'data-go="artists"', 'id="menu-rows"']) {
+    assert.ok(main.includes(place), `${place} is somewhere you go, so it stays on the first view`);
+    assert.ok(!settings.includes(place), `${place} is not a setting`);
+  }
+  for (const setting of ["menu-rescan", "menu-theme", "menu-covers", "menu-lastfm",
+                         "menu-update", "menu-version"]) {
+    assert.ok(settings.includes(`id="${setting}"`), `${setting} belongs behind Settings`);
+    assert.ok(!main.includes(`id="${setting}"`), `${setting} is no longer on the first view`);
+  }
+  assert.ok(main.includes('id="menu-settings-open"'), "and the way in is on the first view");
+  assert.ok(settings.includes('id="menu-settings-back"'), "with a way back out of the second");
+});
+
+test("the library's counters cannot scroll away", () => {
+  /* They answer "what is in here and which rooms can I reach" — the two things
+     worth a glance rather than a scroll — so they sit outside the strip that
+     scrolls and outside the strip that swaps. */
+  const scroll = html.slice(html.indexOf('<div class="menu-scroll">'));
+  const foot = html.indexOf('id="menu-foot"');
+  const scrollEnd = html.indexOf('<div class="menu-sep"></div>\n      <div class="menu-foot"');
+  assert.ok(scrollEnd > 0 && foot > scrollEnd, "the foot is after the scrolling strip, not inside it");
+  assert.ok(!scroll.slice(0, scrollEnd - html.indexOf('<div class="menu-scroll">'))
+              .includes('id="menu-foot"'));
+
+  const panel = css.slice(css.indexOf(".menu-panel {"));
+  assert.match(panel.slice(0, panel.indexOf("}")), /flex-direction: column/,
+    "the panel is a column so the head and foot can stay put");
+  assert.match(css, /\.menu-scroll \{[^}]*overflow-y: auto/,
+    "and only the middle of it scrolls");
+});
+
+test("the menu opens on its first view, never on the settings last seen", () => {
+  /* Reopening into Settings would have hidden Home behind a back button. */
+  const open = js.slice(js.indexOf("function openMenu()"));
+  assert.match(open.slice(0, open.indexOf("\n}")), /showMenuView\("main"\)/);
+  const close = js.slice(js.indexOf("function closeMenu()"));
+  assert.match(close.slice(0, close.indexOf("\n}")), /showMenuView\("main"\)/);
+  /* Escape steps out one level at a time rather than closing the lot. */
+  assert.match(js, /if \(menuIsOpen\(\)\) \{/);
+  assert.match(js, /return showMenuView\("main"\);/);
+});
+
 test("everything pinned to the bottom allows for the keyboard", () => {
   const bar = css.slice(css.indexOf(".mini-transport {"));
   assert.match(bar.slice(0, bar.indexOf("}")), /bottom:[^;]*var\(--kb-inset, 0px\)/,
