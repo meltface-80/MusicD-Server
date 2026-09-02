@@ -267,6 +267,65 @@ test("a skipped track is never counted", async () => {
  * disagree about what was listened to. These tests exist to keep them the
  * same event rather than two events that currently agree.
  */
+/*
+ * Artwork on the screens that are NOT the album screen.
+ *
+ * Now playing, the Queue and the mini transport all take their cover from the
+ * transport payloads rather than from /api/album, and all three lost it in
+ * 0.4.9 when the column behind them was renamed and the readers were not.
+ * Nothing asserted on these payloads, so the suite stayed green while the app
+ * showed three empty boxes.
+ */
+test("now playing and the queue carry the album's cover", async () => {
+  const r = await rig();
+  try {
+    /* Spirit of Eden is the fixture album with a cover.png in its folder. */
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    r.fake.playingAt(1, "0:00:04", "0:05:00");
+
+    const now = await r.playback.nowPlaying(r.kitchen());
+    assert.ok(now.album, "there is an album playing");
+    assert.match(now.album.art, /^\/art\/\S+$/,
+      "the Now playing screen and the mini bar both read this one field");
+
+    const queue = await r.playback.queue(r.kitchen());
+    assert.ok(queue.items.length, "the queue has rows");
+    for (const item of queue.items) {
+      assert.match(item.art, /^\/art\/\S+$/, `queue row "${item.title}" has its cover`);
+    }
+  } finally { await r.cleanup(); }
+});
+
+test("a cover that was FOUND shows on those screens too", async () => {
+  const r = await rig();
+  try {
+    /* Hex is the fixture album with no cover of any kind. Give it one the way
+       lib/covers.js does — a path in art_fetched, with `art` left empty — and
+       every screen must treat it as a cover, because to a listener it is one. */
+    const hex = r.albumId("Hex");
+    r.db.prepare("UPDATE albums SET art_fetched = '/somewhere/found.jpg' WHERE id = ?").run(hex);
+
+    await r.playback.playAlbum(r.kitchen(), hex);
+    r.fake.playingAt(1, "0:00:04", "0:05:00");
+
+    const now = await r.playback.nowPlaying(r.kitchen());
+    assert.match(now.album.art, /^\/art\/\S+$/);
+    const queue = await r.playback.queue(r.kitchen());
+    assert.ok(queue.items.every(i => /^\/art\/\S+$/.test(i.art)));
+  } finally { await r.cleanup(); }
+});
+
+test("an album with no cover at all says so, rather than pointing at nothing", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Hex"));
+    r.fake.playingAt(1, "0:00:04", "0:05:00");
+    const now = await r.playback.nowPlaying(r.kitchen());
+    assert.strictEqual(now.album.art, "",
+      "an empty string is what the client tests to hide the image");
+  } finally { await r.cleanup(); }
+});
+
 test("a scrobble happens exactly when the play is credited", async () => {
   const r = await rig();
   try {
