@@ -221,6 +221,21 @@ test("the six home rows are named the same in the client and the server", () => 
   assert.strictEqual(titles.picks, "Smart Picks");
 });
 
+test("the version tabs belong to the album, not to the panel", () => {
+  /* The panel header already has a tab strip — Now playing and Queue — and
+     putting the version tabs there would show them over the Now playing
+     screen, which has no versions. They live inside the album face, between
+     the Play/Queue pair and the track list they change. */
+  const face = html.slice(html.indexOf('<div id="album-face">'),
+                          html.indexOf('<div id="np-screen"'));
+  assert.ok(face.includes('id="album-versions"'), "the strip is inside the album face");
+  const actions = face.indexOf('class="modal-actions"');
+  const strip = face.indexOf('id="album-versions"');
+  const tracks = face.indexOf('id="tracks-label"');
+  assert.ok(actions < strip && strip < tracks,
+    "the version tabs sit between the buttons and the track list");
+});
+
 test("nothing left over from MusicD Remote that this server does not do", () => {
   /* The features the brief removed. A stray handler for one of them is dead
      code at best and a broken button at worst. */

@@ -19,6 +19,7 @@ const dbLib = require("./lib/db");
 const scanner = require("./lib/scanner");
 const library = require("./lib/library");
 const picksLib = require("./lib/picks");
+const duplicates = require("./lib/duplicates");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -45,6 +46,11 @@ fs.mkdirSync(ART_DIR, { recursive: true });
 
 const db = dbLib.open(DATA_DIR);
 const settings = settingsLib.open(db);
+/* Once at startup as well as after every scan. A library upgraded from a
+   version that had no notion of album versions has never been grouped, and
+   SCAN_ON_START can be off — so without this the feature would arrive only
+   for people who happen to rescan. */
+duplicates.regroup(db);
 const picks = picksLib.createCache(db);
 
 const household = new Household({
@@ -85,7 +91,15 @@ async function runScan(reason = "manual") {
       artDir: ART_DIR,
       onProgress: p => { scanState.done = p.done; scanState.total = p.total; scanState.dir = p.dir; }
     });
-    scanState.last = { ...stats, at: Date.now() };
+    /* Grouping is derived from what the scan just wrote, so it runs on the way
+       out of every scan rather than on a timer of its own — a rescan that
+       finds a new deluxe edition must not leave it sitting on the home screen
+       as a second album until something else happens to trigger a regroup. */
+    const folded = duplicates.regroup(db);
+    if (folded.collapsed) {
+      console.log(`[scan] ${folded.collapsed} album(s) folded into another version`);
+    }
+    scanState.last = { ...stats, versions: folded.collapsed, at: Date.now() };
     picks.invalidate();
   } catch (e) {
     console.error("[scan] failed: " + e.stack);

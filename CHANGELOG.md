@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.8
+
+### One album, however many copies of it are on disk
+- **A deluxe edition is now a version of the album rather than a second
+  album.** The home screen, the grids, the search results and the artist pages
+  show the record once; the album screen carries a tab for each copy, and
+  tapping one swaps the track list, the cover and the runtime without leaving
+  the screen.
+- **The one without the edition marker in its title is the album.** "Souvlaki"
+  wins over "Souvlaki (Deluxe Edition)" even though the deluxe has more tracks
+  on it. Ties between two equally plain titles go to the fuller copy.
+- **The grouping is local and it is careful.** An artist name, the title with
+  its edition marker taken off, and the track titles as a second opinion —
+  nothing is asked of the internet and nothing is identified against a
+  catalogue. A bracket the vocabulary does not recognise stays part of the
+  title, so "(Live)", "(Instrumental)" and "(feat. …)" never fold, and the four
+  different albums called "Weezer" stay four albums.
+- **A group has one history and it follows the album.** Playing the bonus track
+  on the deluxe edition is playing the album; a heart tapped on any tab is the
+  album's. Delete the standard edition and the deluxe becomes the album, plays
+  and all.
+
 ## 0.4.7
 
 ### The mini transport

@@ -1214,6 +1214,51 @@ async function toggleFave(album) {
   }
 }
 
+/* The copy of the record whose track list is on screen. An album with only
+   one version answers with itself, which is why nothing else has to ask. */
+function playing(album) {
+  return (album && (album.selected || album.id)) || null;
+}
+
+/*
+ * The version tabs.
+ *
+ * Switching one is NOT a navigation: the screen stays the same album, so this
+ * refetches in place rather than pushing a layer, and Back still leaves the
+ * album rather than walking through every version that was looked at. The
+ * request is the same /api/album call the screen opened with — asking for a
+ * version returns the same record with that version's track list, so one code
+ * path paints both.
+ */
+function renderVersions(album) {
+  const host = $("album-versions");
+  host.textContent = "";
+  const versions = album.versions || [];
+  host.classList.toggle("hidden", versions.length < 2);
+  if (versions.length < 2) return;
+
+  const current = playing(album);
+  for (const version of versions) {
+    const tab = el("button", "version-tab", version.label);
+    tab.type = "button";
+    tab.setAttribute("role", "tab");
+    const on = version.id === current;
+    tab.classList.toggle("is-active", on);
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+    tab.title = version.title;
+    if (!on) {
+      tab.addEventListener("click", async () => {
+        try {
+          const next = await api("/api/album/" + b64url(version.id));
+          state.album = next;
+          renderAlbum(next);
+        } catch (e) { toast(e.message, true); }
+      });
+    }
+    host.appendChild(tab);
+  }
+}
+
 function renderAlbum(album) {
   const img = $("modal-img");
   if (album.art) { img.src = album.art; img.classList.remove("hidden"); }
@@ -1271,10 +1316,11 @@ function renderAlbum(album) {
 
     /* Tapping a track plays the album FROM that track rather than the track
        alone — an album you started in the middle should keep going. */
-    li.addEventListener("click", () => playAlbum(album.id, album.tracks.indexOf(track)));
+    li.addEventListener("click", () => playAlbum(playing(album), album.tracks.indexOf(track)));
     list.appendChild(li);
   }
   $("tracks-label").textContent = album.multiDisc ? "Tracks" : `Tracks (${album.tracks.length})`;
+  renderVersions(album);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2108,8 +2154,10 @@ function wire() {
   for (const node of document.querySelectorAll("[data-close-modal]")) {
     node.addEventListener("click", closeModal);
   }
-  $("btn-play").addEventListener("click", () => state.album && playAlbum(state.album.id, 0));
-  $("btn-queue").addEventListener("click", () => state.album && queueAlbum(state.album.id));
+  /* playing() rather than .id — the album screen can be showing a version of
+     the record, and Play means the one whose track list is on screen. */
+  $("btn-play").addEventListener("click", () => state.album && playAlbum(playing(state.album), 0));
+  $("btn-queue").addEventListener("click", () => state.album && queueAlbum(playing(state.album)));
   $("np-album").addEventListener("click", () => {
     if (state.now && state.now.album) openAlbum(state.now.album.id);
   });

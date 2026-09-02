@@ -22,6 +22,24 @@ Do not add any of them back, and do not add a "small" call to an external
 metadata API as a convenience. `test/frontend.test.js` fails the build if any of
 these names reappears in the client.
 
+## Duplicates are a local match, not an identification
+
+A record that is on disk twice — the album and its deluxe reissue — is **one
+album with a version tab**, and the grouping is derived from what is already in
+the library: the artist name, the title with its edition marker stripped, and
+the track titles as a second opinion. `lib/match.js` is the only place those
+rules live and `lib/duplicates.js` is the only place they are applied.
+
+- **A bad match costs an album; a missed match costs a duplicate.** Anything the
+  edition vocabulary does not recognise is part of the title, so "(Live)",
+  "(Instrumental)" and "(feat. …)" never fold. Weezer made four albums called
+  "Weezer": the track-title overlap check is what keeps them four.
+- **The primary is the one without the edition marker in its title.** Everything
+  else in `rank()` only settles a tie.
+- **A group has one history, and it lives on the primary.** Counters are MOVED
+  and the donor zeroed, never copied — `regroup()` runs after every scan, and
+  anything copied is counted again every six hours forever.
+
 **Smart Picks are local files only.** They are built from the play history in the
 database and nothing else. A pick must connect to what was actually played —
 being unplayed is a scoring bonus, never a reason to be picked, because a row of

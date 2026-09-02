@@ -298,6 +298,12 @@
               <button id="btn-play" class="action-btn primary" type="button">Play</button>
               <button id="btn-queue" class="action-btn" type="button">Queue</button>
             </div>
+            <!-- One record the library holds more than one copy of: the
+                 standard album and its deluxe reissue are one screen with a
+                 tab each. Built by app.js from the album's versions and
+                 hidden when there is only one, which is nearly always. -->
+            <div id="album-versions" class="version-tabs hidden" role="tablist"
+                 aria-label="Versions of this album"></div>
             <div class="section-label" id="tracks-label">Tracks</div>
             <ol id="track-list" class="track-list"></ol>
           </div>
