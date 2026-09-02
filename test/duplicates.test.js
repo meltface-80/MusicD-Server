@@ -73,6 +73,15 @@ test("a group key needs both an artist and a title worth matching on", () => {
   assert.ok(match.groupKey("Radiohead", "Kid A"));
 });
 
+test("a track title's leading number is not part of its name", () => {
+  assert.strictEqual(match.trackTitleKey("01 Wasting the Dawn"), "wasting the dawn");
+  assert.strictEqual(match.trackTitleKey("07. Stigmata"), "stigmata");
+  assert.strictEqual(match.trackTitleKey("1-01 Dance d Amour"), "dance d amour");
+  assert.strictEqual(match.trackTitleKey("Gothic Girl"), "gothic girl");
+  /* A title that is ONLY a number keeps it — there would be nothing left. */
+  assert.strictEqual(match.trackTitleKey("12"), "12");
+});
+
 test("track overlap is measured against the shorter list", () => {
   const standard = ["One", "Two", "Three"];
   const deluxe = ["one", "two", "three", "Demo", "Live"];
@@ -206,6 +215,61 @@ test("two different albums with the same name stay two albums", async () => {
   await scanner.scan(db, [ws.music], { artDir: ws.art });
   duplicates.regroup(db);
   assert.strictEqual(library.library(db, 50).length, 2, "both albums are still there");
+  ws.cleanup();
+});
+
+/*
+ * Two rips of one record from different sources, one of them untagged.
+ *
+ * The scanner falls back to the filename when a file has no title tag, so the
+ * untagged copy's tracks are called "01 Wasting the Dawn" where the tagged
+ * copy's are called "Wasting the Dawn". Compared literally they share nothing
+ * and the pair stays on the shelf as two albums — which is exactly what a
+ * 7,500-album library is full of, and what was reported against 0.4.10.
+ */
+test("a tagged rip and an untagged one are still the same record", async () => {
+  const ws = workspace();
+  const named = ["Wasting the Dawn", "Dance d Amour", "Brandon Lee", "Gothic Girl"];
+  putAlbum(ws.music, "The 69 Eyes/Bump 'N' Grind",
+    { album: "Bump 'N' Grind", artist: "The 69 Eyes", year: 1992, tracks: named });
+  /* No title tag at all on this copy: the titles come from the filenames, so
+     they carry their track numbers. */
+  const other = path.join(ws.music, "The 69 Eyes", "Bump'N'Grind");
+  fs.mkdirSync(other, { recursive: true });
+  named.forEach((title, i) => {
+    fs.writeFileSync(path.join(other, `${String(i + 1).padStart(2, "0")} ${title}.wav`),
+      wav({ seconds: 1, artist: "The 69 Eyes", album: "Bump'N'Grind",
+            albumArtist: "The 69 Eyes", year: 1992, track: i + 1 }));
+  });
+
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  assert.deepStrictEqual(
+    db.prepare(`SELECT title FROM tracks WHERE album_id = 'a:The 69 Eyes/Bump''N''Grind'
+                ORDER BY no`).all().map(t => t.title),
+    named.map((t, i) => `${String(i + 1).padStart(2, "0")} ${t}`),
+    "the untagged copy really did fall back to its filenames");
+
+  duplicates.regroup(db);
+  assert.deepStrictEqual(library.library(db, 20).map(a => a.title), ["Bump 'N' Grind"]);
+  ws.cleanup();
+});
+
+test("dropping a leading number cannot fold two different records on its own", async () => {
+  const ws = workspace();
+  /* Both track lists are nothing but numbers-plus-words, and both albums are
+     by the same artist with the same name — the most favourable possible case
+     for a false match. They are still different records. */
+  putAlbum(ws.music, "Weezer/Weezer (Blue Album)",
+    { album: "Weezer", artist: "Weezer", year: 1994,
+      tracks: ["01 My Name Is Jonas", "02 Buddy Holly", "03 Undone"] });
+  putAlbum(ws.music, "Weezer/Weezer (Green Album)",
+    { album: "Weezer", artist: "Weezer", year: 2001,
+      tracks: ["01 Don t Let Go", "02 Photograph", "03 Hash Pipe"] });
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  duplicates.regroup(db);
+  assert.strictEqual(library.library(db, 20).length, 2);
   ws.cleanup();
 });
 

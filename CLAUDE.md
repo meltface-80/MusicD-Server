@@ -136,6 +136,12 @@ part of the fix.
   Ask for it on GitHub's tarball endpoint and the answer is 415, which is what
   broke every in-app update from 0.4.0 to 0.4.3. The archive endpoint takes
   `Accept: */*` and a pinned `X-GitHub-Api-Version`.
+- **A renderer fed a hand-made object proves nothing about the wiring.** The
+  0.4.9 covers row was tested by calling `showCovers({available: true, ...})`
+  from a browser check: every branch of the wording was verified and the row
+  was invisible on every real install, because the server never sent
+  `available` in `/api/status`. Drive a UI check from the REAL endpoint the
+  screen reads, then assert on what it painted.
 - **A permissive fake proves nothing about what the caller ASKS FOR.** Four
   transport tests passed through all three broken releases above because the
   stand-in for GitHub answered whatever it was asked. Every fake external
