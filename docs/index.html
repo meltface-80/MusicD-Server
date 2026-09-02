@@ -305,8 +305,9 @@
     <div class="grid">
       <div class="card">
         <h3><span class="em">📁</span>Your library, as it is</h3>
-        <p>Folder-based scanning with cover art taken from the folder or the tags. Nothing is
-           matched against an online release, so nothing is ever renamed behind your back.</p>
+        <p>Folder-based scanning with cover art taken from the folder or the tags. No title, artist,
+           year or genre is ever fetched or matched against an online release, so nothing is renamed
+           behind your back.</p>
       </div>
       <div class="card">
         <h3><span class="em">🔊</span>Plays to Sonos</h3>
@@ -328,6 +329,27 @@
         <h3><span class="em">🔍</span>Search and browse</h3>
         <p>Albums, artists and tracks in one box, an artists index, and every home row opens into a
            full grid that pages as you scroll.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🗂️</span>One album, however many copies</h3>
+        <p>The album and its deluxe reissue are one card and one screen, with a tab for each
+           version. The plain title is the album; the tabs swap the track list and the cover. The
+           matching is local — artist, title without its edition marker, and the track names as a
+           second opinion, so the four different albums called <i>Weezer</i> stay four albums.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🖼️</span>Covers for albums that have none</h3>
+        <p>An album with no picture in its folder and none in its tags gets one found for it, in the
+           background, from MusicBrainz and the Cover Art Archive. <b>No key and no account.</b>
+           Only the missing ones, only the image, and nothing is ever written next to your music.
+           Switch it off with one tap, or for good with <code>COVER_LOOKUP=false</code>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">📻</span>Scrobbles to Last.fm</h3>
+        <p>Optional, and off until you connect an account. Every track the server counts as played
+           is sent — the same half-way rule, so a skipped track is never scrobbled. Listens are
+           saved before they are sent, so a reboot never loses one. Needs a free API key; see
+           <a href="#install">the installer</a>.</p>
       </div>
       <div class="card">
         <h3><span class="em">📱</span>Phone-first interface</h3>
@@ -416,6 +438,37 @@
             </label>
 
             <label class="toggle-row">
+              <input type="checkbox" id="lastfm">
+              <div>
+                <div class="t-title">Scrobble to Last.fm</div>
+                <div class="t-sub">Optional. Last.fm has no anonymous mode — every call carries an
+                     API key — so this is the one thing here that needs a registration. It is free
+                     and takes a minute, and it is a <i>developer</i> key you make once, not
+                     something anyone types into the app.</div>
+              </div>
+            </label>
+            <div class="subfields hidden" id="lastfm-fields">
+              <div class="field">
+                <label for="lastfmkey">Last.fm API key</label>
+                <input type="text" id="lastfmkey" value="" placeholder="32 hex characters" spellcheck="false" autocomplete="off">
+                <div class="hint">Create one at
+                     <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>.
+                     “MusicD Server” and your own address is a complete answer to every field.</div>
+              </div>
+              <div class="field">
+                <label for="lastfmsecret">Last.fm shared secret</label>
+                <input type="text" id="lastfmsecret" value="" placeholder="the secret shown beside the key" spellcheck="false" autocomplete="off">
+                <div class="hint">Both are needed or neither works. They stay on this page — the
+                     shareable link this configurator writes into the address bar deliberately
+                     leaves them out, so a link you send somebody never carries your secret.</div>
+              </div>
+              <div class="field">
+                <div class="hint">Then connect the account itself from the app's side menu: it
+                     opens Last.fm's own approval page, so MusicD never sees your password.</div>
+              </div>
+            </div>
+
+            <label class="toggle-row">
               <input type="checkbox" id="advanced">
               <div>
                 <div class="t-title">Advanced options</div>
@@ -473,11 +526,16 @@
 <section id="home">
   <div class="wrap">
     <h2>The home screen</h2>
-    <p class="lead">Six rows, each a carousel that opens into a full grid when you tap its title.</p>
+    <p class="lead">Seven rows, each a carousel that opens into a full grid when you tap its title.
+       Hold the pad beside a row in the side menu and drag it to put them in your own order — the
+       arrangement lives in the database, so every phone in the house agrees.</p>
     <div class="tablewrap prose">
       <table>
         <thead><tr><th>Row</th><th>What is in it</th></tr></thead>
         <tbody>
+          <tr><td>Favourites</td><td>Albums you tapped the heart on, most recently marked first.
+              <b>Absent rather than empty</b> until there is one — a heading over nothing is an
+              instruction to go and use a feature.</td></tr>
           <tr><td>Library</td><td>Every album, by artist and then by year — the shelf order.</td></tr>
           <tr><td>Random albums</td><td>A fresh handful every time the screen loads.</td></tr>
           <tr><td>Recently added</td><td>Newest first, by the date the scan first saw the folder.</td></tr>
@@ -541,6 +599,12 @@
         <li><b>Smart Picks</b> appear after you have played a few albums, and rebuild once a day.</li>
         <li><b>Not played in 6 months</b> stays empty until albums have genuinely gone that long.
             Nothing is wrong.</li>
+        <li><b>Missing covers</b> are looked for in the background after the first scan, one album
+            a second. The side menu says how many are still without one — tap that row to look now,
+            hold it to switch it off.</li>
+        <li><b>Last.fm</b>, if you supplied a key above: open the side menu, tap <b>Last.fm</b>,
+            approve MusicD on the page that opens, then tap the row again to finish. Hold it to
+            disconnect.</li>
       </ol>
     </div>
   </div>
@@ -549,16 +613,24 @@
 <section id="notdoing">
   <div class="wrap">
     <h2>What it deliberately does not do</h2>
-    <p class="lead">These are decisions, not gaps. Nothing here calls out to the internet, so the
-       library never changes underneath you and there is nothing to sign up for.</p>
+    <p class="lead">These are decisions, not gaps. Your library never changes underneath you, and
+       out of the box there is nothing to sign up for.</p>
     <div class="nope">
-      <div><b>No metadata fetching</b>Albums are shown as they are on disk.</div>
-      <div><b>No album identification</b>Nothing is matched against an online release.</div>
-      <div><b>No record labels</b>No Discogs, no MusicBrainz, no FanArt.tv.</div>
+      <div><b>No metadata fetching</b>Titles, artists, years and genres come from your tags and
+           nowhere else.</div>
+      <div><b>No album identification</b>Nothing is matched against an online release, and no tag
+           is ever rewritten.</div>
+      <div><b>No record labels</b>No Discogs, no FanArt.tv.</div>
       <div><b>No streaming services</b>No Qobuz, no TIDAL.</div>
       <div><b>No reviews or scores</b>No Pitchfork.</div>
       <div><b>No wall display</b>This one is a remote and a server, not a screen.</div>
     </div>
+    <p class="lead" style="margin-top:22px"><b>Two things do leave your network, and only these
+       two.</b> A <b>missing cover</b> is looked up at MusicBrainz and the Cover Art Archive —
+       covers only, only for albums that have none, no key and no account, and
+       <code>COVER_LOOKUP=false</code> stops it for good. And <b>scrobbles go to Last.fm</b> if you
+       connect an account, which needs a key you supply and does nothing at all until you do.
+       Neither one can change a single thing about your library.</p>
   </div>
 </section>
 
@@ -592,6 +664,10 @@
     sonoshost: document.getElementById("sonoshost"),
     fSonos:    document.getElementById("f-sonos"),
     fromsource: document.getElementById("fromsource"),
+    lastfm:      document.getElementById("lastfm"),
+    lastfmFields:document.getElementById("lastfm-fields"),
+    lastfmkey:   document.getElementById("lastfmkey"),
+    lastfmsecret:document.getElementById("lastfmsecret"),
     advanced:  document.getElementById("advanced"),
     advFields: document.getElementById("advanced-fields"),
     serverip:  document.getElementById("serverip"),
@@ -796,6 +872,15 @@
     }
     if (portVal() !== "3400") env.push(["PORT", portVal()]);
     if (state.mode === "ports") env.push(["SONOS_HOSTS", sonosVal()]);
+    /* Both or neither: one half of a Last.fm registration authenticates nothing,
+       and a container holding only the key would show a row that cannot work. */
+    if (els.lastfm.checked) {
+      var key = els.lastfmkey.value.trim(), secret = els.lastfmsecret.value.trim();
+      if (key && secret) {
+        env.push(["LASTFM_API_KEY", key]);
+        env.push(["LASTFM_API_SECRET", secret]);
+      }
+    }
     if (els.advanced.checked) {
       if (els.serverip.value.trim()) env.push(["SERVER_IP", els.serverip.value.trim()]);
       if (els.include.value.trim()) env.push(["INCLUDE_ZONES", els.include.value.trim()]);
@@ -947,6 +1032,9 @@
     if (els.serverip.value.trim()) p.set("ip", els.serverip.value.trim());
     if (els.include.value.trim()) p.set("only", els.include.value.trim());
     if (els.exclude.value.trim()) p.set("not", els.exclude.value.trim());
+    /* The Last.fm key and secret are deliberately NOT here. This URL is written
+       into the address bar to be copied and sent, and a credential in a link is
+       a credential in somebody's chat history. */
     var qs = p.toString();
     history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
   }
@@ -988,12 +1076,18 @@
 
   els.fromsource.addEventListener("change", render);
 
+  els.lastfm.addEventListener("change", function () {
+    els.lastfmFields.classList.toggle("hidden", !els.lastfm.checked);
+    render();
+  });
+
   els.advanced.addEventListener("change", function () {
     els.advFields.classList.toggle("hidden", !els.advanced.checked);
     render();
   });
 
-  ["tz", "port", "sonoshost", "serverip", "include", "exclude"].forEach(function (id) {
+  ["tz", "port", "sonoshost", "serverip", "include", "exclude",
+   "lastfmkey", "lastfmsecret"].forEach(function (id) {
     els[id].addEventListener("input", render);
   });
 

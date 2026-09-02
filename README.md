@@ -19,6 +19,14 @@ its cover is the image sitting next to the files. What it does keep is a small
 database of your listening — when an album arrived, when you last played it, and
 how often — because that is what the home screen is built out of.
 
+Two things do leave your network, and only these two. An album with **no cover
+at all** gets one found for it (MusicBrainz and the Cover Art Archive, no key,
+covers only — see [Covers for albums that have none](#covers-for-albums-that-have-none)),
+and **scrobbles go to Last.fm** if you connect an account (see
+[Scrobbling to Last.fm](#scrobbling-to-lastfm)). Neither can change anything
+about your library, and either can be switched off — the first with
+`COVER_LOOKUP=false`, the second by simply not supplying a key.
+
 The UI follows [MusicD Remote](https://github.com/meltface-80/MusicD-Remote), and
 the Sonos side follows the
 [UPnP to Sonos UPnP bridge](https://github.com/meltface-80/UPnP-to-Sonos-UPnP-bridge).
