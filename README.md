@@ -118,7 +118,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.9` | that exact version, for pinning |
+| `:0.4.10` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -226,6 +226,8 @@ Everything is optional except your music path.
 | `SCAN_ON_START` | `true` | Scan when the container starts. |
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
 | `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |
+| `LASTFM_API_KEY` | — | A Last.fm API key. Without one the Last.fm row does not appear. |
+| `LASTFM_API_SECRET` | — | The shared secret that came with it. Both are needed or neither works. |
 
 ## Covers for albums that have none
 
@@ -254,6 +256,41 @@ tap it to look now, hold it to switch it off.
 
 [MusicBrainz]: https://musicbrainz.org/
 [Cover Art Archive]: https://coverartarchive.org/
+
+## Scrobbling to Last.fm
+
+Every track this server counts as played is sent to Last.fm, if you connect an
+account. It is the same event: a track counts once you are half way through it
+or four minutes in, whichever comes first, which is Last.fm's own rule — so a
+skipped track is never scrobbled and a play count and a scrobble can never
+disagree.
+
+**Last.fm needs an API key, and there is no way around it.** It has no OAuth 2
+and no anonymous mode: every call carries an `api_key`, and every authenticated
+one is signed with a shared secret. Using somebody else's is what their terms
+exist to forbid. So this is the one thing in MusicD Server that needs a
+registration, and it is a *developer* one you make once, not something anybody
+types into the app:
+
+1. Create a key at <https://www.last.fm/api/account/create>. It is free, it
+   takes a minute, and "MusicD Server" with your own address is a complete
+   answer to every field.
+2. Put the two values in the container's environment:
+
+   ```yaml
+   environment:
+     LASTFM_API_KEY: your-key
+     LASTFM_API_SECRET: your-secret
+   ```
+
+3. Open the side menu and tap **Last.fm**. It opens Last.fm's own approval page
+   — MusicD never sees your password — and once you have approved it, tap the
+   row again to finish. Hold the row to disconnect.
+
+Without both values the row does not appear at all.
+
+Listens that cannot be sent are kept in the database and go out later, so a
+router reboot, a restart or an update never loses one.
 
 ## Your files
 

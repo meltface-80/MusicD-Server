@@ -117,6 +117,8 @@ const state = {
   homeStale: false,      // a favourite changed while Home sat behind the panel
   covers: null,          // what the server last said about looking for covers
   coverHeld: false,      // the covers row was HELD, so ignore the click after it
+  lastfm: null,          // what the server last said about the Last.fm account
+  lastfmHeld: false,     // ditto, for the Last.fm row
   afterModal: null,      // a screen to open once the panel has closed itself
   checkedForUpdate: false
 };
@@ -1670,6 +1672,32 @@ function showCovers(covers) {
     : "On — every album has a cover";
 }
 
+/*
+ * The Last.fm row.
+ *
+ * Absent unless the container was given a key: Last.fm has no anonymous mode
+ * and no OAuth 2, so a server without one has nothing this row could do, and a
+ * row that explains why it cannot work is worse than no row.
+ *
+ * Connecting is two taps because Last.fm's flow is two steps — approve MusicD
+ * on last.fm's own page, then come back — and the row says which tap it is
+ * waiting for. Holding it disconnects, the same gesture as the covers row.
+ */
+function showLastfm(lastfm) {
+  state.lastfm = lastfm;
+  const row = $("menu-lastfm");
+  row.classList.toggle("hidden", !lastfm.configured);
+  if (!lastfm.configured) return;
+
+  row.classList.toggle("is-off", !lastfm.connected);
+  const waiting = lastfm.queued
+    ? ` · ${lastfm.queued} waiting to send` : "";
+  $("lastfm-sub").textContent =
+    lastfm.connected ? `Scrobbling as ${lastfm.user}${waiting} · hold to disconnect`
+    : lastfm.pending ? "Approve MusicD in the tab that opened, then tap to finish"
+    : "Not connected · tap to connect";
+}
+
 async function refreshStatus() {
   try {
     const status = await api("/api/status");
@@ -1702,6 +1730,7 @@ async function refreshStatus() {
     }
 
     if (status.covers) showCovers(status.covers);
+    if (status.lastfm) showLastfm(status.lastfm);
 
     state.build = status.build;
     $("version-sub").textContent = describeBuild(status.build);
@@ -2199,6 +2228,62 @@ function wire() {
     try {
       showCovers({ ...await post("/api/covers", {}), available: true });
       toast(state.covers.missing ? "Looking for missing covers…" : "Every album already has a cover.");
+    } catch (e) { toast(e.message, true); }
+  });
+
+  /* Held to disconnect, tapped to move the connection along — the same pair
+     of gestures as the covers row above, for the same reason: the rarer and
+     less reversible intention takes the more deliberate one. */
+  let lastfmHold = null;
+  $("menu-lastfm").addEventListener("pointerdown", () => {
+    lastfmHold = setTimeout(async () => {
+      lastfmHold = null;
+      state.lastfmHeld = true;
+      if (!state.lastfm || !state.lastfm.connected) return;
+      try {
+        showLastfm(await post("/api/lastfm/disconnect", {}));
+        toast("Disconnected from Last.fm. Anything not yet sent is kept.");
+      } catch (e) { toast(e.message, true); }
+    }, 500);
+  });
+  for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
+    $("menu-lastfm").addEventListener(event, () => {
+      if (lastfmHold) { clearTimeout(lastfmHold); lastfmHold = null; }
+    });
+  }
+  $("menu-lastfm").addEventListener("click", async () => {
+    if (state.lastfmHeld) { state.lastfmHeld = false; return; }
+    const lastfm = state.lastfm;
+    if (!lastfm) return;
+    if (lastfm.connected) { toast(`Scrobbling as ${lastfm.user}.`); return; }
+    try {
+      if (lastfm.pending) {
+        showLastfm(await post("/api/lastfm/finish", {}));
+        toast(state.lastfm.connected
+          ? `Connected to Last.fm as ${state.lastfm.user}.`
+          : "Last.fm did not confirm that yet — approve it and tap again.");
+        return;
+      }
+      /* Opened EMPTY and synchronously, inside the tap, then pointed at the
+         page once the token comes back. A window opened after an await has
+         lost the gesture that justified it and is blocked as a pop-up on
+         every phone — which looked exactly like the connection failing. */
+      const tab = window.open("", "_blank");
+      let begun;
+      try { begun = await post("/api/lastfm/start", {}); }
+      catch (e) { if (tab) tab.close(); throw e; }
+      if (tab) {
+        tab.opener = null;                       // the new page gets no handle back
+        tab.location.replace(begun.url);
+      } else {
+        /* Pop-ups are blocked outright. Going there in this tab is worse —
+           it leaves the app — but it is the only way left to approve it, and
+           Back returns. */
+        window.location.href = begun.url;
+        return;
+      }
+      showLastfm({ ...lastfm, pending: true });
+      toast("Approve MusicD on the Last.fm page, then tap Last.fm again.");
     } catch (e) { toast(e.message, true); }
   });
 

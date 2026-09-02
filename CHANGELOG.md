@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.10
+
+### Scrobbling to Last.fm
+- **Every track this server counts as played now goes to Last.fm**, if you
+  connect an account. It is the same event: half way through, or four minutes
+  in, whichever comes first — which is Last.fm's own rule, so a skipped track
+  is never scrobbled and a play count and a scrobble can never disagree about
+  what you listened to.
+- **Connect from the side menu.** It opens Last.fm's own approval page; MusicD
+  never sees your password. Tap the row again to finish, hold it to
+  disconnect. A compilation scrobbles the track's artist, not "Various
+  Artists".
+- **Last.fm needs an API key, and there is no way around it** — it has no
+  OAuth 2 and no anonymous mode. It is a developer key you make once, free, at
+  last.fm/api/account/create, and it goes in the container as
+  `LASTFM_API_KEY` and `LASTFM_API_SECRET`. Nothing is typed into the app, and
+  without both values the row does not appear at all.
+- **Nothing is lost to a bad network.** A listen is written to the database
+  before it is sent and deleted only once Last.fm has accepted it, so a router
+  reboot, a restart or an update never costs you one. A weekend offline goes
+  back fifty at a time.
+
 ## 0.4.9
 
 ### A cover for albums that have none

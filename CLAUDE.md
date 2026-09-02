@@ -51,6 +51,30 @@ the user set:
   button — one row in the side menu that says what is happening, and
   `COVER_LOOKUP=false` to remove even that.
 
+## Last.fm is the one place a key was unavoidable
+
+`lib/lastfm.js`. Last.fm has **no OAuth 2 and no anonymous mode**: every call
+carries an `api_key` and every authenticated one an `api_sig` made with a
+shared secret. There is no keyless path, and a scrobbler without a key is a
+scrobbler using somebody else's. So:
+
+- The key and secret are a DEVELOPER registration read from `LASTFM_API_KEY`
+  and `LASTFM_API_SECRET`. Nobody types a key into the app; with neither set
+  the feature reports itself unavailable and the row is absent, not disabled.
+- **The signature excludes `format` and `api_sig`, and the rest is sorted by
+  name.** Getting that wrong fails silently with "Invalid method signature".
+  The test's fake Last.fm VERIFIES the signature — a permissive stand-in would
+  pass every test while the real service refused all of it.
+- **A scrobble is the same event as a play count**, credited in
+  `lib/playback.js` at the half-way mark. Hooking it anywhere else lets the two
+  disagree about what was listened to. The timestamp is when the track
+  STARTED.
+- **A scrobble is written to the database before it is sent** and deleted only
+  once Last.fm accepts it. "Playing now" is never queued — a copy of it sent
+  later would be a lie.
+- **A revoked session forgets itself rather than retrying forever**, and the
+  queue is kept for whenever it is reconnected.
+
 ## Duplicates are a local match, not an identification
 
 A record that is on disk twice — the album and its deluxe reissue — is **one

@@ -91,6 +91,19 @@ test("cover lookup reports itself off when the container says so", async () => {
   assert.strictEqual((await json("/api/covers")).body.enabled, false);
 });
 
+test("Last.fm is absent from a server that was given no key", async () => {
+  /* Last.fm has no anonymous mode and no OAuth 2 — every call carries an
+     api_key — so a container without one has nothing to offer, and says so
+     rather than showing a row that cannot work. */
+  const status = await json("/api/status");
+  assert.strictEqual(status.body.lastfm.configured, false);
+  assert.strictEqual(status.body.lastfm.connected, false);
+
+  const started = await json("/api/lastfm/start", { method: "POST", body: {} });
+  assert.strictEqual(started.status, 500);
+  assert.match(String(started.body.error || ""), /not set up/);
+});
+
 test("status reports the library, the scan and the time zone", async () => {
   const { status, body } = await json("/api/status");
   assert.strictEqual(status, 200);

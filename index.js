@@ -21,6 +21,7 @@ const library = require("./lib/library");
 const picksLib = require("./lib/picks");
 const duplicates = require("./lib/duplicates");
 const { createCovers } = require("./lib/covers");
+const { createLastfm } = require("./lib/lastfm");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -92,9 +93,25 @@ function baseUrl() {
   return advertisedOrigin;
 }
 
+/*
+ * Scrobbling to Last.fm.
+ *
+ * The key and secret are a DEVELOPER registration in the container's
+ * environment, not something anybody types into the app — Last.fm has no
+ * OAuth 2 and no anonymous mode, so there is no keyless way to do this at all
+ * (see lib/lastfm.js). With neither set the feature reports itself unavailable
+ * and nothing in the app offers it.
+ */
+const lastfm = createLastfm({
+  db, settings,
+  apiKey: process.env.LASTFM_API_KEY || "",
+  apiSecret: process.env.LASTFM_API_SECRET || ""
+});
+
 const playback = new Playback({
   db, household, baseUrl,
-  onLibraryChange: () => picks.invalidate()
+  onLibraryChange: () => picks.invalidate(),
+  scrobbler: lastfm
 });
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +225,7 @@ app.get("/api/status", api((req, res) => {
       last: scanState.last, error: scanState.error
     },
     covers: covers.status(),
+    lastfm: lastfm.status(),
     sonos: {
       rooms: household.rooms().length,
       error: household.lastError,
@@ -408,6 +426,35 @@ app.post("/api/rescan", api(async (req, res) => {
   if (scanState.running) return res.json({ running: true, already: true });
   runScan("requested");                      // deliberately not awaited
   res.json({ running: true });
+}));
+
+/* ------------------------------------------------------------------ */
+/*  Last.fm                                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Connecting an account, in the two steps Last.fm's flow has.
+ *
+ * The password is never seen here: /start asks Last.fm for a token and hands
+ * back the approval page on last.fm's own domain, and /finish exchanges the
+ * approved token for a session key. That key is not a password and cannot be
+ * used to read anything about the account.
+ */
+app.get("/api/lastfm", api((req, res) => res.json(lastfm.status())));
+
+app.post("/api/lastfm/start", api(async (req, res) => res.json(await lastfm.start())));
+
+app.post("/api/lastfm/finish", api(async (req, res) => {
+  const result = await lastfm.finish((req.body || {}).token);
+  /* Anything that was listened to before the account was connected is still
+     in the queue and is still a listen. */
+  lastfm.flush().catch(e => console.error("[lastfm] " + e.message));
+  res.json({ ...result, ...lastfm.status() });
+}));
+
+app.post("/api/lastfm/disconnect", api((req, res) => {
+  lastfm.disconnect();
+  res.json(lastfm.status());
 }));
 
 /* ------------------------------------------------------------------ */
@@ -678,6 +725,16 @@ function start() {
        a missing cover again — the delay is only so the first request after a
        restart is not queued behind a lookup. */
     else setTimeout(sweepCovers, 5000).unref();
+    /* Anything that could not be sent when it happened — the router was down,
+       Last.fm was having a moment — goes out on its own quarter hour rather
+       than waiting for the next track to finish. The queue is in the database,
+       so this also picks up whatever a restart interrupted. */
+    if (lastfm.status().configured) {
+      const drain = () => lastfm.flush().catch(e => console.error("[lastfm] " + e.message));
+      setTimeout(drain, 10000).unref();
+      setInterval(drain, 15 * 60 * 1000).unref();
+    }
+
     if (SCAN_INTERVAL_HOURS > 0) {
       setInterval(() => runScan("scheduled"), SCAN_INTERVAL_HOURS * 3600 * 1000).unref();
     }
