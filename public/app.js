@@ -353,7 +353,7 @@ function renderMenuRows() {
     const open = el("button", "menu-item menu-row-open", state.rowTitles[key] || key);
     open.type = "button";
     open.addEventListener("click", () => {
-      $("menu-overlay").classList.add("hidden");
+      closeMenu();
       openRow(key);
     });
 
@@ -1683,6 +1683,22 @@ function showCovers(covers) {
  * on last.fm's own page, then come back — and the row says which tap it is
  * waiting for. Holding it disconnects, the same gesture as the covers row.
  */
+/*
+ * What the Settings row promises.
+ *
+ * Built from what is actually behind it rather than written out: covers and
+ * Last.fm are each absent on a container that was not given them, and naming a
+ * setting that is not there is how somebody ends up hunting for it.
+ */
+function describeSettings() {
+  const bits = ["Scanning", "theme"];
+  if (state.covers && state.covers.available) bits.push("covers");
+  if (state.lastfm && state.lastfm.configured) bits.push("Last.fm");
+  bits.push("updates");
+  $("settings-sub").textContent =
+    bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1];
+}
+
 function showLastfm(lastfm) {
   state.lastfm = lastfm;
   const row = $("menu-lastfm");
@@ -1731,6 +1747,7 @@ async function refreshStatus() {
 
     if (status.covers) showCovers(status.covers);
     if (status.lastfm) showLastfm(status.lastfm);
+    describeSettings();
 
     state.build = status.build;
     $("version-sub").textContent = describeBuild(status.build);
@@ -2201,17 +2218,56 @@ function trackKeyboard() {
   apply();
 }
 
+/*
+ * Which of the menu's two views is showing.
+ *
+ * Settings is deliberately NOT on the navigation stack, for the same reason
+ * the menu itself is not: it is a drawer you opened, not a place you went, and
+ * pushing history for it would mean the phone's Back gesture walked out of a
+ * menu instead of leaving the screen behind it. Escape and the back row step
+ * through it directly.
+ */
+function showMenuView(view) {
+  const settings = view === "settings";
+  $("menu-main").classList.toggle("hidden", settings);
+  $("menu-settings").classList.toggle("hidden", !settings);
+  $("menu-settings-open").setAttribute("aria-expanded", settings ? "true" : "false");
+  /* Back at the top of whichever list is now showing. Leaving Settings
+     scrolled halfway down and returning to a main menu at the same offset is
+     how a two-view panel loses people. */
+  const scroll = document.querySelector(".menu-scroll");
+  if (scroll) scroll.scrollTop = 0;
+}
+
+function openMenu() {
+  /* Always on the first view. A menu that reopens on the settings you last
+     looked at is a menu that has hidden Home from you. */
+  showMenuView("main");
+  $("menu-overlay").classList.remove("hidden");
+}
+
+function closeMenu() {
+  $("menu-overlay").classList.add("hidden");
+  showMenuView("main");
+}
+
+function menuIsOpen() {
+  return !$("menu-overlay").classList.contains("hidden");
+}
+
 function wire() {
   trackKeyboard();
 
   /* Menu */
-  $("menu-toggle").addEventListener("click", () => $("menu-overlay").classList.remove("hidden"));
+  $("menu-toggle").addEventListener("click", openMenu);
+  $("menu-settings-open").addEventListener("click", () => showMenuView("settings"));
+  $("menu-settings-back").addEventListener("click", () => showMenuView("main"));
   for (const node of document.querySelectorAll("[data-close-menu]")) {
-    node.addEventListener("click", () => $("menu-overlay").classList.add("hidden"));
+    node.addEventListener("click", closeMenu);
   }
   for (const node of document.querySelectorAll("[data-go]")) {
     node.addEventListener("click", () => {
-      $("menu-overlay").classList.add("hidden");
+      closeMenu();
       const target = node.getAttribute("data-go");
       if (target === "home") navReset();
       else if (target === "artists") openArtists();
@@ -2220,7 +2276,7 @@ function wire() {
   }
 
   $("menu-rescan").addEventListener("click", async () => {
-    $("menu-overlay").classList.add("hidden");
+    closeMenu();
     try {
       const r = await post("/api/rescan", {});
       toast(r.already ? "A scan is already running." : "Scanning your library…");
@@ -2229,7 +2285,7 @@ function wire() {
   });
 
   $("menu-update").addEventListener("click", () => {
-    $("menu-overlay").classList.add("hidden");
+    closeMenu();
     checkForUpdate(state.build, { manual: true });
   });
 
@@ -2474,10 +2530,12 @@ function wire() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     /* The side menu is not on the navigation stack — it is a menu, not a place
-       you went — so it is closed here directly. Everything else unwinds
+       you went — so it is closed here directly, one level at a time: Settings
+       goes back to the menu, and the menu goes away. Everything else unwinds
        through the same Back the phone's gesture uses. */
-    if (!$("menu-overlay").classList.contains("hidden")) {
-      return $("menu-overlay").classList.add("hidden");
+    if (menuIsOpen()) {
+      if (!$("menu-settings").classList.contains("hidden")) return showMenuView("main");
+      return closeMenu();
     }
     if (volSheetOpen()) return closeVolSheet();
     navBack();

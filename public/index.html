@@ -93,49 +93,81 @@
         </button>
       </div>
 
-      <button class="menu-item" type="button" data-go="home">Home</button>
-      <button class="menu-item" type="button" data-go="artists">Artists</button>
+      <!--
+        The panel's two views. Everything that is a PLACE stays on the first —
+        Home, the artists index, and the home screen's rows. Everything that is
+        a setting moved behind one button, because a menu that is nine
+        preferences and seven destinations is a menu you have to read.
 
-      <!-- The home screen's rows, in the order the home screen shows them.
-           Built by app.js from /api/rows rather than written out here, because
-           the order is the user's and lives in the database — a list nailed
-           into the markup could only ever be one of the two, and the two have
-           to agree. Each one carries a pad you hold and drag to move it. -->
-      <div id="menu-rows" class="menu-rows"></div>
+        Only this middle strip scrolls and only this strip swaps: the mark above
+        and the library's counters below stay put, so what the library holds and
+        which rooms are on the network are answerable without going anywhere.
+      -->
+      <div class="menu-scroll">
+        <div id="menu-main">
+          <button class="menu-item" type="button" data-go="home">Home</button>
+          <button class="menu-item" type="button" data-go="artists">Artists</button>
 
-      <div class="menu-sep"></div>
+          <!-- The home screen's rows, in the order the home screen shows them.
+               Built by app.js from /api/rows rather than written out here,
+               because the order is the user's and lives in the database — a
+               list nailed into the markup could only ever be one of the two,
+               and the two have to agree. Each one carries a pad you hold and
+               drag to move it. -->
+          <div id="menu-rows" class="menu-rows"></div>
 
-      <button class="menu-item" type="button" id="menu-rescan">
-        Rescan library
-        <span class="menu-sub" id="rescan-sub"></span>
-      </button>
-      <button class="menu-item" type="button" id="menu-theme">
-        Theme
-        <span class="menu-sub" id="theme-sub"></span>
-      </button>
-      <!-- The one thing this server asks the internet about, so it is the one
-           thing with a switch. Hidden entirely when the container was started
-           with COVER_LOOKUP=false — a switch that cannot do anything is worse
-           than no switch. -->
-      <button class="menu-item hidden" type="button" id="menu-covers">
-        Find missing covers
-        <span class="menu-sub" id="covers-sub"></span>
-      </button>
-      <!-- Hidden unless this container was given a Last.fm key. Last.fm has no
-           anonymous mode, so without one there is nothing this row could do. -->
-      <button class="menu-item hidden" type="button" id="menu-lastfm">
-        Last.fm
-        <span class="menu-sub" id="lastfm-sub"></span>
-      </button>
+          <div class="menu-sep"></div>
 
-      <button class="menu-item" type="button" id="menu-update">
-        Check for updates
-        <span class="menu-sub">Asks GitHub whether a newer release exists</span>
-      </button>
-      <button class="menu-item" type="button" id="menu-version">
-        Version
-        <span class="menu-sub" id="version-sub"></span>
-      </button>
+          <button class="menu-item" type="button" id="menu-settings-open"
+                  aria-expanded="false" aria-controls="menu-settings">
+            Settings
+            <span class="menu-sub" id="settings-sub">Scanning, theme, covers and updates</span>
+          </button>
+        </div>
+
+        <div id="menu-settings" class="hidden">
+          <button class="menu-item menu-back" type="button" id="menu-settings-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Settings
+          </button>
+
+          <button class="menu-item" type="button" id="menu-rescan">
+            Rescan library
+            <span class="menu-sub" id="rescan-sub"></span>
+          </button>
+          <button class="menu-item" type="button" id="menu-theme">
+            Theme
+            <span class="menu-sub" id="theme-sub"></span>
+          </button>
+          <!-- The one thing this server asks the internet about, so it is the
+               one thing with a switch. Hidden entirely when the container was
+               started with COVER_LOOKUP=false — a switch that cannot do
+               anything is worse than no switch. -->
+          <button class="menu-item hidden" type="button" id="menu-covers">
+            Find missing covers
+            <span class="menu-sub" id="covers-sub"></span>
+          </button>
+          <!-- Hidden unless this container was given a Last.fm key. Last.fm has
+               no anonymous mode, so without one there is nothing this row could
+               do. -->
+          <button class="menu-item hidden" type="button" id="menu-lastfm">
+            Last.fm
+            <span class="menu-sub" id="lastfm-sub"></span>
+          </button>
+
+          <button class="menu-item" type="button" id="menu-update">
+            Check for updates
+            <span class="menu-sub">Asks GitHub whether a newer release exists</span>
+          </button>
+          <button class="menu-item" type="button" id="menu-version">
+            Version
+            <span class="menu-sub" id="version-sub"></span>
+          </button>
+        </div>
+      </div>
 
       <div class="menu-sep"></div>
       <div class="menu-foot" id="menu-foot"></div>
