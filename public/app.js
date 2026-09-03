@@ -109,6 +109,9 @@ const state = {
      Both come from the server — see loadSort(). */
   sort: null,
   sortOptions: [],
+  /* Whether a text field has the soft keyboard up, which is the third thing
+     that decides whether the mini bar is on screen — see trackTyping(). */
+  typing: false,
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
@@ -1316,7 +1319,10 @@ function syncMini() {
      nowhere to choose a speaker from. The one face that hides it is Now
      playing, which has the full transport on it already. */
   const onNpFace = state.face === "np" && !$("album-modal").classList.contains("hidden");
-  $("mini").classList.toggle("hidden", onNpFace);
+  /* And the third: not while the soft keyboard is up. See trackTyping() — the
+     bar was always meant to be behind the keys, and being absent is the only
+     version of that which no viewport can paint wrong. */
+  $("mini").classList.toggle("hidden", onNpFace || state.typing);
 }
 
 function openModal() {
@@ -2687,11 +2693,27 @@ const KB_MIN = 60;
 let keyboardInset = 0;
 
 function measureKeyboard(viewport) {
-  /* The bottom edge of the visual viewport, in layout-viewport coordinates,
-     against the bottom of the layout viewport. window.innerHeight is the one
-     that does NOT change when the keyboard opens, which is what makes the
-     difference the keyboard. */
-  const covered = window.innerHeight - (viewport.height + viewport.offsetTop);
+  /*
+   * HOW TALL THE KEYBOARD IS — not where the visual viewport happens to be
+   * sitting this frame. The two are different measurements and only the first
+   * one belongs here.
+   *
+   * The keyboard SHRINKS the visual viewport; scrolling MOVES it. So its
+   * height is the difference between the two viewports, and window.innerHeight
+   * is the one that does not change when the keyboard opens, which is what
+   * makes that difference the keyboard.
+   *
+   * offsetTop — how far the visual viewport has slid down inside the layout
+   * viewport — is deliberately NOT subtracted, though it looks like it should
+   * be. It is the scroll position, and including it made this measurement
+   * decay to nothing over the course of a flick (266 → 226 → 146 → 0) while
+   * the keyboard stood perfectly still. That is the worst possible moment for
+   * the correction to switch off: a scroll is exactly when iOS re-anchors
+   * fixed elements to the visual viewport, so the bar sprang up onto the keys
+   * on the way past. The keyboard's height cannot change during a scroll, and
+   * now neither can this.
+   */
+  const covered = window.innerHeight - viewport.height;
   /* No keyboard is 60 pixels tall. Anything smaller is browser chrome, a
      rounding difference or a pinch-zoom, and moving the bar for it would be a
      twitch with no cause the user can see. */
@@ -2711,9 +2733,53 @@ function trackKeyboard() {
     keyboardInset = next;
     document.documentElement.style.setProperty("--kb-inset", next + "px");
   };
+  /* Resize is the event that means something: the keyboard opening, closing or
+     changing height is the only thing that moves this number. Scroll is
+     listened to as a backstop — iOS does not always fire resize when a
+     keyboard is dismissed by a scroll — and it is safe to listen to precisely
+     because what apply() reads no longer varies with the scroll. */
   viewport.addEventListener("resize", apply);
   viewport.addEventListener("scroll", apply);
   apply();
+}
+
+/*
+ * IS THE SOFT KEYBOARD UP — asked of the FOCUS, not of a viewport.
+ *
+ * --kb-inset above holds the bar behind the keys by arithmetic, and that has
+ * now been reported twice as a bar that appears over the search results
+ * anyway. The arithmetic depends on which viewport iOS chooses to resize, and
+ * it does not choose the same one everywhere: Safari shrinks the visual
+ * viewport and leaves the layout viewport alone, an installed home-screen app
+ * has been seen to shrink both, and a fixed element is re-anchored to the
+ * visual viewport mid-scroll in either. Every one of those makes the same
+ * subtraction land somewhere different.
+ *
+ * So stop approximating the intent and state it. The intent was always "the
+ * bar does not move for the keyboard; the keyboard covers it" — a bar that is
+ * covered is a bar you cannot see or press, so while you are typing there is
+ * no bar. That is one rule, it is true in every viewport model, and it cannot
+ * be off by a hundred pixels.
+ *
+ * The focus is the signal because it is the actual cause: a soft keyboard is
+ * open exactly when a text field has it. Coarse pointers only — a desktop
+ * keyboard is always up and covers nothing, and hiding the bar whenever
+ * somebody clicked the search box would be a bug of its own.
+ */
+function trackTyping() {
+  if (!window.matchMedia || !window.matchMedia("(pointer: coarse)").matches) return;
+  const update = () => {
+    const el = document.activeElement;
+    const next = !!(el && el.matches && el.matches("input, textarea"));
+    if (next === state.typing) return;
+    state.typing = next;
+    syncMini();
+  };
+  document.addEventListener("focusin", update);
+  /* focusout runs BEFORE the next element takes focus, when activeElement is
+     still the body — so read it a tick later, or moving between two fields
+     would blink the bar back on between them. */
+  document.addEventListener("focusout", () => setTimeout(update, 0));
 }
 
 /*
@@ -2755,6 +2821,7 @@ function menuIsOpen() {
 
 function wire() {
   trackKeyboard();
+  trackTyping();
 
   /* Menu */
   $("menu-toggle").addEventListener("click", openMenu);

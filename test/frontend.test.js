@@ -343,7 +343,17 @@ test("the keyboard is measured against the viewport that does not move", () => {
      opens; visualViewport is the one that shrinks. Measuring the difference
      between them is the whole trick, and measuring against the wrong one
      yields zero forever. */
-  assert.match(js, /window\.innerHeight - \(viewport\.height \+ viewport\.offsetTop\)/);
+  assert.match(js, /window\.innerHeight - viewport\.height/);
+  /*
+   * AND NOT offsetTop, which this test used to require.
+   *
+   * The keyboard's height is what is wanted; offsetTop is how far the visual
+   * viewport has slid down inside the layout viewport, which is the SCROLL
+   * POSITION. Folding it in made the measurement decay over the course of a
+   * flick — 266, 226, 146, 0 — while the keyboard stood still, so the
+   * correction switched itself off during the one gesture it exists for. */
+  assert.doesNotMatch(js, /viewport\.height \+ viewport\.offsetTop/,
+    "the keyboard's height must not vary with the scroll position");
   /* Both events: resize is the keyboard opening, scroll is the moment the bar
      used to jump. */
   assert.match(js, /viewport\.addEventListener\("resize", apply\)/);
@@ -353,6 +363,32 @@ test("the keyboard is measured against the viewport that does not move", () => {
   /* And a floor, so browser chrome or a pinch-zoom is not mistaken for a
      keyboard and does not twitch the bar. */
   assert.match(js, /const KB_MIN = \d+;/);
+});
+
+/*
+ * While you are typing there is no mini bar.
+ *
+ * The subtraction above is arithmetic against a viewport whose behaviour is
+ * not the same in Safari, in an installed home-screen app, or mid-scroll in
+ * either — and it has now been reported twice as a bar sitting over the search
+ * results with the keyboard up. The intent was always that the keyboard covers
+ * the bar, so the bar is simply not there while the keyboard is: one rule, true
+ * in every viewport model, and nothing left to paint in the wrong place.
+ */
+test("the mini transport is absent while the soft keyboard is up", () => {
+  /* Decided in syncMini with the other two conditions, so there is one place
+     that knows whether the bar is on screen. */
+  assert.match(js, /classList\.toggle\("hidden", onNpFace \|\| state\.typing\)/);
+  /* From the FOCUS, which is the actual cause of a soft keyboard, rather than
+     from a measurement that only correlates with one. */
+  assert.match(js, /el\.matches\("input, textarea"\)/);
+  /* Coarse pointers only: a desktop keyboard is always up and covers nothing,
+     and hiding the bar whenever somebody clicked the search box would be a new
+     bug in place of the old one. */
+  assert.match(js, /matchMedia\("\(pointer: coarse\)"\)\.matches/);
+  /* focusout lands while activeElement is still the body, so it is read a tick
+     later — otherwise moving between two fields blinks the bar back on. */
+  assert.match(js, /"focusout", \(\) => setTimeout\(update, 0\)/);
 });
 
 test("the version tabs belong to the album, not to the panel", () => {
@@ -1077,7 +1113,10 @@ test("the mini bar is always on screen, because it is the only room picker", () 
      to choose a speaker from, now that the top bar has no button for it. */
   const sync = js.slice(js.indexOf("function syncMini()"));
   const body = sync.slice(0, sync.indexOf("\n}"));
-  assert.match(body, /classList\.toggle\("hidden", onNpFace\)/);
+  /* Two exceptions and no others: the Now playing face, which carries the full
+     transport already, and a soft keyboard, which the bar is meant to be
+     behind. Neither is about whether anything is playing. */
+  assert.match(body, /classList\.toggle\("hidden", onNpFace \|\| state\.typing\)/);
   assert.ok(!/!playing/.test(body), "playing state no longer decides whether the bar exists");
   /* And it says something useful when idle. */
   assert.match(js, /"Nothing playing" : "Choose a room"/);

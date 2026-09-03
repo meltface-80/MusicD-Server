@@ -231,6 +231,20 @@ part of the fix.
   around the cover's INTRINSIC PIXEL SIZE, which is why a low-resolution sleeve
   made the app look different. A definite `width: 100%` is what gives the
   stretch back. Suspect this whenever a column sizes itself to a picture.
+- **A KEYBOARD'S HEIGHT IS NOT A SCROLL POSITION.** `--kb-inset` once measured
+  `innerHeight - (visualViewport.height + offsetTop)`. `offsetTop` is how far
+  the visual viewport has slid inside the layout viewport — the scroll — so the
+  measurement decayed from 266px to 0 over one flick while the keyboard stood
+  still, switching the correction off during the exact gesture it exists for.
+  Measure `innerHeight - visualViewport.height` and nothing else.
+- **Arithmetic against the viewport is the wrong tool for "the keyboard covers
+  it", because there is no one viewport.** Safari shrinks the visual viewport
+  and leaves the layout viewport alone, an installed home-screen app has been
+  seen to shrink both, and a fixed element is re-anchored to the visual
+  viewport mid-scroll in either — so one subtraction lands in three places. The
+  mini bar is now ABSENT while a text field has the keyboard, which is the same
+  intent with nothing left to paint wrongly. Prefer stating the intent over
+  approximating it whenever the platform disagrees with itself.
 - **A fixed overlay does not stop the page behind it scrolling.** `overflow:
   hidden` stops a panel scrolling, not the GESTURE: the drag goes up the chain
   to the document, which scrolls invisibly under the overlay and paints its own
