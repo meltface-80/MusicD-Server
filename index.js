@@ -22,6 +22,7 @@ const picksLib = require("./lib/picks");
 const duplicates = require("./lib/duplicates");
 const { createCovers } = require("./lib/covers");
 const { createLastfm } = require("./lib/lastfm");
+const { createInfo } = require("./lib/info");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -56,6 +57,17 @@ fs.mkdirSync(ART_DIR, { recursive: true });
  * the database like every other arrangement.
  */
 const COVER_LOOKUP = process.env.COVER_LOOKUP !== "false";
+
+/*
+ * Looking up what a record IS — the write-up on the album screen and the
+ * biography on an artist's.
+ *
+ * Its own switch rather than the covers one, because they are different
+ * promises: a cover is a picture for an album that has none, and this is prose
+ * from an encyclopaedia. Somebody may reasonably want one and not the other,
+ * and a container that says no to this says no whatever the app asks for.
+ */
+const INFO_LOOKUP = process.env.INFO_LOOKUP !== "false";
 
 const db = dbLib.open(DATA_DIR);
 const settings = settingsLib.open(db);
@@ -110,6 +122,28 @@ const lastfm = createLastfm({
   db, settings,
   apiKey: process.env.LASTFM_API_KEY || "",
   apiSecret: process.env.LASTFM_API_SECRET || ""
+});
+
+/*
+ * Wikipedia first, Last.fm second, and NOTHING on a timer.
+ *
+ * Unlike the cover sweep this never runs by itself: a write-up is fetched the
+ * first time somebody opens the screen that shows it, and after that it is
+ * read out of the database. A library of four thousand albums costs no
+ * requests at all until somebody looks at something.
+ */
+const info = createInfo({
+  db,
+  version: require("./package.json").version,
+  /* Read-only, and only as the fallback. The key is the one already read for
+     scrobbling — nothing new is asked of anybody. */
+  lastfm,
+  available: INFO_LOOKUP,
+  /* Undefined in every real install, which leaves lib/info.js on Wikipedia's
+     own address. It exists so an end-to-end check can point the WHOLE path —
+     this route, the module, the gate, the User-Agent and the cache — at a
+     stand-in over real HTTP, rather than testing a renderer fed by hand. */
+  apiRoot: process.env.MUSICD_WIKI_API || undefined
 });
 
 const playback = new Playback({
@@ -229,6 +263,7 @@ app.get("/api/status", api((req, res) => {
       last: scanState.last, error: scanState.error
     },
     covers: covers.status(),
+    info: info.status(),
     lastfm: lastfm.status(),
     sonos: {
       rooms: household.rooms().length,
@@ -411,10 +446,38 @@ app.post("/api/album/name", api((req, res) => {
   if (!id) return res.status(400).json({ error: "Which album?" });
   const result = library.setNames(db, id, { title, artist });
   if (!result) return res.status(404).json({ error: "No such album." });
+  /* The write-up was found by searching for the OLD name. A correction makes
+     it the answer to a question nobody is asking any more, so it goes and the
+     next open of the screen asks again with what the user actually typed. */
+  info.forget("album", result.id);
   /* Smart Picks are matched by artist and built once a day from a cached
      answer — one holding the name that was just corrected. */
   picks.invalidate();
   res.json(result);
+}));
+
+/*
+ * What Wikipedia says about this record, and about the person who made it.
+ *
+ * SEPARATE FROM /api/album ON PURPOSE. The album screen paints from the tags
+ * the moment it opens; this is a request that may go to the internet, and
+ * folding it into the screen's own call would hold the track list behind a
+ * lookup. Two calls means the album is there instantly and the write-up
+ * arrives underneath it, or does not.
+ *
+ * A 200 with a null body is the honest answer for "asked, and there is no
+ * confident match" — an error would tell the client to retry something that
+ * has already been settled and written down.
+ */
+app.get("/api/album/:id/info", api(async (req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  res.json({ info: await info.album(id) });
+}));
+
+app.get("/api/artist/:name/info", api(async (req, res) => {
+  /* Express has already decoded this — see the note on /api/artist below. */
+  res.json({ info: await info.artist(req.params.name) });
 }));
 
 app.get("/api/artist/:name", api((req, res) => {

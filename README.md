@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.16` | that exact version, for pinning |
+| `:0.4.17` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -248,6 +248,39 @@ Nothing is ever deleted. A rescan that cannot see your NAS marks the albums
 absent rather than removing them; remount it, rescan, and they come back with
 their history intact.
 
+## What a record is, and who made it
+
+Open an album and, under the track list, it says what the record is — the
+opening of its Wikipedia article, and its critical reception where the article
+has one. Open an artist and their biography sits above their albums.
+
+**It is fetched when you open the screen and never in the background.** Nothing
+is looked up by the scan, so a library of four thousand albums costs no requests
+at all until you look at something. Once fetched it is kept in the database for
+good: an encyclopaedia article about a 1988 record is not going to become a
+different article. Only a *miss* expires — after a week, so an album that gains
+an article next year is not marked unknown for ever.
+
+Wikipedia first. **Last.fm** answers for the records Wikipedia has never heard
+of — bootlegs, small pressings, self-released work — and needs no new
+credential: it uses the same developer key as scrobbling, and the calls it makes
+change nothing.
+
+**A wrong write-up is worse than none, so every candidate is checked before it
+is believed.** Wikipedia ranks the disambiguation page for *Hex* above the Bark
+Psychosis album, Earth made a record of the same name, and *Souvlaki* is a Greek
+dish before it is a Slowdive album. An album with no confident match shows
+nothing at all. If a match is wrong, correcting the album's name with **Edit**
+throws the write-up away and asks again with the name you typed.
+
+Both sources give their prose away on condition it is credited and linked, so
+every write-up carries its source, the article's own title and its licence, and
+they are visible without expanding anything. `INFO_LOOKUP=false` turns the whole
+thing off for a container, whatever the app asks for.
+
+Nothing found this way is written back into your library. Not a title, not an
+artist, and not a grouping.
+
 ## Correcting a title or an artist
 
 Some records arrive with no artist tag at all and show as **Unknown artist**.
@@ -284,6 +317,7 @@ Everything is optional except your music path.
 | `SCAN_ON_START` | `true` | Scan when the container starts. |
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
 | `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |
+| `INFO_LOOKUP` | `true` | Set to `false` and no album write-up or artist biography is ever fetched. |
 | `LASTFM_API_KEY` | — | A Last.fm API key. Without one the Last.fm row does not appear. |
 | `LASTFM_API_SECRET` | — | The shared secret that came with it. Both are needed or neither works. |
 

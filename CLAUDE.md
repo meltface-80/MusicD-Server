@@ -25,18 +25,24 @@ a decision, not a gap:
   editor and said the identification work needs planning first.
 - **No record labels.** No Discogs, no FanArt.tv.
 - **No streaming services.** No Qobuz, no TIDAL.
-- **No Pitchfork**, no reviews, no scores.
+- **No Pitchfork and no scores.** 0.4.17 added a WRITE-UP — the opening of an
+  album's Wikipedia article and its critical reception, and an artist's
+  biography — at the user's explicit request. A sourced paragraph about how a
+  record landed is not a score out of ten, and the distinction is the whole of
+  what changed: still no Pitchfork, still no ratings, still nothing from a
+  source whose text cannot lawfully be shown. See the info rules below.
 - **No wall display.**
 
 Do not add any of them back, and do not add a "small" call to an external
 metadata API as a convenience. `test/frontend.test.js` fails the build if any of
 these names reappears in the client.
 
-## The one thing that reaches the internet
+## The two things that reach the internet
 
-`lib/covers.js` looks for a cover, and it is the only outbound request the
-server makes while it is simply running. Everything about it is a constraint
-the user set:
+`lib/covers.js` looks for a cover and `lib/info.js` asks what a record is. They
+are the only outbound requests the server makes while it is simply running, and
+neither happens on a timer. Everything about covers is a constraint the user
+set:
 
 - **No API keys and no accounts, ever.** MusicBrainz and the Cover Art Archive
   need neither. If a source needs a key it is not a source for this project.
@@ -56,6 +62,49 @@ the user set:
 - **It is not a manual fetch.** No picker, no candidate grid, no per-album
   button — one row in the side menu that says what is happening, and
   `COVER_LOOKUP=false` to remove even that.
+
+## Write-ups: `lib/info.js`
+
+An album's write-up and an artist's biography, added in 0.4.17. The rules are
+the covers rules plus the ones that only apply to prose:
+
+- **NOTHING IT LEARNS IS WRITTEN BACK.** Not a title, not an artist, not a year,
+  and above all not a grouping. `lib/duplicates.js` decides what is one record
+  by looking at the disk, and a regroup MOVES the demoted copy's play counts —
+  so a website must never be able to cause one. This module reads; it never
+  writes to `albums`.
+- **A SEARCH ALWAYS ANSWERS, which is the danger.** Wikipedia ranks the
+  disambiguation page for "Hex" above the Bark Psychosis album, Earth made a
+  record of the same name, and "Souvlaki" is a Greek dish before it is a
+  Slowdive album. Every candidate is checked against the library's own facts —
+  it must name the artist, through `artistKey()` — before it is believed, and
+  no confident match means SHOW NOTHING. A wrong biography is worse than an
+  absent one because nobody reports it; it just reads plausibly about the wrong
+  band. The test that proves this is the Earth one: drop the artist check and
+  it is the only thing that fails.
+- **The licence is the reason Wikipedia was chosen, not a preference.**
+  Wikipedia and Last.fm are CC BY-SA and may be shown WITH a credit and a link;
+  AllMusic and Pitchfork may not, which is why an app that wants to print a
+  paragraph either uses an open source or prints nothing. The source, the
+  article's title and the licence are stored beside the text and rendered
+  OUTSIDE the part that collapses — a credit behind a "Read more" is a credit
+  that is usually not shown.
+- **Use `/w/api.php`, never the pretty endpoints.** `/api/rest_v1/` is RESTBase,
+  which is being retired, and `api.wikimedia.org/core/v1` is itself scheduled
+  for deprecation. The Action API is twenty years old and is the only one that
+  searches AND returns text in one request. Same lesson as the GitHub 415.
+- **`exlimit` defaults to 1.** Without it a search returns five results and ONE
+  extract, which works until the right page is the second hit and then fails
+  silently for ever. Multiple extracts also require `exintro`, which is why the
+  full article for the chosen page is a second request. The fake Wikipedia in
+  `test/info.test.js` enforces both, and 10 tests fail if `exlimit` is dropped.
+- **A hit is kept forever; only a miss expires.** An article about a 1988 record
+  will not become a different article. A miss is retried after a week so an
+  album that gains an article next year is not unknown for ever. A NETWORK
+  FAILURE is not a miss — recording one would mean waiting a week because a
+  router rebooted.
+- **Nothing is fetched by the scan.** One request when somebody opens a screen,
+  never four thousand on a rescan.
 
 ## Last.fm is the one place a key was unavoidable
 
@@ -78,6 +127,10 @@ scrobbler using somebody else's. So:
 - **A scrobble is written to the database before it is sent** and deleted only
   once Last.fm accepts it. "Playing now" is never queued — a copy of it sent
   later would be a lie.
+- **`describeArtist` and `describeAlbum` are the two unsigned calls.** They only
+  read, so Last.fm wants the key alone, and they exist for `lib/info.js` as the
+  fallback source. `autocorrect=1` is on, which means what comes back may be
+  about a DIFFERENT act — info.js checks the artist on the way out.
 - **A revoked session forgets itself rather than retrying forever**, and the
   queue is kept for whenever it is reconnected.
 

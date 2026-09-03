@@ -191,6 +191,9 @@
     </section>
 
     <section id="grid-view" class="hidden" aria-label="Albums">
+      <!-- The artist's biography. Filled only by the artist screen; every
+           other grid leaves it hidden. -->
+      <div id="artist-info" class="info hidden"></div>
       <div id="album-grid" class="album-grid" aria-live="polite"></div>
       <div id="grid-empty" class="grid-empty hidden"></div>
     </section>
@@ -380,6 +383,10 @@
                  aria-label="Versions of this album"></div>
             <div class="section-label" id="tracks-label">Tracks</div>
             <ol id="track-list" class="track-list"></ol>
+            <!-- What Wikipedia says about the record. UNDER the track list on
+                 purpose: the list is what the screen was opened for, and this
+                 arrives from the network a moment later. -->
+            <div id="album-info" class="info hidden"></div>
           </div>
         </div>
 
