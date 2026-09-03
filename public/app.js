@@ -1306,6 +1306,17 @@ function renderAlbum(album) {
 
   const list = $("track-list");
   list.textContent = "";
+  /*
+   * A NUMBER COLUMN ONLY WHERE THERE ARE NUMBERS.
+   *
+   * Decided once for the whole list rather than per row, so a record where one
+   * file lost its tag does not have that one title sitting out of line with
+   * the other eleven. Where no file carries a number at all — very common on a
+   * rip whose numbering is in the filename, which is where the title comes
+   * from too — the column was a stack of placeholder dots pushing every title
+   * 38px in from a left edge that already had more air than the right.
+   */
+  const numbered = album.tracks.some(t => t.no);
   let disc = null;
   for (const track of album.tracks) {
     if (album.multiDisc && track.disc !== disc) {
@@ -1318,7 +1329,7 @@ function renderAlbum(album) {
     const unplayable = track.playable === false;
     if (unplayable) li.classList.add("is-unplayable");
 
-    li.appendChild(el("span", "t-no", track.no ? String(track.no) : "·"));
+    if (numbered) li.appendChild(el("span", "t-no", track.no ? String(track.no) : "·"));
     const text = el("div", "t-text");
     text.appendChild(el("div", "t-title", track.title));
     const sub = [];

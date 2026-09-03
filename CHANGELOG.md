@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.18
+
+### Now playing stopped resizing itself around the cover
+- **A low-resolution sleeve shrank the whole screen.** The artwork, the title,
+  the transport and the room row all took their width from the cover's pixel
+  size, so a 1400px scan filled the phone and a 300px one left the screen
+  looking like a different app. Nothing about the album caused it and nothing
+  about the layout was meant to allow it.
+- The cause was one property doing two jobs: the panel's body centres itself
+  with `margin: 0 auto`, and an auto margin in a flex item's cross axis
+  switches stretching off — so on this face the body quietly became
+  shrink-to-fit and sized itself to its widest content. It fills the panel now,
+  and every cover from 120px to 1400px renders at exactly the same size.
+- The artwork still fits rather than crops, so a sleeve that is not square
+  letterboxes inside a frame that no longer moves.
+
+### The track list has the same air on both sides
+- **The durations sat hard against the right of the screen while the titles
+  were pushed a long way in from the left.** Both now keep the same gutter, a
+  little wider than the panel's own, and the rule under each track still spans
+  the full width.
+- **A stack of placeholder dots is gone.** An album whose numbering lives in
+  its filenames carries no track-number tag, so the number column was a column
+  of nothing — and it was what pushed every title in. It is absent entirely on
+  such an album and unchanged on a properly tagged one, decided once for the
+  whole list so a single lost tag cannot leave one title out of line.
+
 ## 0.4.17
 
 ### An album screen says what the record is, and an artist screen who they are

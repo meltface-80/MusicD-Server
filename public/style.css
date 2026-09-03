@@ -804,11 +804,27 @@ main {
   font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-faint); margin: 22px 0 8px; text-align: left;
 }
+/* On the same line the rows below it start at, or the heading hangs off the
+   left of its own list. */
+#tracks-label { padding-left: 8px; }
 
 .track-list { list-style: none; margin: 0; padding: 0; text-align: left; }
+/*
+ * THE SAME AIR ON BOTH SIDES.
+ *
+ * The row used to run edge to edge, which put the duration hard against the
+ * right of the screen while the title sat a whole number-column further in
+ * from the left — so the list read as though it had a wide left margin and no
+ * right one. A gutter here gives the duration somewhere to stop and gives the
+ * left the same amount back.
+ *
+ * Padding rather than a narrower row: the rule under each track still spans
+ * the full width, because a hairline that stops short of the screen edge turns
+ * a track list into a stack of cards.
+ */
 .track-list li {
   display: flex; align-items: center; gap: 12px;
-  min-height: var(--tap-min); padding: 10px 0;
+  min-height: var(--tap-min); padding: 10px 8px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
 }
@@ -816,7 +832,7 @@ main {
 .track-list li:hover  { background: var(--bg-elev); }
 .track-list li:active { background: var(--accent-soft); }
 .track-list li.is-disc {
-  cursor: default; background: none; padding: 18px 0 6px;
+  cursor: default; background: none; padding: 18px 8px 6px;
   font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-faint); border-bottom: 0; min-height: 0;
 }
@@ -824,7 +840,12 @@ main {
 /* Left-aligned, so the number starts at the same inset the duration ends at.
    Right-aligning it inside a fixed box pushed every single-digit number about
    twenty pixels in, and the list read as though the left margin were wider than
-   the right one. Tabular figures keep the titles lined up regardless. */
+   the right one. Tabular figures keep the titles lined up regardless.
+
+   ABSENT ENTIRELY on an album whose files carry no track numbers — see
+   renderAlbum(). A column of placeholder dots is a column of nothing, and it
+   was pushing every title a further 38px in from a left edge that already had
+   more air than the right one. */
 .t-no {
   flex: 0 0 26px; text-align: left;
   color: var(--text-faint); font-size: 13px; font-variant-numeric: tabular-nums;
@@ -885,7 +906,26 @@ main {
   /* The mini bar is hidden on this face, so the room it reserves goes too. */
   padding-bottom: calc(var(--np-pad-b) + env(safe-area-inset-bottom));
 }
-.modal.face-np .modal-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/*
+ * width: 100% IS LOAD-BEARING, and this is the bug it fixes.
+ *
+ * .modal-body carries `margin: 0 auto` to centre itself on a wide screen. On
+ * this face the panel is a flex COLUMN, and an auto margin in a flex item's
+ * cross axis switches off stretching — so the body stopped filling the panel
+ * and became shrink-to-fit, sized by its widest content. On Now playing that
+ * content is the artwork, so the whole screen took its width from the cover's
+ * INTRINSIC PIXEL SIZE: a 1400px sleeve filled the phone, a 300px one shrank
+ * the column to 300px, and a tiny one collapsed it to the width of the
+ * transport buttons. The same album looked like two different apps depending
+ * on how the cover happened to be scanned.
+ *
+ * A definite width restores the stretch that the auto margins took away. The
+ * max-width and the centring still do their job on a wide screen.
+ */
+.modal.face-np .modal-body {
+  flex: 1 1 auto; min-height: 0; width: 100%;
+  display: flex; flex-direction: column;
+}
 .modal.face-np #np-screen { flex: 1 1 auto; min-height: 0; }
 
 /* Now playing is a SCREEN, not a dialog. At ≥720px the panel is otherwise a
