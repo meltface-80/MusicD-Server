@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.19` | that exact version, for pinning |
+| `:0.4.20` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -229,6 +229,20 @@ Play nothing and the row says so rather than sitting there empty.
 | Number of plays | yes | yes |
 | Marked a favourite | yes | — |
 | A corrected title or artist | yes | — |
+
+## Random Album Radio
+
+**Settings › Random Album Radio** keeps the queue from running out: another
+album is added behind whatever is playing before you reach the last one.
+**Match the current genre** appears underneath it while it is on — with that on
+the next album shares the genre tag of the one playing, and with it off the
+choice is the whole library.
+
+It runs on the server, so the queue keeps filling while the phone that started
+the music is in a pocket or off the network entirely, and both settings live in
+the database so every phone in the house agrees. Nothing already in the queue is
+offered again; with nothing left to add it adds nothing rather than repeating
+itself. Off unless you turn it on.
 
 **Settings › Now playing button** chooses what the control in the corner of the
 Now playing screen does: **Home** returns to the home screen, **Back** returns

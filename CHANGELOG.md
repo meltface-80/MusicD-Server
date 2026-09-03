@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.20
+
+### Random Album Radio
+- **Settings › Random Album Radio.** With it on, another album is added behind
+  whatever is playing before the last one in the queue runs out, so an evening
+  that started with one record keeps going.
+- **Match the current genre** appears underneath it, and only while the radio is
+  on — an option describing something that is not happening is worse than no
+  option. On, the next album shares the genre tag of the one playing; off,
+  totally random means exactly that.
+- **It runs on the server, not the phone.** The queue keeps filling while the
+  phone that started the music is in a pocket, asleep or off the network — the
+  loop that already watches your speakers to count plays does this too. Both
+  settings live in the database for the same reason, so every phone in the
+  house agrees and a reinstalled shortcut remembers.
+- **Nothing already in the queue is offered again**, and neither is a deluxe
+  reissue of a record you have just heard, an album on a NAS that is not
+  mounted, or a folder with nothing playable in it. With nothing left to add it
+  adds nothing rather than repeating itself.
+- Off unless you turn it on. A queue that grows on its own is a surprise.
+- The one genre in the house with a single album in it falls through to the
+  whole library rather than stopping — silence is a worse answer to "keep
+  playing" than a record from somewhere else.
+- Genres match exactly, once case and punctuation are set aside: "Art Rock" and
+  "art rock" are one genre, "Art Rock" and "Rock" are two. Matching those
+  loosely would be a guess about what a genre means.
+
 ## 0.4.19
 
 ### Leaving Now playing can go back instead of Home

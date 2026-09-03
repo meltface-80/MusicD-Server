@@ -25,7 +25,8 @@ const FAKE_PORT = 11450;
  * same thing, and two plays. That is correct behaviour and the wrong thing to
  * assert against here, so the play-counting tests get a household of one.
  */
-async function rig({ zones } = {}) {
+async function rig(opts = {}) {
+  const { zones } = opts;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-play-"));
   const music = path.join(root, "music");
   buildLibrary(music);
@@ -52,8 +53,10 @@ async function rig({ zones } = {}) {
     scrobble: async (listen) => { scrobbled.push(listen); return true; },
     nowPlaying: async (listen) => { announced.push(listen); return true; }
   };
+  const radio = opts.radio || null;
   const playback = new Playback({
-    db, household, baseUrl: () => BASE, onLibraryChange: () => { invalidated++; }, scrobbler
+    db, household, baseUrl: () => BASE, onLibraryChange: () => { invalidated++; },
+    scrobbler, radio
   });
 
   return {
@@ -597,5 +600,187 @@ test("now playing splits the play mode into the two switches the buttons drive",
     assert.strictEqual(now.shuffle, true);
     assert.strictEqual(now.repeat, "one");
     assert.strictEqual(now.playMode, "SHUFFLE_REPEAT_ONE", "the raw mode is still reported");
+  } finally { await r.cleanup(); }
+});
+
+
+/* ------------------------------------------------------------------ */
+/*  Random Album Radio                                                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The top-up, driven through the real poll loop against the fake speaker.
+ *
+ * Everything here goes through the queue the PLAYER holds — the fake honours
+ * StartingIndex the way a real one does, so the radio is reading the tail of a
+ * queue rather than being handed the whole of it.
+ */
+const { createRadio } = require("../lib/radio");
+const settingsLib = require("../lib/settings");
+
+function withRadio(db, { enabled = true, matchGenre = false } = {}) {
+  const radio = createRadio({ db, settings: settingsLib.open(db) });
+  radio.setEnabled(enabled);
+  radio.setMatchGenre(matchGenre);
+  return radio;
+}
+
+/* How many albums the player's queue holds, read the way the radio reads it. */
+function albumsInQueue(r) {
+  const ids = new Set();
+  for (const item of r.fake.state.queue) {
+    const id = decodeId((/\/stream\/([^./?]+)/.exec(item.uri) || [])[1] || "");
+    const track = id ? r.db.prepare("SELECT album_id FROM tracks WHERE id = ?").get(id) : null;
+    if (track) ids.add(track.album_id);
+  }
+  return [...ids];
+}
+
+test("the radio adds another album once the last one is playing", async () => {
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db);
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    assert.deepStrictEqual(albumsInQueue(r), [r.albumId("Souvlaki")], "one album to start");
+
+    /* On the first track, with the rest of the album still ahead: nothing due. */
+    r.fake.playingAt(1, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setImmediate(done));
+    assert.strictEqual(albumsInQueue(r).length, 1, "the album has not run out yet");
+
+    /* On the LAST track, with nothing after it. */
+    r.fake.playingAt(r.fake.state.queue.length, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+    const after = albumsInQueue(r);
+    assert.strictEqual(after.length, 2, "a second album was queued: " + after.join(", "));
+    assert.notStrictEqual(after[1], r.albumId("Souvlaki"), "and it is not the one playing");
+  } finally { await r.cleanup(); }
+});
+
+test("the radio does nothing at all while it is switched off", async () => {
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db, { enabled: false });
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    r.fake.playingAt(r.fake.state.queue.length, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+    assert.strictEqual(albumsInQueue(r).length, 1, "the queue ends where it was left");
+  } finally { await r.cleanup(); }
+});
+
+test("the radio keeps to the genre when it is asked to", async () => {
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db, { matchGenre: true });
+    /* Spirit of Eden is Art Rock, and so are Laughing Stock and Hex. */
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    r.fake.playingAt(r.fake.state.queue.length, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+
+    const added = albumsInQueue(r).filter(id => id !== r.albumId("Spirit of Eden"));
+    assert.strictEqual(added.length, 1);
+    const genre = r.db.prepare("SELECT genre FROM albums WHERE id = ?").get(added[0]).genre;
+    assert.strictEqual(genre, "Art Rock", "picked " + added[0]);
+  } finally { await r.cleanup(); }
+});
+
+test("the radio does not interrupt what is already queued behind it", async () => {
+  /* Two albums queued by hand: the second is still to come, so the radio has
+     nothing to do until it is reached. */
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db);
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    await r.playback.queueAlbum(r.kitchen(), r.albumId("Hex"));
+    const before = albumsInQueue(r).length;
+
+    /* Still inside the FIRST album. */
+    r.fake.playingAt(1, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+    assert.strictEqual(albumsInQueue(r).length, before, "nothing added over the top");
+  } finally { await r.cleanup(); }
+});
+
+test("the radio tops up at the end of a queue it did not build alone", async () => {
+  /*
+   * THE CASE THE WHOLE FEATURE IS FOR, and the only one where reading the TAIL
+   * of the queue rather than the whole of it makes any difference.
+   *
+   * Play one album, queue another by hand, and listen to the end of the
+   * second. Everything AFTER the current track is nothing, so this is the last
+   * album and another is due — but the queue as a whole still contains the
+   * first album, so a radio that read all of it would decide there was more to
+   * come and let the music stop.
+   */
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db);
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    await r.playback.queueAlbum(r.kitchen(), r.albumId("Hex"));
+    const before = albumsInQueue(r);
+    assert.strictEqual(before.length, 2, "two albums queued by hand");
+
+    /* The very last track of the second album. */
+    r.fake.playingAt(r.fake.state.queue.length, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+
+    const after = albumsInQueue(r);
+    assert.strictEqual(after.length, 3, "a third album followed: " + after.join(", "));
+    assert.ok(!before.includes(after[2]), "and it is not one already played");
+  } finally { await r.cleanup(); }
+});
+
+test("the radio would rather add nothing than repeat what is queued", async () => {
+  /*
+   * Deterministic on purpose. Cut the library down to exactly the two albums
+   * already in the queue, and there is no third answer: a radio that excludes
+   * everything queued must add nothing, and one that only excludes the album
+   * PLAYING has the first album still eligible and will eventually offer it
+   * back. Asserting on "nothing was added" is the only version of this that
+   * cannot pass by luck of the draw.
+   */
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db);
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    await r.playback.queueAlbum(r.kitchen(), r.albumId("Hex"));
+    r.db.prepare("UPDATE albums SET present = 0 WHERE title NOT IN ('Souvlaki', 'Hex')").run();
+
+    const before = r.fake.state.queue.length;
+    r.fake.playingAt(before, "0:00:01", "0:03:00");
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+
+    assert.strictEqual(r.fake.state.queue.length, before,
+      "there was nothing left to add, so nothing was added");
+    assert.deepStrictEqual(albumsInQueue(r).sort(),
+      [r.albumId("Hex"), r.albumId("Souvlaki")].sort(), "and neither was queued twice");
+  } finally { await r.cleanup(); }
+});
+
+test("a top-up does not restart or reorder what is playing", async () => {
+  /* The append must not touch the transport: pointing it at the queue again
+     would start the record over. */
+  const r = await rig();
+  try {
+    r.playback.radio = withRadio(r.db);
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    const first = r.fake.state.queue.map(q => q.uri);
+
+    r.fake.playingAt(r.fake.state.queue.length, "0:00:01", "0:03:00");
+    const at = r.fake.state.track;
+    await r.playback.poll();
+    await new Promise(done => setTimeout(done, 60));
+
+    assert.strictEqual(r.fake.state.track, at, "the player is still on the same track");
+    assert.deepStrictEqual(r.fake.state.queue.slice(0, first.length).map(q => q.uri), first,
+      "and what was already queued is untouched, in order");
+    assert.ok(r.fake.state.queue.length > first.length, "the new album went on the end");
   } finally { await r.cleanup(); }
 });

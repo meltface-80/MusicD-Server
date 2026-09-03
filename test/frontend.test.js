@@ -1518,3 +1518,30 @@ test("an album's write-up is keyed on the record, not the version on show", () =
   assert.match(js, /loadInfo\(\$\("album-info"\), "album:" \+ album\.id,/);
   assert.match(js, /"\/api\/album\/" \+ b64url\(album\.id\) \+ "\/info"/);
 });
+
+/* ------------------------------------------------------------------ */
+/*  Random Album Radio                                                 */
+/* ------------------------------------------------------------------ */
+
+test("the genre option is absent while the radio is off, not dimmed", () => {
+  /* It is not a setting that is currently unavailable — it is a setting that
+     describes something not happening. The same rule the covers row follows on
+     a container with the lookup switched off. */
+  assert.ok(htmlIds.has("menu-radio"), "the switch");
+  assert.ok(htmlIds.has("menu-radio-genre"), "and the option under it");
+  const show = js.slice(js.indexOf("function showRadio(radio)"));
+  const body = show.slice(0, show.indexOf("\n}"));
+  assert.match(body, /genre\.classList\.toggle\("hidden", !radio\.enabled\)/,
+    "hidden by the radio being off");
+  assert.match(body, /genre\.classList\.toggle\("is-off", !radio\.matchGenre\)/,
+    "and dimmed only by its own setting");
+});
+
+test("both radio rows are painted from what the server says it did", () => {
+  /* This setting lives in the database and drives a loop nothing on the phone
+     can see, so the server's answer is the only true one — painting from what
+     was asked for would let a phone show a radio that is not running. */
+  assert.match(js, /showRadio\(await post\("\/api\/radio", \{ \[field\]: !now\[field\] \}\)\)/);
+  assert.match(js, /if \(status\.radio\) showRadio\(status\.radio\);/,
+    "and the status poll repaints them, so two phones cannot disagree for long");
+});

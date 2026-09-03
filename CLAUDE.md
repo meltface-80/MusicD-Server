@@ -180,6 +180,14 @@ part of the fix.
   only place metadata is built; keep it that way.
 - **Transport goes to the group coordinator, volume goes to the speaker.**
   Sending Play to a grouped member is accepted and does nothing audible.
+- **Random Album Radio rides on the poll loop, not on a phone.** `lib/radio.js`
+  picks and `lib/playback.js` adds, on a TRACK CHANGE only — reading the queue
+  back off the speaker is a SOAP call, and doing it every five-second poll would
+  triple that loop's traffic to answer a question that can only change when the
+  track does. The whole queue is read, not the tail: the tail says whether an
+  album is due, and the rest says what must not be offered again — and at the
+  moment a top-up is due the tail is EMPTY, so a tail-only read excludes
+  nothing. The fake Sonos honours `StartingIndex` because a real one does.
 - **Play counting watches the speaker, not the button.** Counting on the way out
   would credit an album that was queued and skipped, which is exactly the
   distinction the six-month row depends on.

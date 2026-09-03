@@ -161,15 +161,25 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
         case "BecomeCoordinatorOfStandaloneGroup": return reply({});
 
         case "Browse": {
-          const items = state.queue.map((q, i) =>
-            `<item id="Q:0/${i + 1}" parentID="Q:0" restricted="true">` +
-            `<dc:title>${esc("Track " + (i + 1))}</dc:title>` +
+          /* StartingIndex and RequestedCount are HONOURED, because a real
+             player honours them. A fake that returned the whole queue however
+             it was asked would let a caller reading the TAIL of the queue —
+             Random Album Radio does exactly that — pass its tests while
+             getting something else entirely from a speaker. TotalMatches is
+             the whole queue either way, which is what UPnP specifies and what
+             makes paging possible. */
+          const from = Math.max(0, Number(tag(body, "StartingIndex") || 0));
+          const want = Number(tag(body, "RequestedCount") || 0);
+          const page = state.queue.slice(from, want > 0 ? from + want : undefined);
+          const items = page.map((q, i) =>
+            `<item id="Q:0/${from + i + 1}" parentID="Q:0" restricted="true">` +
+            `<dc:title>${esc("Track " + (from + i + 1))}</dc:title>` +
             `<dc:creator>Fake</dc:creator>` +
             `<res protocolInfo="http-get:*:audio/flac:*">${esc(q.uri)}</res></item>`).join("");
           const didl = `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" ` +
             `xmlns:dc="http://purl.org/dc/elements/1.1/">${items}</DIDL-Lite>`;
           return reply({
-            Result: didl, NumberReturned: state.queue.length,
+            Result: didl, NumberReturned: page.length,
             TotalMatches: state.queue.length, UpdateID: 1
           });
         }

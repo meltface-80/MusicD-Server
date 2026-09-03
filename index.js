@@ -23,6 +23,7 @@ const duplicates = require("./lib/duplicates");
 const { createCovers } = require("./lib/covers");
 const { createLastfm } = require("./lib/lastfm");
 const { createInfo } = require("./lib/info");
+const { createRadio } = require("./lib/radio");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -146,10 +147,21 @@ const info = createInfo({
   apiRoot: process.env.MUSICD_WIKI_API || undefined
 });
 
+/*
+ * Random Album Radio.
+ *
+ * Off unless somebody asked for it, and remembered in the database rather than
+ * on a phone: this is something the SERVER does — it keeps the queue filled
+ * while the phone that started the music is in a pocket — so a phone's storage
+ * is the wrong place for it to live.
+ */
+const radio = createRadio({ db, settings });
+
 const playback = new Playback({
   db, household, baseUrl,
   onLibraryChange: () => picks.invalidate(),
-  scrobbler: lastfm
+  scrobbler: lastfm,
+  radio
 });
 
 /* ------------------------------------------------------------------ */
@@ -264,6 +276,7 @@ app.get("/api/status", api((req, res) => {
     },
     covers: covers.status(),
     info: info.status(),
+    radio: radio.status(),
     lastfm: lastfm.status(),
     sonos: {
       rooms: household.rooms().length,
@@ -512,6 +525,21 @@ app.post("/api/covers", api((req, res) => {
      back on does not have to wait six hours to mean anything. */
   if (body.sweep !== false && covers.status().enabled) sweepCovers();
   res.json(covers.status());
+}));
+
+/*
+ * Random Album Radio's two switches.
+ *
+ * Matching the genre is meaningless with the radio off, so the client hides it
+ * there — but it is still SET here when it is sent, because turning the radio
+ * off and on again should find the option the way it was left rather than back
+ * at its default.
+ */
+app.post("/api/radio", api((req, res) => {
+  const body = req.body || {};
+  if (body.enabled !== undefined) radio.setEnabled(!!body.enabled);
+  if (body.matchGenre !== undefined) radio.setMatchGenre(!!body.matchGenre);
+  res.json(radio.status());
 }));
 
 app.post("/api/rescan", api(async (req, res) => {
