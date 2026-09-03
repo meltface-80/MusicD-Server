@@ -142,6 +142,12 @@
             Theme
             <span class="menu-sub" id="theme-sub"></span>
           </button>
+          <!-- Which control sits in the corner of Now playing, and so where
+               leaving it takes you. See paintModalLeft() in app.js. -->
+          <button class="menu-item" type="button" id="menu-npleft">
+            Now playing button
+            <span class="menu-sub" id="npleft-sub"></span>
+          </button>
           <!-- The one thing this server asks the internet about, so it is the
                one thing with a switch. Hidden entirely when the container was
                started with COVER_LOOKUP=false — a switch that cannot do
