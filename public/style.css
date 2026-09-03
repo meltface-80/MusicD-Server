@@ -1439,6 +1439,33 @@ main {
 .zone-note { padding: 14px 18px 4px; font-size: 13px; color: var(--text-faint); line-height: 1.5; }
 
 /* ------------------------------------------------------------------ */
+/*  How the Library screen is ordered                                  */
+/* ------------------------------------------------------------------ */
+
+/* Two controls, above the wall they order: which sort, and which way it
+   points. Right-aligned so they sit under the top bar's own controls rather
+   than over the first album, which is what the screen is for. */
+.sort-bar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  margin: 0 0 14px;
+}
+.sort-ctl {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: var(--ctl-h-sm); padding: 0 12px;
+  background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  font: 600 13px var(--font-sans); cursor: pointer;
+  transition: background .15s ease, transform .08s ease;
+}
+.sort-ctl:hover  { background: var(--bg-elev-2); }
+.sort-ctl:active { transform: scale(.97); }
+.sort-ctl svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--text-dim); }
+/* The direction reads as the quieter half of the pair: it only ever qualifies
+   the sort beside it, and two controls of equal weight would leave nothing
+   saying which one is the subject. */
+.sort-dir { color: var(--text-dim); font-weight: 500; }
+
+/* ------------------------------------------------------------------ */
 /*  What a record is, and who made it                                  */
 /* ------------------------------------------------------------------ */
 

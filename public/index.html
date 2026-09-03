@@ -208,6 +208,21 @@
     </section>
 
     <section id="grid-view" class="hidden" aria-label="Albums">
+      <!-- The Library screen's order. Shown on that screen only: every other
+           grid IS an order — "Recently added" sorted by artist would be a row
+           that no longer means what its name says. -->
+      <div id="sort-bar" class="sort-bar hidden">
+        <button class="sort-ctl" id="sort-open" type="button" aria-haspopup="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 7h16M6 12h12M9 17h6"/>
+          </svg>
+          <span id="sort-label">Sort</span>
+        </button>
+        <button class="sort-ctl sort-dir" id="sort-dir" type="button">
+          <span id="sort-dir-label"></span>
+        </button>
+      </div>
       <!-- The artist's biography. Filled only by the artist screen; every
            other grid leaves it hidden. -->
       <div id="artist-info" class="info hidden"></div>
@@ -510,6 +525,26 @@
       <div class="share-actions" id="share-actions"></div>
       <p class="share-hint" id="share-hint"></p>
       <p class="share-err" id="share-err"></p>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <!--  How the Library screen is ordered                                -->
+  <!-- ---------------------------------------------------------------- -->
+  <!-- A sheet rather than a menu on the bar: the bar repaints when the order
+       changes, and a list that rebuilds under a finger mid-tap is how the
+       wrong sort gets chosen. -->
+  <div id="sort-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="Sort albums by">
+    <div class="sheet-backdrop" data-close-sort></div>
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <span>Sort by</span>
+        <button class="icon-btn" type="button" data-close-sort aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="sort-list" class="zone-list"></div>
     </div>
   </div>
 

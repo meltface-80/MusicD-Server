@@ -658,3 +658,76 @@ test("correcting a name throws that album's write-up away", async () => {
   /* Put the library back the way the tests above left it. */
   await json("/api/album/name", { method: "POST", body: { album: FIELD, title: "", artist: "" } });
 });
+
+/* ------------------------------------------------------------------ */
+/*  How the Library screen is ordered                                  */
+/* ------------------------------------------------------------------ */
+
+test("the order comes with the vocabulary to draw it", async () => {
+  /* The sheet is built from the SERVER's list rather than a copy kept in the
+     client, so the two cannot drift as sorts are added or renamed. */
+  const { status, body } = await json("/api/sort");
+  assert.strictEqual(status, 200);
+  assert.deepStrictEqual(body.view, { sort: "artist", dir: "asc", seed: 1 },
+    "and opens on the shelf order it always did");
+  assert.strictEqual(body.options.length, 7);
+  for (const o of body.options) {
+    assert.ok(o.id && o.label, JSON.stringify(o));
+    /* Every direction has a NAME for that sort: "Newest first" and "Z → A" are
+       the same arrow, and one shared label would be wrong for one of them. */
+    if (o.directional) assert.ok(o.asc && o.desc, o.id + " names both directions");
+  }
+});
+
+test("a chosen order is stored and applied to the row and the grid alike", async () => {
+  const saved = await json("/api/sort", {
+    method: "POST", body: { sort: "album", dir: "desc" }
+  });
+  assert.deepStrictEqual(saved.body.view, { sort: "album", dir: "desc", seed: 1 });
+
+  const grid = await json("/api/albums?row=library&limit=200");
+  const titles = grid.body.albums.map(a => a.title);
+  assert.deepStrictEqual(titles, [...titles].sort().reverse(), titles.join(", "));
+
+  /* The Home row is the same shelf, so it is in the same order — a row
+     labelled "Library" that disagrees with the screen it opens into is two
+     screens disagreeing about one thing. */
+  const home = await json("/api/home?limit=60");
+  const row = home.body.rows.find(r => r.key === "library");
+  assert.deepStrictEqual(row.albums.map(a => a.title), titles.slice(0, row.albums.length));
+});
+
+test("what is stored is always something this server would accept", async () => {
+  /* Normalised on the way IN as well as out, so a request from an older client
+     or a hand-made one cannot leave a value that breaks the screen later. */
+  const odd = await json("/api/sort", {
+    method: "POST", body: { sort: "by-vibes", dir: "sideways", seed: -3 }
+  });
+  assert.deepStrictEqual(odd.body.view, { sort: "artist", dir: "asc", seed: 1 });
+});
+
+test("the order survives the server being restarted", async () => {
+  /*
+   * THE POINT OF STORING IT SERVER-SIDE. It lives in DATA_DIR, which the
+   * container's own lifetime does not touch and the in-app updater is not
+   * allowed to write to — so a reboot, a restart and an update all find it as
+   * it was left. A browser's storage would also lose it to a cleared cache or
+   * a re-added home-screen shortcut.
+   */
+  await json("/api/sort", { method: "POST", body: { sort: "plays" } });
+
+  const dbLib = require("../lib/db");
+  const settingsLib = require("../lib/settings");
+  const library = require("../lib/library");
+  /* A second connection to the same file on disk, which is what a restart is
+     from the setting's point of view. */
+  const fresh = dbLib.open(process.env.DATA_DIR);
+  try {
+    const stored = settingsLib.open(fresh).get("library.sort");
+    assert.deepStrictEqual(library.normaliseSort(JSON.parse(stored)),
+      { sort: "plays", dir: "desc", seed: 1 });
+  } finally { fresh.close(); }
+
+  /* Put it back so the ordering tests above do not depend on running first. */
+  await json("/api/sort", { method: "POST", body: { sort: "artist" } });
+});

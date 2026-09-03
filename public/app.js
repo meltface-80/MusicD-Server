@@ -105,6 +105,10 @@ const state = {
      everything, "back" steps out one screen. A preference, set in Settings —
      see applyNpLeft(). */
   npLeft: "home",
+  /* The Library screen's order, and the vocabulary the sheet is drawn from.
+     Both come from the server — see loadSort(). */
+  sort: null,
+  sortOptions: [],
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
@@ -491,6 +495,9 @@ function showView(view, title) {
      forgot would show the last artist's biography over a row of albums. */
   $("artist-info").textContent = "";
   $("artist-info").classList.add("hidden");
+  /* Same reasoning for the sort bar, which belongs to the Library grid alone.
+     openRow() paints it back on for that one. */
+  $("sort-bar").classList.add("hidden");
   window.scrollTo(0, 0);
 }
 
@@ -580,6 +587,7 @@ async function openRow(key) {
   for (let i = 0; i < 18; i++) grid.appendChild(skeletonCard());
 
   state.grid = { key, offset: 0, done: false, loading: false, first: true };
+  paintSortBar();
   await loadGridPage();
 }
 
@@ -693,6 +701,134 @@ async function showArtist(name) {
     toast(e.message, true);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  How the Library screen is ordered                                  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * KEPT BY THE SERVER, NOT BY THIS PHONE.
+ *
+ * The order survives an update, a reboot and a restart because it lives in the
+ * database — a browser's storage would lose it to a cleared cache or a re-added
+ * home-screen shortcut, which is exactly the failure that reads as a
+ * regression. It is shared between phones for the same reason the home rows'
+ * order is: it describes the library, not the device.
+ *
+ * Fetched once at startup, so opening the Library screen costs no extra
+ * request and the bar is right the first time it is painted.
+ */
+async function loadSort() {
+  try {
+    const data = await api("/api/sort");
+    state.sort = data.view;
+    state.sortOptions = data.options || [];
+  } catch {
+    /* Silent: the screen still works, in whatever order the server used. A
+       toast at startup about a preference nobody has asked for yet would be
+       the first thing a new install said. */
+  }
+  paintSortBar();
+}
+
+const sortDef = (id) => state.sortOptions.find(o => o.id === id) || null;
+
+/* A seed the last one was not, so a reshuffle visibly reorders instead of
+   repainting the same shuffle. The server clamps to 1..100000 and treats
+   anything else as 1, which would silently mean "the same shuffle again". */
+function nextSeed(current) {
+  let seed = current;
+  while (seed === current) seed = Math.floor(Math.random() * 100000) + 1;
+  return seed;
+}
+
+/* What this order is CALLED in the direction it is in — "Newest first" and
+   "Oldest first" are the same arrow on the same sort, so the label has to come
+   from the option rather than from the word "descending". */
+function sortDirLabel(view) {
+  const def = sortDef(view && view.sort);
+  if (!def || !def.directional) return "";
+  return view.dir === "desc" ? def.desc : def.asc;
+}
+
+/*
+ * The bar, on the Library screen and nowhere else.
+ *
+ * Every other grid IS an order: "Recently added" re-sorted by artist is a row
+ * that no longer means what its name says, and a control that changes what a
+ * screen is called is worse than no control.
+ */
+function paintSortBar() {
+  const bar = $("sort-bar");
+  const onLibrary = state.view === "grid" && state.grid && state.grid.key === "library";
+  bar.classList.toggle("hidden", !onLibrary || !state.sort);
+  if (!onLibrary || !state.sort) return;
+
+  const def = sortDef(state.sort.sort);
+  $("sort-label").textContent = def ? def.label : "Sort";
+  $("sort-open").setAttribute("aria-label", "Sort by " + (def ? def.label : ""));
+
+  const directional = !!(def && def.directional);
+  /* Random has no direction, so the control becomes the only thing a shuffle
+     needs: another shuffle. */
+  $("sort-dir-label").textContent = directional ? sortDirLabel(state.sort) : "Shuffle";
+  $("sort-dir").setAttribute("aria-label", directional
+    ? "Direction — " + sortDirLabel(state.sort)
+    : "Shuffle again");
+}
+
+/* Sent, stored, then repainted from what came BACK. The server decides what a
+   valid view is, so painting from what was asked for could show an order the
+   library is not actually in. */
+async function saveSort(next) {
+  try {
+    const data = await post("/api/sort", next);
+    state.sort = data.view;
+    state.sortOptions = data.options || state.sortOptions;
+  } catch (e) {
+    toast(e.message, true);
+    return;
+  }
+  /* The wall is re-read from the top: a new order makes every page boundary
+     meaningless, and appending the next page of the old order underneath would
+     interleave two sorts. openRow repaints the bar on its way through. */
+  openRow("library");
+}
+
+function openSortSheet() {
+  const host = $("sort-list");
+  host.textContent = "";
+  for (const option of state.sortOptions) {
+    const row = el("button", "zone-row");
+    row.type = "button";
+    const on = !!(state.sort && state.sort.sort === option.id);
+    row.classList.toggle("is-active", on);
+    const label = el("span");
+    label.appendChild(el("span", "", option.label));
+    /* The chosen one says which way it is pointing. The others say nothing —
+       promising a direction they have not been given yet would be a second
+       thing to read on every row. */
+    if (on && option.directional) {
+      label.appendChild(el("span", "zone-sub", sortDirLabel(state.sort)));
+    }
+    row.appendChild(label);
+    row.addEventListener("click", () => {
+      closeSortSheet();
+      if (on) return;                       // already this order: nothing to do
+      /* A sort opens in ITS OWN default direction rather than keeping the last
+         one: "sort by year" means newest first, and inheriting "A → Z" from the
+         alphabetical sort would answer a different question. Leaving dir out is
+         what asks the server for that default. */
+      saveSort({ sort: option.id });
+    });
+    host.appendChild(row);
+  }
+  $("sort-sheet").classList.remove("hidden");
+  navOpen("sheet", hideSortSheet);
+}
+
+function closeSortSheet() { navBack(); }
+function hideSortSheet() { $("sort-sheet").classList.add("hidden"); }
 
 /* ---- Artists ----------------------------------------------------- */
 
@@ -2773,6 +2909,19 @@ function wire() {
     applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
   });
 
+  $("sort-open").addEventListener("click", openSortSheet);
+  for (const node of document.querySelectorAll("[data-close-sort]")) {
+    node.addEventListener("click", closeSortSheet);
+  }
+  $("sort-dir").addEventListener("click", () => {
+    const def = sortDef(state.sort && state.sort.sort);
+    if (!def) return;
+    /* A shuffle's control is another shuffle; everything else flips. */
+    saveSort(def.directional
+      ? { sort: state.sort.sort, dir: state.sort.dir === "desc" ? "asc" : "desc" }
+      : { sort: state.sort.sort, seed: nextSeed(state.sort.seed) });
+  });
+
   $("menu-npleft").addEventListener("click", () => {
     applyNpLeft(state.npLeft === "back" ? "home" : "back");
   });
@@ -2968,6 +3117,7 @@ function wire() {
 
   wire();
   loadMenuRows();
+  loadSort();
   startProgressTicker();
   registerServiceWorker();
   loadHome();
