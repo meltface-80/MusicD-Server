@@ -207,6 +207,13 @@ part of the fix.
   album asks through it. `lib/duplicates.js` is the one deliberate exception —
   grouping matches what is ON DISK, because a match MOVES the demoted copy's
   play counts and typing the name back would not bring them home.
+- **An auto margin switches off a flex item's stretch.** `.modal-body` centres
+  itself with `margin: 0 auto`; on the Now playing face the panel is a flex
+  COLUMN, so those auto margins made the body shrink-to-fit and it took its
+  width from its widest content — the artwork. The whole screen then resized
+  around the cover's INTRINSIC PIXEL SIZE, which is why a low-resolution sleeve
+  made the app look different. A definite `width: 100%` is what gives the
+  stretch back. Suspect this whenever a column sizes itself to a picture.
 - **A fixed overlay does not stop the page behind it scrolling.** `overflow:
   hidden` stops a panel scrolling, not the GESTURE: the drag goes up the chain
   to the document, which scrolls invisibly under the overlay and paints its own

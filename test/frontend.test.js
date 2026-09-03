@@ -892,6 +892,31 @@ test("a short window scrolls rather than putting the transport out of reach", ()
   assert.match(css, /@media \(max-height: 520px\) \{[^@]*\.modal\.face-np \.modal-panel \{ overflow-y: auto/s);
 });
 
+test("Now playing does not resize itself around the cover's pixel size", () => {
+  /*
+   * THE BUG THIS PINS.
+   *
+   * .modal-body carries `margin: 0 auto` to centre itself on a wide screen. On
+   * this face the panel is a flex COLUMN, and an auto margin in a flex item's
+   * cross axis switches stretching OFF — so the body became shrink-to-fit and
+   * took its width from its widest content, which here is the artwork. A
+   * 1400px sleeve filled the phone; a 300px one shrank the whole column to
+   * 300px; a tiny one collapsed it to the width of the transport buttons. The
+   * same screen looked like two different apps depending on how the cover
+   * happened to have been scanned.
+   *
+   * A definite width gives back the stretch the auto margins took away.
+   */
+  const body = css.slice(css.indexOf(".modal.face-np .modal-body {"));
+  const block = body.slice(0, body.indexOf("\n}"));
+  assert.match(block, /width: 100%/, "the column fills the panel whatever is in it");
+  /* And the artwork still fits rather than crops, which is the other half of
+     the contract: the FRAME is constant, and a sleeve that is not square
+     letterboxes inside it instead of losing its edges. */
+  const art = css.slice(css.indexOf(".np-art img {"));
+  assert.match(art.slice(0, art.indexOf("}")), /object-fit: contain/);
+});
+
 test("Now playing is a screen at every width, never a floating dialog", () => {
   /* At >=720px the panel is otherwise a centred auto-height box, which gives
      height-driven artwork nothing to size against — it collapses to nothing
@@ -1171,14 +1196,36 @@ test("the Play and Queue buttons are one control in two halves", () => {
   assert.match(body, /min-height: var\(--ctl-h-lg\)/, "and taller than the ordinary control");
 });
 
-test("a track row has the same inset on both sides", () => {
-  /* Right-aligning the number inside a fixed box pushed every single digit
-     about twenty pixels in, and the list read as though the left margin were
-     wider than the right. */
-  assert.match(css, /\.track-list li \{[^}]*padding: 10px 0;/s);
+test("a track row has the same air on both sides", () => {
+  /* The row used to run edge to edge, so the duration sat hard against the
+     right of the screen while the title was a whole number-column further in
+     from the left. A gutter gives the duration somewhere to stop and gives the
+     left the same amount back. */
+  assert.match(css, /\.track-list li \{[^}]*padding: 10px 8px;/s, "a gutter, equal both sides");
+  assert.match(css, /\.track-list li\.is-disc \{[^}]*padding: 18px 8px 6px;/s,
+    "and the disc heading keeps to it");
+  assert.match(css, /#tracks-label \{ padding-left: 8px; \}/,
+    "so does the heading over the list");
+  /* The rule under each track still spans the full width — a hairline that
+     stops short of the edge turns a track list into a stack of cards. */
+  assert.ok(!/\.track-list li \{[^}]*margin: 0 8px/s.test(css));
   assert.match(css, /\.t-no \{[^}]*text-align: left;/s);
   assert.match(css, /\.t-no \{[^}]*font-variant-numeric: tabular-nums/s,
     "figures still line the titles up");
+});
+
+test("the number column is absent on an album with no track numbers", () => {
+  /* A rip whose numbering lives in the filename carries no number tag at all,
+     so the column was a stack of placeholder dots pushing every title a
+     further 38px in from a left edge that already had more air than the right.
+     Decided once for the whole list, so one file with a lost tag does not sit
+     its title out of line with the other eleven. */
+  const render = js.slice(js.indexOf("function renderAlbum(album)"));
+  const body = render.slice(0, render.indexOf("\n}"));
+  assert.match(body, /const numbered = album\.tracks\.some\(t => t\.no\);/,
+    "asked of the whole album, not of each row");
+  assert.match(body, /if \(numbered\) li\.appendChild\(el\("span", "t-no"/,
+    "and the column only exists when the answer is yes");
 });
 
 test("the progress bar runs on a clock, not on the poll", () => {
