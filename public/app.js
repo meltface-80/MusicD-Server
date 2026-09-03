@@ -481,6 +481,12 @@ function showView(view, title) {
   }
   $("screen-title").textContent = title || "";
   $("topbar-back").classList.toggle("hidden", view === "home");
+  /* The biography belongs to the artist screen, and every other grid — a home
+     row opened in full — shares that screen's markup. Cleared HERE, once,
+     rather than in each of the openers that do not want it: an opener that
+     forgot would show the last artist's biography over a row of albums. */
+  $("artist-info").textContent = "";
+  $("artist-info").classList.add("hidden");
   window.scrollTo(0, 0);
 }
 
@@ -647,6 +653,8 @@ function openArtist(name) {
 
 async function showArtist(name) {
   showView("grid", name);
+  loadInfo($("artist-info"), "artist:" + name,
+    "/api/artist/" + encodeURIComponent(name) + "/info");
   /* An artist's albums arrive in one go, so there is no pager here — and a
      pager left over from the row the user came from would append that row's
      next page onto this screen. */
@@ -1329,6 +1337,119 @@ function renderAlbum(album) {
   }
   $("tracks-label").textContent = album.multiDisc ? "Tracks" : `Tracks (${album.tracks.length})`;
   renderVersions(album);
+
+  /* Keyed on album.id, which is the PRIMARY's — /api/album answers with the
+     record's identity whichever version was asked for. So switching version
+     tabs re-paints the same write-up rather than fetching a second one. */
+  loadInfo($("album-info"), "album:" + album.id,
+    "/api/album/" + b64url(album.id) + "/info");
+}
+
+/* ------------------------------------------------------------------ */
+/*  What a record is, and who made it                                  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * ONE RENDERER, TWO SCREENS.
+ *
+ * An album's write-up and an artist's biography are the same object — some
+ * prose, a source, a licence and a link — so they are painted by the same
+ * function. The album's carries a second part, the critical reception, and
+ * that is the only difference between them.
+ */
+
+/*
+ * THE CREDIT IS NOT PART OF WHAT COLLAPSES.
+ *
+ * Wikipedia and Last.fm both give their prose away on one condition: that it
+ * is credited and linked. So the credit line sits OUTSIDE the clamped text and
+ * is painted before it — a licence that is only visible after somebody presses
+ * "Read more" is a licence that is usually not visible at all.
+ */
+function creditFor(info) {
+  const line = el("p", "info-credit");
+  line.appendChild(document.createTextNode("From "));
+  const link = el("a", "", info.source === "lastfm" ? "Last.fm" : "Wikipedia");
+  link.href = info.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  line.appendChild(link);
+  if (info.title) {
+    /* What the SOURCE calls it, which is not always what the library does:
+       "Hex (Bark Psychosis album)" is the article, "Hex" is the record. Saying
+       so is how somebody spots a wrong match. */
+    line.appendChild(document.createTextNode(" · " + info.title));
+  }
+  if (info.licence) line.appendChild(document.createTextNode(" · " + info.licence));
+  return line;
+}
+
+/* Paragraphs, not one block of text with newlines in it — an article's blank
+   lines are paragraph breaks and reading them as spaces makes a wall. */
+function prose(text, cls) {
+  const host = el("div", cls);
+  for (const para of String(text || "").split(/\n{2,}/)) {
+    const line = para.trim();
+    if (line) host.appendChild(el("p", "", line));
+  }
+  return host;
+}
+
+function renderInfo(host, info) {
+  host.textContent = "";
+  host.classList.toggle("hidden", !info || !info.summary);
+  host.classList.remove("is-open");
+  if (!info || !info.summary) return;
+
+  const body = el("div", "info-body");
+  body.appendChild(prose(info.summary, "info-summary"));
+  if (info.review) {
+    body.appendChild(el("div", "section-label", "Critical reception"));
+    body.appendChild(prose(info.review, "info-review"));
+  }
+  host.appendChild(body);
+
+  /* The button appears only when there is something folded away. A "Read more"
+     over three lines that are all already on screen is a control that does
+     nothing, and this is measured after the paint rather than guessed from the
+     character count — the same text is two lines on a tablet and six on a
+     phone. */
+  const more = el("button", "info-more", "Read more");
+  more.type = "button";
+  more.addEventListener("click", () => {
+    const open = host.classList.toggle("is-open");
+    more.textContent = open ? "Show less" : "Read more";
+  });
+  host.appendChild(more);
+  host.appendChild(creditFor(info));
+
+  requestAnimationFrame(() => {
+    more.classList.toggle("hidden", body.scrollHeight <= body.clientHeight + 4);
+  });
+}
+
+/*
+ * Fetched when the screen opens, and never blocking it.
+ *
+ * `state.infoFor` is which write-up the app currently wants. An answer that
+ * comes back for anything else is dropped: the album screen can be closed and
+ * another one opened while a request is still out, and painting a late answer
+ * onto the screen that replaced it is how the wrong band's biography ends up
+ * under the right band's albums.
+ */
+async function loadInfo(host, key, path) {
+  host.textContent = "";
+  host.classList.add("hidden");
+  state.infoFor = key;
+  try {
+    const data = await api(path);
+    if (state.infoFor !== key) return;
+    renderInfo(host, data.info);
+  } catch {
+    /* Silent on purpose, and the one place in this app where that is right: a
+       write-up is not what anybody opened the screen for, and a toast about a
+       failed biography would interrupt somebody who came here to press play. */
+  }
 }
 
 /* ------------------------------------------------------------------ */

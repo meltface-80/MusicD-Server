@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.17
+
+### An album screen says what the record is, and an artist screen who they are
+- **Wikipedia, fetched the first time you open the screen and never again.** An
+  album gets its opening paragraphs and, where the article has one, its critical
+  reception; an artist gets their biography. Nothing is looked up in the
+  background and nothing is looked up by the scan — a library of four thousand
+  albums costs no requests at all until you look at something.
+- **Kept forever once fetched.** An encyclopaedia article about a 1988 record is
+  not going to become a different article, so re-asking for it would spend
+  Wikipedia's bandwidth to be told the same thing. A MISS is the one thing that
+  expires, after a week, so an album that gains an article next year is not
+  marked unknown for ever.
+- **Last.fm answers for the records Wikipedia has never heard of** — bootlegs,
+  small pressings, self-released work. It needs no new credential: the key is
+  the developer registration already read for scrobbling, and the two calls it
+  makes change nothing and are unsigned.
+- **The first search result is never taken on trust.** Wikipedia ranks the
+  disambiguation page for "Hex" above the Bark Psychosis album, and Earth made
+  a record of the same name; "Souvlaki" is a Greek dish before it is a Slowdive
+  album. So every candidate is checked against the library's own facts before it
+  is believed, and an album with no confident match shows nothing at all. A
+  wrong biography is worse than an absent one, because nobody reports it.
+- **The credit and the link are not optional and do not collapse.** Wikipedia
+  and Last.fm both give their prose away on condition it is credited and linked,
+  so the source, the article's own title and the licence sit outside the folded
+  text and are visible before anybody presses Read more.
+- **Nothing fetched is written back into the library.** Not a title, not an
+  artist, and above all not a grouping — which still matches what is on disk,
+  because folding two albums together moves one of their play counts and no
+  website gets to cause that.
+- Correcting an album's name with the Edit dialog throws its write-up away, so
+  the next open asks again with the name you typed. That is the whole of the
+  disambiguation UI, and it already existed.
+- `INFO_LOOKUP=false` turns the whole thing off for a container, whatever the
+  app asks for — the same shape of switch as `COVER_LOOKUP`.
+
 ## 0.4.16
 
 ### The mini transport is a quarter taller

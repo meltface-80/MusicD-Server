@@ -1351,3 +1351,80 @@ test("a correction is saved, then re-read, rather than painted on trust", () => 
   assert.match(body, /state\.homeStale = true/,
     "every row on Home carries this album's name on a card");
 });
+
+/* ------------------------------------------------------------------ */
+/*  What a record is, and who made it                                  */
+/* ------------------------------------------------------------------ */
+
+test("the write-up and the biography are one renderer on two screens", () => {
+  assert.ok(htmlIds.has("album-info"), "the album's");
+  assert.ok(htmlIds.has("artist-info"), "the artist's");
+  assert.match(js, /function renderInfo\(host, info\)/, "one function paints both");
+  assert.match(js, /loadInfo\(\$\("album-info"\)/);
+  assert.match(js, /loadInfo\(\$\("artist-info"\)/);
+});
+
+test("the credit is outside the part that collapses", () => {
+  /*
+   * Wikipedia and Last.fm both give their prose away on one condition: that it
+   * is credited and linked. A credit that only appears once somebody presses
+   * "Read more" is a credit that is usually not shown at all — so it is
+   * appended after the button rather than into the clamped body, and the
+   * stylesheet folds .info-body alone.
+   */
+  const render = js.slice(js.indexOf("function renderInfo(host, info)"));
+  const body = render.slice(0, render.indexOf("\n}"));
+  assert.ok(body.indexOf("host.appendChild(more)") < body.indexOf("creditFor(info)"),
+    "the credit comes after the fold, not inside it");
+  assert.match(css, /\.info-body \{[^}]*line-clamp: 5/s, "the body is what folds");
+  assert.ok(!/\.info \{[^}]*line-clamp/s.test(css), "not the block that holds the credit");
+});
+
+test("the credit names the source, the licence and a way to the article", () => {
+  const credit = js.slice(js.indexOf("function creditFor(info)"));
+  const body = credit.slice(0, credit.indexOf("\n}"));
+  assert.match(body, /"Last\.fm" : "Wikipedia"/, "which of the two answered");
+  assert.match(body, /link\.href = info\.url/, "a link back, which both licences ask for");
+  assert.match(body, /info\.licence/, "and the licence it arrived under");
+  /* A link out of the app opens away from it, and rel is what stops the new
+     tab reaching back into this one. */
+  assert.match(body, /link\.target = "_blank"/);
+  assert.match(body, /noopener noreferrer/);
+});
+
+test("a late answer cannot land on the screen that replaced it", () => {
+  /* The album screen can be closed and another opened while a request is still
+     out. Painting a late answer onto whatever is showing now is how the wrong
+     band's biography ends up under the right band's albums. */
+  const load = js.slice(js.indexOf("async function loadInfo("));
+  const body = load.slice(0, load.indexOf("\n}"));
+  assert.match(body, /state\.infoFor = key/);
+  assert.match(body, /if \(state\.infoFor !== key\) return;/);
+});
+
+test("a failed lookup is silent", () => {
+  /* The one place in this app where a silent catch is right, and it says so:
+     a write-up is not what anybody opened the screen for, and a toast about a
+     failed biography interrupts somebody who came to press play. */
+  const load = js.slice(js.indexOf("async function loadInfo("));
+  const body = load.slice(0, load.indexOf("\n}"));
+  assert.ok(!/toast\(/.test(body), "no toast for something nobody asked for");
+  assert.match(body, /\/\* Silent on purpose/, "and the silence carries its reason");
+});
+
+test("the biography belongs to the artist screen, and is cleared once", () => {
+  /* Every home row opened in full shares the artist screen's markup, so a
+     biography left behind would appear over a row of albums. */
+  const show = js.slice(js.indexOf("function showView(view, title)"));
+  const body = show.slice(0, show.indexOf("\n}"));
+  assert.match(body, /\$\("artist-info"\)\.classList\.add\("hidden"\)/,
+    "cleared in the one place every view change goes through");
+});
+
+test("an album's write-up is keyed on the record, not the version on show", () => {
+  /* /api/album answers with the record's identity whichever version was asked
+     for, so album.id is the primary's — switching version tabs repaints the
+     same write-up rather than fetching a second one. */
+  assert.match(js, /loadInfo\(\$\("album-info"\), "album:" \+ album\.id,/);
+  assert.match(js, /"\/api\/album\/" \+ b64url\(album\.id\) \+ "\/info"/);
+});

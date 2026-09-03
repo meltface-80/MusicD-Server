@@ -8,7 +8,7 @@ const path = require("path");
 const http = require("http");
 
 const { buildLibrary } = require("./fixtures");
-const { encodeId } = require("../lib/ids");
+const { encodeId, decodeId } = require("../lib/ids");
 
 /* index.js reads its configuration from the environment at require time, so
    the workspace has to exist before it is loaded. Everything in this file
@@ -595,4 +595,66 @@ test("correcting a name is a POST, so nothing can rename an album by being linke
   const source = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
   assert.match(source, /app\.post\("\/api\/album\/name"/);
   assert.ok(!/app\.get\("\/api\/album\/name"/.test(source));
+});
+
+/* ------------------------------------------------------------------ */
+/*  What a record is, and who made it                                  */
+/* ------------------------------------------------------------------ */
+
+/* This server is started with no INFO_LOOKUP override, so the lookup is
+   available — but nothing in a test run reaches the internet, and the routes
+   below prove exactly that: they answer, and they answer null. */
+
+test("an album's write-up is its own request, not part of the album", async () => {
+  /* Folding it into /api/album would hold the track list behind a lookup that
+     may go to the internet. Two calls means the album is there instantly. */
+  const album = await json("/api/album/" + FIELD);
+  assert.ok(!("info" in album.body), "the album screen's own payload is unchanged");
+
+  const info = await json("/api/album/" + FIELD + "/info");
+  assert.strictEqual(info.status, 200);
+  assert.ok("info" in info.body, "and the write-up has an endpoint of its own");
+});
+
+test("no confident match is a 200 with nothing in it, never an error", async () => {
+  /* An error would tell the client to retry something already settled and
+     written down. Null is the honest answer for "asked, and there is none". */
+  const res = await json("/api/artist/" + encodeURIComponent("Nobody At All") + "/info");
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.info, null);
+});
+
+test("an album that is not in the library has no write-up", async () => {
+  /* Not an error: the id is well formed and the question is a fair one, and
+     the answer is that there is nothing to say. */
+  const missing = await json("/api/album/" + encodeId("a:nowhere/at all") + "/info");
+  assert.strictEqual(missing.status, 200);
+  assert.strictEqual(missing.body.info, null);
+});
+
+test("the status says whether looking things up is allowed at all", async () => {
+  const status = await json("/api/status");
+  assert.ok(status.body.info, "the client is told");
+  assert.strictEqual(typeof status.body.info.available, "boolean");
+  assert.strictEqual(typeof status.body.info.known, "number");
+});
+
+test("correcting a name throws that album's write-up away", async () => {
+  /* The write-up was found by searching for the old name, so a rename makes it
+     the answer to a question nobody is asking. */
+  const db = server.db;
+  db.prepare(`INSERT INTO info (kind, key, source, summary, fetched_at, ok)
+              VALUES ('album', ?, 'wikipedia', 'Something.', ?, 1)`)
+    .run(decodeId(FIELD), Date.now());
+  assert.ok(db.prepare("SELECT 1 FROM info WHERE key = ?").get(decodeId(FIELD)),
+    "it is there to begin with");
+
+  await json("/api/album/name", {
+    method: "POST", body: { album: FIELD, title: "Sea Nettles", artist: "Chris Watson" }
+  });
+  assert.strictEqual(db.prepare("SELECT 1 FROM info WHERE key = ?").get(decodeId(FIELD)),
+    undefined, "and gone after the rename");
+
+  /* Put the library back the way the tests above left it. */
+  await json("/api/album/name", { method: "POST", body: { album: FIELD, title: "", artist: "" } });
 });

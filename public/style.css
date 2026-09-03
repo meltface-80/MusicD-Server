@@ -1399,6 +1399,70 @@ main {
 .zone-note { padding: 14px 18px 4px; font-size: 13px; color: var(--text-faint); line-height: 1.5; }
 
 /* ------------------------------------------------------------------ */
+/*  What a record is, and who made it                                  */
+/* ------------------------------------------------------------------ */
+
+/* One block, two screens: under an album's track list, and above an artist's
+   albums. Set apart from the app's own voice by the ground it sits on rather
+   than by a heading — this is somebody else's writing, and it should not read
+   as though MusicD wrote it. */
+.info {
+  margin: 22px 0 0;
+  padding: 16px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left;
+}
+#artist-info { margin: 0 0 18px; }
+
+/*
+ * Folded to about five lines until it is asked to open.
+ *
+ * -webkit-line-clamp is the one that works on every browser this app runs in;
+ * the unprefixed line-clamp is here for the ones that have moved on. Both need
+ * the -webkit-box display, which is why this is not simply a max-height: a
+ * height cut would slice a line in half, and the clamp cuts at a line and adds
+ * the ellipsis itself.
+ */
+.info-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+          line-clamp: 5;
+  overflow: hidden;
+}
+.info.is-open .info-body {
+  display: block;
+  overflow: visible;
+}
+.info-body p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: var(--text-dim); }
+.info-body p:last-child { margin-bottom: 0; }
+.info-body .section-label { margin-top: 14px; }
+
+.info-more {
+  display: inline-block; margin-top: 10px; padding: 0;
+  background: none; border: 0; cursor: pointer;
+  font: 600 13px var(--font-sans); color: var(--accent-text);
+}
+.info-more:hover { text-decoration: underline; }
+
+/*
+ * The credit, and why it is outside the fold.
+ *
+ * Wikipedia and Last.fm both give their prose away on one condition: that it
+ * is credited and linked. A credit that only appears once somebody presses
+ * "Read more" is a credit that is usually not shown at all, so it sits below
+ * the button rather than inside the part that collapses.
+ */
+.info-credit {
+  margin: 12px 0 0; padding-top: 10px;
+  border-top: 1px solid var(--panel-hairline);
+  font-size: 12px; line-height: 1.5; color: var(--text-faint);
+}
+.info-credit a { color: var(--text-dim); }
+
+/* ------------------------------------------------------------------ */
 /*  Correcting an album's name                                         */
 /* ------------------------------------------------------------------ */
 
