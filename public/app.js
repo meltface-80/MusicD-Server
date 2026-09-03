@@ -1966,6 +1966,35 @@ function banner(text, isError = false) {
  * lookup off: a switch that cannot do anything is a worse answer than no
  * switch.
  */
+/*
+ * The two Random Album Radio rows.
+ *
+ * The genre row is ABSENT rather than dimmed while the radio is off, because
+ * it is not a setting that is currently unavailable — it is a setting that
+ * describes something not happening. The same rule the covers row follows for
+ * a container with the lookup switched off: a control that cannot do anything
+ * is worse than no control.
+ *
+ * Painted from /api/status like every other row here, so a second phone that
+ * turned it on is reflected on this one within the poll rather than the two
+ * disagreeing until a reload.
+ */
+function showRadio(radio) {
+  state.radio = radio;
+  const row = $("menu-radio");
+  row.classList.toggle("is-off", !radio.enabled);
+  $("radio-sub").textContent = radio.enabled
+    ? "On — keeps the queue full with random albums"
+    : "Off — the queue ends where you left it";
+
+  const genre = $("menu-radio-genre");
+  genre.classList.toggle("hidden", !radio.enabled);
+  genre.classList.toggle("is-off", !radio.matchGenre);
+  $("radio-genre-sub").textContent = radio.matchGenre
+    ? "On — picks from the genre that is playing"
+    : "Off — anything in the library";
+}
+
 function showCovers(covers) {
   state.covers = covers;
   const row = $("menu-covers");
@@ -2055,6 +2084,7 @@ async function refreshStatus() {
     }
 
     if (status.covers) showCovers(status.covers);
+    if (status.radio) showRadio(status.radio);
     if (status.lastfm) showLastfm(status.lastfm);
     describeSettings();
 
@@ -2652,6 +2682,18 @@ function wire() {
     }, 500);
   };
   const dropCovers = () => { if (coverHold) { clearTimeout(coverHold); coverHold = null; } };
+  for (const [id, field] of [["menu-radio", "enabled"], ["menu-radio-genre", "matchGenre"]]) {
+    $(id).addEventListener("click", async () => {
+      const now = state.radio || { enabled: false, matchGenre: true };
+      try {
+        /* Painted from what the SERVER says it did, not from what was asked
+           for: this setting lives in the database and drives a loop nothing on
+           this phone can see, so the server's answer is the only true one. */
+        showRadio(await post("/api/radio", { [field]: !now[field] }));
+      } catch (e) { toast(e.message, true); }
+    });
+  }
+
   $("menu-covers").addEventListener("pointerdown", holdCovers);
   for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
     $("menu-covers").addEventListener(event, dropCovers);
