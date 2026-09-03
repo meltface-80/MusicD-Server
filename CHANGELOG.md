@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.19
+
+### Leaving Now playing can go back instead of Home
+- **Settings › Now playing button** chooses what the control in the corner of
+  the Now playing screen does. **Home** shows the house and returns to the home
+  screen, which is what it has always done and is still the default. **Back**
+  shows a chevron and returns to the screen you came from.
+- The reason it is a choice rather than a fix: the mini transport is on every
+  screen, so Now playing can be reached from anywhere and there is often no
+  obvious "back" — which is what Home was built on. But search an artist, open
+  their albums, tap the bar to see what is playing, and Home is exactly the
+  wrong place to be sent. Neither answer is right for everybody.
+- Kept on the device, beside the theme rather than in the database: the home
+  screen's row order is the library's arrangement and every phone in the house
+  should agree about it, while this is how one person's thumb gets out of a
+  screen.
+- Changing it repaints a panel that is already open behind the menu, so it
+  takes effect where you can see it rather than next time.
+
 ## 0.4.18
 
 ### Now playing stopped resizing itself around the cover

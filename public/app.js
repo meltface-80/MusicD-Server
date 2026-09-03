@@ -101,6 +101,10 @@ const state = {
   album: null,           // the album open in the modal
   face: "album",         // album | np | queue
   npTab: "np",           // which tab the Now playing face is showing
+  /* What the corner control does when leaving Now playing: "home" unwinds
+     everything, "back" steps out one screen. A preference, set in Settings —
+     see applyNpLeft(). */
+  npLeft: "home",
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
@@ -1123,8 +1127,7 @@ function setFace(face) {
   $("queue-pane").classList.toggle("hidden", face !== "queue");
 
   $("modal-tabs").classList.toggle("hidden", !onNp);
-  $("modal-back").classList.toggle("hidden", onNp);
-  $("modal-home").classList.toggle("hidden", !onNp);
+  paintModalLeft();
   /* One corner, two jobs: the heart belongs to an album, the share card to
      what is playing. */
   $("modal-fave").classList.toggle("hidden", onNp);
@@ -1135,6 +1138,32 @@ function setFace(face) {
   }
   $("album-modal").querySelector(".modal-panel").scrollTop = 0;
   syncMini();
+}
+
+/*
+ * WHICH CONTROL SITS IN THE CORNER, AND WHY IT IS A CHOICE.
+ *
+ * The album face has always shown Back: you came from a card, and Back is
+ * where you came from. Now playing showed Home, on the reasoning that you did
+ * not come from anywhere in particular — the mini bar is on every screen, so
+ * the face can be reached from anywhere and there is no obvious "back".
+ *
+ * That reasoning holds until somebody searches an artist, opens their albums,
+ * taps the bar to see what is playing, and then wants to be back at the
+ * artist. Home is exactly wrong there, and it is not wrong in general — so it
+ * is a preference rather than a fix. Whichever is chosen, the OTHER control is
+ * hidden: they share grid column 1 of the panel's header, and two controls in
+ * one cell is one control on top of another.
+ *
+ * Both already do the right thing and neither needed changing: Back carries
+ * data-close-modal, which pops one layer off the navigation stack, and Home
+ * unwinds the whole of it.
+ */
+function paintModalLeft() {
+  const onNp = state.face === "np" || state.face === "queue";
+  const showBack = !onNp || state.npLeft === "back";
+  $("modal-back").classList.toggle("hidden", !showBack);
+  $("modal-home").classList.toggle("hidden", showBack);
 }
 
 /*
@@ -2436,6 +2465,29 @@ function registerServiceWorker() {
   });
 }
 
+/*
+ * Kept on the DEVICE, like the theme and not like the row order.
+ *
+ * The rows are the library's arrangement and belong in the database, where
+ * every phone in the house sees the same one. This is about how one person's
+ * thumb gets out of a screen, and a phone held one-handed and a tablet on a
+ * table can reasonably disagree — so it lives beside the theme, in the same
+ * storage, read the same way at startup.
+ */
+const NP_LEFT_KEY = "musicd.npLeft";
+
+function applyNpLeft(mode) {
+  state.npLeft = mode === "back" ? "back" : "home";
+  $("npleft-sub").textContent = state.npLeft === "back"
+    ? "Back · to the screen you came from"
+    : "Home · to the home screen";
+  try { localStorage.setItem(NP_LEFT_KEY, state.npLeft); } catch { /* storage off */ }
+  /* Repainted rather than left until the next face change: the panel can be
+     open behind the menu, and a setting that only takes effect next time reads
+     as one that did not work. */
+  paintModalLeft();
+}
+
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   document.querySelector('meta[name="theme-color"]')
@@ -2679,6 +2731,10 @@ function wire() {
     applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
   });
 
+  $("menu-npleft").addEventListener("click", () => {
+    applyNpLeft(state.npLeft === "back" ? "home" : "back");
+  });
+
   /* Navigation */
   $("topbar-back").addEventListener("click", navBack);
 
@@ -2857,6 +2913,13 @@ function wire() {
   let saved = "dark";
   try { saved = localStorage.getItem("musicd.theme") || "dark"; } catch { /* storage off */ }
   applyTheme(saved);
+
+  /* Home is the default, because it is what every existing install already
+     does — a preference that changes behaviour for people who never open it is
+     not a preference. */
+  let corner = "home";
+  try { corner = localStorage.getItem(NP_LEFT_KEY) || "home"; } catch { /* storage off */ }
+  applyNpLeft(corner);
 
   announceUpdateIfJustDone();
   state.zone = loadZone();

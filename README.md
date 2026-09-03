@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.18` | that exact version, for pinning |
+| `:0.4.19` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -229,6 +229,11 @@ Play nothing and the row says so rather than sitting there empty.
 | Number of plays | yes | yes |
 | Marked a favourite | yes | — |
 | A corrected title or artist | yes | — |
+
+**Settings › Now playing button** chooses what the control in the corner of the
+Now playing screen does: **Home** returns to the home screen, **Back** returns
+to the screen you came from. Home is the default. Like the theme, it is
+remembered on the device rather than in the library.
 
 A favourite and a corrected name are the two things in the library you typed
 rather than the files, so they are the two a rescan could destroy — and does

@@ -284,8 +284,8 @@ test("the menu keeps places and settings apart", () => {
     assert.ok(main.includes(place), `${place} is somewhere you go, so it stays on the first view`);
     assert.ok(!settings.includes(place), `${place} is not a setting`);
   }
-  for (const setting of ["menu-rescan", "menu-theme", "menu-covers", "menu-lastfm",
-                         "menu-update", "menu-version"]) {
+  for (const setting of ["menu-rescan", "menu-theme", "menu-npleft", "menu-covers",
+                         "menu-lastfm", "menu-update", "menu-version"]) {
     assert.ok(settings.includes(`id="${setting}"`), `${setting} belongs behind Settings`);
     assert.ok(!main.includes(`id="${setting}"`), `${setting} is no longer on the first view`);
   }
@@ -721,6 +721,49 @@ test("every overlay registers itself with the navigation stack", () => {
   for (const layer of ['navOpen("modal"', 'navOpen("sheet"', 'navOpen("share"', 'navOpen("view"']) {
     assert.ok(js.includes(layer), layer + ") is on the stack");
   }
+});
+
+test("what the Now playing corner does is a preference, not a rule", () => {
+  /*
+   * Home was right on the reasoning it was built on — the mini bar is on every
+   * screen, so Now playing can be reached from anywhere and there is no obvious
+   * "back". It stops being right the moment somebody searches an artist, opens
+   * their albums, taps the bar, and wants to be back at the artist. Neither
+   * answer is wrong in general, so it is a choice.
+   */
+  assert.ok(htmlIds.has("menu-npleft"), "a row in Settings");
+  assert.ok(htmlIds.has("npleft-sub"), "that says which way it is set");
+  assert.match(js, /function applyNpLeft\(mode\)/);
+  assert.match(js, /\$\("menu-npleft"\)\.addEventListener\("click"/);
+
+  /* Kept on the device, beside the theme — the row ORDER is the library's and
+     belongs in the database, but this is how one person's thumb gets out of a
+     screen. */
+  assert.match(js, /const NP_LEFT_KEY = "musicd\.npLeft";/);
+  assert.match(js, /localStorage\.setItem\(NP_LEFT_KEY/);
+  assert.match(js, /localStorage\.getItem\(NP_LEFT_KEY\) \|\| "home"/,
+    "and Home is the default, because it is what every install already does");
+});
+
+test("the two corner controls are never both on screen", () => {
+  /* They share grid column 1 of the panel's header, so two of them in one cell
+     is one control drawn on top of another. One function decides, and it is
+     the only thing that touches either. */
+  assert.match(js, /function paintModalLeft\(\)/);
+  const paint = js.slice(js.indexOf("function paintModalLeft()"));
+  const body = paint.slice(0, paint.indexOf("\n}"));
+  assert.match(body, /const showBack = !onNp \|\| state\.npLeft === "back";/);
+  assert.match(body, /\$\("modal-back"\)\.classList\.toggle\("hidden", !showBack\)/);
+  assert.match(body, /\$\("modal-home"\)\.classList\.toggle\("hidden", showBack\)/);
+
+  /* Nowhere else may show or hide them, or the two could disagree. */
+  const shows = [...stripComments(js, "js")
+    .matchAll(/\$\("modal-(?:back|home)"\)\.classList\.toggle\("hidden"/g)];
+  assert.strictEqual(shows.length, 2, "both toggles live in paintModalLeft and nowhere else");
+
+  /* And the setting repaints a panel that is already open behind the menu. */
+  const apply = js.slice(js.indexOf("function applyNpLeft(mode)"));
+  assert.match(apply.slice(0, apply.indexOf("\n}")), /paintModalLeft\(\)/);
 });
 
 test("Home unwinds the whole stack rather than stepping back one screen", () => {
