@@ -180,6 +180,15 @@ part of the fix.
   only place metadata is built; keep it that way.
 - **Transport goes to the group coordinator, volume goes to the speaker.**
   Sending Play to a grouped member is accepted and does nothing audible.
+- **A paged list cannot use an unseeded shuffle.** SQLite's `RANDOM()` draws
+  again on every call, so page two of the Library wall would be a different
+  shuffle from page one — some albums twice, others never. `seeded_rank()` in
+  `lib/db.js` hashes the id with a seed instead, and the seed is what a
+  reshuffle changes.
+- **An unknown value is not a zero.** An album with no year sorts to the END of
+  the wall in BOTH directions, and so does one never played under "Last
+  played" — the `(year IS NULL)` term is deliberately not reversed with the
+  rest. Reversing it floats every untagged record to the top.
 - **Random Album Radio rides on the poll loop, not on a phone.** `lib/radio.js`
   picks and `lib/playback.js` adds, on a TRACK CHANGE only — reading the queue
   back off the speaker is a SOAP call, and doing it every five-second poll would

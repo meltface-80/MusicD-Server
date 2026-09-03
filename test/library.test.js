@@ -853,3 +853,124 @@ test("Smart Picks follow the corrected artist rather than the tag", async () => 
   assert.match(picked.reason, /Slowdive/);
   ws.cleanup();
 });
+
+/* ------------------------------------------------------------------ */
+/*  How the library is ordered                                         */
+/* ------------------------------------------------------------------ */
+
+const titlesOf = (rows) => rows.map(a => a.title);
+
+test("the library opens in the shelf order it always did", async () => {
+  const { ws, db } = await scannedLibrary();
+  try {
+    /* Artist then year: every album an artist made, in the order they made
+       them. Nobody who never opens the sort control should see a change. */
+    assert.deepStrictEqual(library.normaliseSort(null),
+      { sort: "artist", dir: "asc", seed: 1 });
+    assert.deepStrictEqual(titlesOf(library.library(db, 100)),
+      titlesOf(library.library(db, 100, 0, { sort: "artist", dir: "asc" })));
+  } finally { ws.cleanup(); }
+});
+
+test("each sort opens in its own direction, not a shared one", () => {
+  /* "Sort by year" means newest first and "sort by album" means A → Z. One
+     shared default would answer the wrong question for half of them. */
+  const opens = (id) => library.normaliseSort({ sort: id }).dir;
+  assert.strictEqual(opens("album"), "asc");
+  assert.strictEqual(opens("artist"), "asc");
+  assert.strictEqual(opens("year"), "desc");
+  assert.strictEqual(opens("added"), "desc");
+  assert.strictEqual(opens("plays"), "desc");
+  assert.strictEqual(opens("lastplayed"), "desc");
+  /* Random has no direction at all. */
+  assert.strictEqual(library.normaliseSort({ sort: "random", dir: "desc" }).dir, "asc");
+  assert.ok(!library.sortOptions().find(o => o.id === "random").directional);
+});
+
+test("a direction reverses the wall and nothing else", async () => {
+  const { ws, db } = await scannedLibrary();
+  try {
+    const up = titlesOf(library.library(db, 100, 0, { sort: "album", dir: "asc" }));
+    const down = titlesOf(library.library(db, 100, 0, { sort: "album", dir: "desc" }));
+    assert.deepStrictEqual(down, [...up].reverse());
+  } finally { ws.cleanup(); }
+});
+
+test("an album with no year is unknown, not year zero", async () => {
+  /*
+   * The fixture's Field Recordings carries no year tag. Reversing to
+   * newest-first must not float every untagged record to the TOP of the wall,
+   * so unknowns are held at the end whichever way the arrow points.
+   */
+  const { ws, db } = await scannedLibrary();
+  try {
+    const newest = titlesOf(library.library(db, 100, 0, { sort: "year", dir: "desc" }));
+    const oldest = titlesOf(library.library(db, 100, 0, { sort: "year", dir: "asc" }));
+    assert.strictEqual(newest[newest.length - 1], "Field Recordings", newest.join(", "));
+    assert.strictEqual(oldest[oldest.length - 1], "Field Recordings", oldest.join(", "));
+  } finally { ws.cleanup(); }
+});
+
+test("an album never played is unknown too, at either end", async () => {
+  const { ws, db } = await scannedLibrary();
+  try {
+    const spirit = db.prepare("SELECT id FROM albums WHERE title = 'Spirit of Eden'").get().id;
+    dbLib.recordAlbumPlay(db, spirit, Date.now() - DAY);
+    for (const dir of ["asc", "desc"]) {
+      const rows = library.library(db, 100, 0, { sort: "lastplayed", dir });
+      assert.strictEqual(rows[0].title, "Spirit of Eden",
+        `the only played album leads under ${dir}: ` + titlesOf(rows).join(", "));
+    }
+  } finally { ws.cleanup(); }
+});
+
+test("a random sort is stable across pages, which is why it is seeded", async () => {
+  /*
+   * The grid reads a page at a time. SQLite's own RANDOM() draws again on
+   * every call, so page two would be a different shuffle from page one —
+   * showing some albums twice and others never. This is the test that fails
+   * if the seed is dropped.
+   */
+  const { ws, db } = await scannedLibrary();
+  try {
+    const view = { sort: "random", seed: 4242 };
+    const whole = titlesOf(library.library(db, 100, 0, view));
+    const paged = [];
+    for (let offset = 0; offset < whole.length; offset += 2) {
+      paged.push(...titlesOf(library.library(db, 2, offset, view)));
+    }
+    assert.deepStrictEqual(paged, whole, "the pages join up into the same order");
+    assert.strictEqual(new Set(paged).size, whole.length, "and nothing is repeated or missed");
+
+    /* The same seed twice is the same wall; a different seed is a different
+       one, or the reshuffle control does nothing visible. */
+    assert.deepStrictEqual(titlesOf(library.library(db, 100, 0, view)), whole);
+    const other = titlesOf(library.library(db, 100, 0, { sort: "random", seed: 99 }));
+    assert.notDeepStrictEqual(other, whole);
+  } finally { ws.cleanup(); }
+});
+
+test("a stored view from another version cannot break the screen", () => {
+  /* This value comes out of a database row and off a query string. A library
+     screen that throws because a setting is from last year is a library screen
+     nobody can open. */
+  assert.deepStrictEqual(library.normaliseSort({ sort: "by-vibes" }).sort, "artist");
+  assert.strictEqual(library.normaliseSort({ sort: "album", dir: "sideways" }).dir, "asc");
+  assert.strictEqual(library.normaliseSort({ sort: "random", seed: -5 }).seed, 1);
+  assert.strictEqual(library.normaliseSort({ sort: "random", seed: 1e9 }).seed, 1);
+  assert.strictEqual(library.normaliseSort({ sort: "random", seed: "abc" }).seed, 1);
+  assert.doesNotThrow(() => library.normaliseSort(undefined));
+});
+
+test("a corrected name sorts where it is shown, not where the tags put it", async () => {
+  /* The sorts read through albumNames() like every other query — an album
+     filed under a name it does not display is one nobody can find by
+     scrolling to where it says it is. */
+  const { ws, db } = await scannedLibrary();
+  try {
+    const field = library.library(db, 100).find(a => a.title === "Field Recordings");
+    library.setNames(db, field.id, { title: "Aardvark", artist: "Aardvark" });
+    const first = library.library(db, 100, 0, { sort: "album", dir: "asc" })[0];
+    assert.strictEqual(first.title, "Aardvark");
+  } finally { ws.cleanup(); }
+});

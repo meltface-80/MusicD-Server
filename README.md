@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.20` | that exact version, for pinning |
+| `:0.4.21` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -229,6 +229,23 @@ Play nothing and the row says so rather than sitting there empty.
 | Number of plays | yes | yes |
 | Marked a favourite | yes | — |
 | A corrected title or artist | yes | — |
+
+## Sorting the library
+
+The Library screen carries a sort control: album name, artist, release year,
+recently added, most played, last played, or random. Each opens in the
+direction that suits it — alphabetical A → Z, everything else newest or biggest
+first — and a second control flips it.
+
+**The order is stored in the database, not on the phone**, so it survives a
+restart, a reboot, an update, a cleared browser cache and a re-added
+home-screen shortcut, and every phone in the house agrees about it. The Library
+row on the home screen follows the same order.
+
+Albums with no year, and albums never played, are treated as *unknown* rather
+than as zero: they stay at the end of the wall whichever way the arrow points.
+Random is seeded so the wall stays consistent as it pages; the control becomes
+**Shuffle**.
 
 ## Random Album Radio
 

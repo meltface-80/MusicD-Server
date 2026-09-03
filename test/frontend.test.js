@@ -1545,3 +1545,62 @@ test("both radio rows are painted from what the server says it did", () => {
   assert.match(js, /if \(status\.radio\) showRadio\(status\.radio\);/,
     "and the status poll repaints them, so two phones cannot disagree for long");
 });
+
+/* ------------------------------------------------------------------ */
+/*  How the Library screen is ordered                                  */
+/* ------------------------------------------------------------------ */
+
+test("the sort bar belongs to the Library screen and nowhere else", () => {
+  /* Every other grid IS an order: "Recently added" re-sorted by artist is a
+     row that no longer means what its name says. */
+  assert.ok(htmlIds.has("sort-bar"));
+  assert.ok(htmlIds.has("sort-open"));
+  assert.ok(htmlIds.has("sort-dir"));
+  const paint = js.slice(js.indexOf("function paintSortBar()"));
+  const body = paint.slice(0, paint.indexOf("\n}"));
+  assert.match(body, /state\.grid && state\.grid\.key === "library"/);
+  /* Cleared in showView, the one place every view change goes through, so an
+     opener that forgot could not leave it over a row of albums. */
+  const show = js.slice(js.indexOf("function showView(view, title)"));
+  assert.match(show.slice(0, show.indexOf("\n}")),
+    /\$\("sort-bar"\)\.classList\.add\("hidden"\)/);
+});
+
+test("the order is kept by the server, not by the phone", () => {
+  /*
+   * The requirement it was asked for: it has to survive an update, a reboot
+   * and a restart. localStorage would also lose it to a cleared cache or a
+   * re-added home-screen shortcut — the failure that reads as a regression.
+   */
+  assert.match(js, /async function loadSort\(\)/);
+  assert.match(js, /api\("\/api\/sort"\)/, "read from the server at startup");
+  assert.match(js, /post\("\/api\/sort", next\)/, "and written back to it");
+  const save = js.slice(js.indexOf("async function saveSort(next)"));
+  const body = save.slice(0, save.indexOf("\n}"));
+  assert.ok(!/localStorage/.test(body), "nothing about this touches the phone's storage");
+  /* Painted from what came BACK, because the server decides what a valid view
+     is — painting the request could show an order the library is not in. */
+  assert.match(body, /state\.sort = data\.view/);
+});
+
+test("changing the order re-reads the wall from the top", () => {
+  /* A new order makes every page boundary meaningless, so appending the next
+     page of the old one underneath would interleave two sorts. */
+  const save = js.slice(js.indexOf("async function saveSort(next)"));
+  const body = save.slice(0, save.indexOf("\n}"));
+  assert.match(body, /openRow\("library"\)/);
+});
+
+test("a sort is chosen in its own direction, and Random is shuffled", () => {
+  const sheet = js.slice(js.indexOf("function openSortSheet()"));
+  const body = sheet.slice(0, sheet.indexOf("\n}\n"));
+  /* dir is left OUT, which is what asks the server for that sort's own
+     default — inheriting "A → Z" onto "sort by year" answers a different
+     question. */
+  assert.match(body, /saveSort\(\{ sort: option\.id \}\)/);
+  assert.ok(!/dir:/.test(body), "the sheet never names a direction");
+  /* Random has none, so its control is the only thing a shuffle needs. */
+  assert.match(js, /def\.directional\s*\n?\s*\? \{ sort: state\.sort\.sort, dir:/s);
+  assert.match(js, /: \{ sort: state\.sort\.sort, seed: nextSeed\(state\.sort\.seed\) \}/);
+  assert.match(js, /function nextSeed\(current\)/);
+});

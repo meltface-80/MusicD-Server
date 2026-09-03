@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.21
+
+### The Library screen can be sorted
+- **Seven orders**: album name, artist, release year, recently added, most
+  played, last played and random. The control sits above the wall on the
+  Library screen and nowhere else — every other row IS an order, and
+  "Recently added" re-sorted by artist is a row that no longer means what its
+  name says.
+- **Each sort opens in its own direction.** Alphabetical opens A → Z;
+  year, added, most played and last played open with the newest or biggest
+  first, because that is what somebody means by "sort by year". Picking a sort
+  never inherits the direction of the one before it. A second control flips it,
+  and says what the flip is called for that sort — "Newest first", not
+  "descending".
+- **The order is kept by the server, in the database.** It survives a restart,
+  a reboot and an update, and it is not lost to a cleared browser cache or a
+  re-added home-screen shortcut either. Every phone in the house agrees about
+  it, for the same reason they agree about the home screen's row order.
+- **An album with no year is unknown, not year zero**, and stays at the end of
+  the wall whichever way the arrow points — otherwise reversing to newest-first
+  would float every untagged record to the top. Never-played albums are treated
+  the same way under "Last played".
+- **Random is seeded**, and has to be: the wall is read a page at a time, and an
+  unseeded shuffle would draw again for every page — showing some albums twice
+  and others never. The control becomes Shuffle, which draws a new one.
+- The Library row on the home screen follows the same order, so the row and the
+  screen it opens into cannot disagree about one shelf.
+
 ## 0.4.20
 
 ### Random Album Radio

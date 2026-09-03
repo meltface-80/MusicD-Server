@@ -344,11 +344,40 @@ function bounded(value, fallback, max) {
  * and so the order they appear in is a list of keys rather than a shape
  * repeated in three places.
  */
+/*
+ * THE ORDER THE LIBRARY SCREEN IS IN, and where it is kept.
+ *
+ * In the DATABASE rather than on the phone, which is the whole point of the
+ * request: it has to survive an update, a reboot and a restart — and putting
+ * it in a browser's storage would also lose it to a cleared cache or a
+ * re-added home-screen shortcut, which is the failure this project has already
+ * been bitten by once. DATA_DIR is a volume the container's own lifetime does
+ * not touch and the in-app updater is not allowed to write to, so a setting
+ * there outlives everything. It is shared between phones for the same reason
+ * the home rows' order is: it describes the library, not the device.
+ *
+ * Read through normaliseSort() every time rather than trusted, because the
+ * stored blob can be from an older version or hand-edited — see lib/library.js.
+ */
+const LIBRARY_SORT_KEY = "library.sort";
+
+function librarySort() {
+  let stored = null;
+  try { stored = JSON.parse(settings.get(LIBRARY_SORT_KEY) || "null"); }
+  catch { /* not JSON: a hand-edited row, or a write that was interrupted.
+             The defaults below are a working screen, which is the point. */ }
+  return library.normaliseSort(stored);
+}
+
 const ROW_DEFS = {
   favourites: { title: "Favourites",
                 albums: (n, o) => library.favourites(db, n, o) },
   library:    { title: "Library",
-                albums: (n, o) => library.library(db, n, o) },
+                /* The Home row is the same query in the same order as the
+                   screen it opens into. A row labelled "Library" that is
+                   alphabetical over a screen sorted by year is two screens
+                   disagreeing about the same shelf. */
+                albums: (n, o) => library.library(db, n, o, librarySort()) },
   random:     { title: "Random albums",
                 albums: (n)    => library.random(db, n) },
   added:      { title: "Recently added",
@@ -411,6 +440,26 @@ app.get("/api/albums", api((req, res) => {
   const limit = bounded(req.query.limit, 200, 500);
   const offset = Math.max(0, Math.trunc(Number(req.query.offset)) || 0);
   res.json({ row, albums: fn(limit, offset) });
+}));
+
+/*
+ * The Library screen's order.
+ *
+ * GET hands over both the current setting and the vocabulary — what the sorts
+ * are called, and what each one's two directions are called — so the sheet is
+ * drawn from the server's list rather than a copy of it kept in the client
+ * that could drift.
+ */
+app.get("/api/sort", api((req, res) => {
+  res.json({ view: librarySort(), options: library.sortOptions() });
+}));
+
+app.post("/api/sort", api((req, res) => {
+  /* Normalised on the way IN as well as on the way out: what is stored is
+     always a value this server would accept, whatever was posted. */
+  const view = library.normaliseSort(req.body || {});
+  settings.set(LIBRARY_SORT_KEY, JSON.stringify(view));
+  res.json({ view, options: library.sortOptions() });
 }));
 
 app.get("/api/album/:id", api((req, res) => {
