@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.22
+
+### The mini transport no longer appears over the search results
+- **While you are typing, there is no mini bar.** With the keyboard up it was
+  meant to be behind the keys, and instead it turned up floating over the
+  search results as soon as the list was scrolled. It is now absent whenever a
+  text field has the keyboard, which is the same intent stated in the one way
+  no viewport can paint wrong. It returns as soon as you leave the field.
+- **The keyboard's height no longer varies with the scroll position.** The
+  measurement behind `--kb-inset` folded in how far the visual viewport had
+  slid, which is the scroll — so over a single flick it decayed from 266px to
+  nothing while the keyboard stood perfectly still, switching the correction
+  off during the one gesture it exists for. It measures only the difference
+  between the two viewports now, which a scroll cannot change.
+
 ## 0.4.21
 
 ### The Library screen can be sorted
