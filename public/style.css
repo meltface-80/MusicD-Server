@@ -267,20 +267,22 @@ button, input { font-family: inherit; }
    because the mark carries no colour of its own to flip. */
 .menu-brand { display: block; height: 26px; width: auto; }
 [data-theme="light"] .menu-brand { filter: invert(1); }
+/* 17px rather than 15px. This is the app's index — every screen is reached
+   from it — and it was set a size below the lists it opens into. */
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   width: 100%; min-height: var(--tap-min);
-  padding: 11px 18px; text-align: left;
+  padding: 12px 18px; text-align: left;
   background: none; border: 0; color: var(--text);
-  font-size: 15px; cursor: pointer;
+  font-size: 17px; cursor: pointer;
 }
 .menu-item:hover  { background: var(--bg-elev-2); }
 .menu-item:active { background: var(--accent-soft); }
-.menu-sub { font-size: 12px; color: var(--text-dim); }
+.menu-sub { font-size: 13px; color: var(--text-dim); }
 .menu-sep { flex: 0 0 auto; height: 1px; margin: 8px 18px; background: var(--border); }
 .menu-foot {
   flex: 0 0 auto;
-  padding: 4px 18px 18px; font-size: 12px; color: var(--text-faint); line-height: 1.5;
+  padding: 4px 18px 18px; font-size: 13px; color: var(--text-faint); line-height: 1.5;
 }
 
 /* The way back out of Settings. A row rather than a stacked item, because it is
@@ -1138,7 +1140,28 @@ main {
 .np-btn svg { width: 30px; height: 30px; }
 .np-btn:hover  { background: var(--bg-elev-2); }
 .np-btn:active { transform: scale(.94); }
-.np-playpause { background: var(--bg-elev); }
+/*
+ * ONE unmistakable primary.
+ *
+ * It used to be --bg-elev on a --bg page: an eight-point lift, which is to say
+ * invisible. A filled disc in the TEXT colour is the strongest contrast this
+ * ground offers, and it deliberately does not use --accent — the accent is
+ * already carrying the progress and the played half of the waveform directly
+ * above, and spending it twice on one screen makes neither use mean anything.
+ * Both tokens, so the light theme inverts it to a near-black disc with a light
+ * glyph and it is still the primary.
+ *
+ * Skip and previous stay bare on purpose. Three equals is not a hierarchy, and
+ * play is pressed far more often than either of them.
+ */
+.np-playpause {
+  width: 68px; height: 68px;
+  background: var(--text); color: var(--bg);
+}
+/* After .np-btn:hover, which has the same specificity — a filled button must
+   not go grey under a pointer it will never see on a phone. */
+.np-playpause:hover { background: var(--text); }
+.np-playpause svg { width: 32px; height: 32px; }
 /* Shuffle and repeat sit either side of the three transport buttons, smaller
    and dimmer until they are on — they change what happens next rather than
    doing something now. */
@@ -1160,14 +1183,17 @@ main {
 }
 .np-room {
   flex: 1 1 auto; min-width: 0; text-align: left;
-  font-size: 13px; color: var(--text-dim);
+  font-size: 13px; font-weight: 600; color: var(--text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* The room and the volume were drawn a step down from everything above them —
+   dimmed glyphs on a barely-lifted surface — which read as disabled rather than
+   as secondary. Same shapes, legible contrast. */
 .np-mini-btn {
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; width: var(--tap-min); height: var(--tap-min);
-  background: var(--bg-elev); color: var(--text-dim);
-  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-elev-2); color: var(--text);
+  border: 1px solid var(--glass-edge); border-radius: 12px;
   cursor: pointer; transition: color .15s ease, border-color .15s ease;
 }
 .np-mini-btn svg { width: 20px; height: 20px; }
