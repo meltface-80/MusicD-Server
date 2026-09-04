@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.25
+
+### The waveform is drawn at a height you can read
+- **34px rather than the plain bar's 14px.** The shape was right in length and
+  unreadable in height: squeezed into the bar's own box, every peak landed
+  within a few pixels of every other and it read as a texture rather than a
+  waveform.
+- **The seek bar grows to match it**, which also means the whole shape is
+  draggable instead of just the 4px line the plain bar occupies. A range input
+  centres its own track and thumb in its box, so the thumb lands exactly on the
+  waveform's midline with no offset to keep in step.
+- **The two-pixel margin the browser adds to a range input is accounted for.**
+  The canvas is positioned against the container while the input sits in flow
+  below that margin, so without allowing for it the shape is drawn two pixels
+  above the thumb meant to ride along it.
+
 ## 0.4.24
 
 ### The seek bar draws the shape of the track
