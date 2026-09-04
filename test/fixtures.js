@@ -29,11 +29,27 @@ function infoField(id, value) {
 
 /* A valid WAV: 8-bit mono, 8000 Hz, `seconds` of silence, with a LIST/INFO
    block carrying the tags. Small enough that a whole fixture library is a few
-   kilobytes, real enough that music-metadata parses it like any other file. */
+   kilobytes, real enough that music-metadata parses it like any other file.
+
+   `shape` makes it audible instead: a function of 0..1 through the track
+   returning an amplitude of 0..1. Silence is still the default, because every
+   other test in the suite wants a small file and does not care what is in it —
+   but a waveform asserted over silence would pass with the drawing wrong, so
+   the tests that look at the picture ask for a track that has one. */
 function wav({ seconds = 2, title = "", artist = "", album = "", albumArtist = "",
-               year = "", date = "", genre = "", track = "" } = {}) {
+               year = "", date = "", genre = "", track = "", shape = null } = {}) {
   const rate = 8000;
   const data = Buffer.alloc(rate * seconds, 128);      // 8-bit silence is 0x80
+  if (typeof shape === "function") {
+    /* A square wave at the requested amplitude: it is the loudest thing a
+       given peak can be, so what comes back out of the peak detector is the
+       envelope that went in and nothing about the tone gets in the way. */
+    for (let i = 0; i < data.length; i++) {
+      const a = Math.max(0, Math.min(1, shape(i / data.length)));
+      const swing = Math.round(a * 127);
+      data[i] = 128 + (i % 2 ? -swing : swing);
+    }
+  }
 
   const fmt = Buffer.alloc(16);
   fmt.writeUInt16LE(1, 0);            // PCM

@@ -1109,6 +1109,67 @@ test("Home does not name itself in the bar", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  The shape of the track                                             */
+/* ------------------------------------------------------------------ */
+
+test("the waveform is decoration under the seek bar, never a replacement", () => {
+  /* The range input keeps the drag, the keyboard, the thumb and the disabled
+     state. If the fetch fails or the file cannot be decoded, what is left is
+     the bar exactly as it was before the feature existed. */
+  assert.match(html, /<canvas id="np-wave" class="np-wave hidden" aria-hidden="true">/);
+  assert.match(css, /\.np-wave \{[^}]*pointer-events: none/s,
+    "the input underneath has to keep the drag");
+  /* Bound to the seek bar's own box. Stretched over the whole progress block
+     it drew across the running time and the total underneath. */
+  assert.match(css, /\.np-seek-wrap \{ position: relative; \}/);
+  assert.match(css, /\.np-wave \{[^}]*position: absolute; inset: 0;/s);
+});
+
+test("the seek bar's own track is REMOVED, not overridden, under a waveform", () => {
+  /*
+   * Both halves are needed and only one of them is obvious.
+   *
+   * The stylesheet says --fill: transparent for .has-wave — and on its own
+   * that does nothing at all, because fillRange() writes --fill INLINE four
+   * times a second and an inline custom property beats any stylesheet rule
+   * however specific. MusicD Remote shipped exactly that and drew a grey line
+   * straight through the middle of the waveform (its v1.7.90).
+   */
+  assert.match(css, /\.np-progress\.has-wave \.np-seek \{ --fill: transparent; \}/);
+  const body = js.slice(js.indexOf("function fillRange("));
+  const fn = body.slice(0, body.indexOf("\n}"));
+  assert.match(fn, /removeProperty\("--fill"\)/,
+    "the inline property has to go, not be written with a transparent value");
+  /* Asked in ONE place, so the two call sites cannot drift. */
+  assert.match(fn, /input\.closest\("\.np-progress"\)/);
+});
+
+test("a slow waveform cannot land under a track that has already changed", () => {
+  const body = js.slice(js.indexOf("async function loadWaveform("));
+  const fn = body.slice(0, body.indexOf("\n}"));
+  /* Landing a stale waveform under a different song is worse than none: it
+     looks authoritative and it is simply the wrong shape. */
+  assert.match(fn, /if \(mine !== state\.waveReq \|\| state\.waveKey !== id\) return;/);
+  /* Keyed on the TRACK ID. This server knows exactly which file is playing —
+     there is nothing to match on a title and nothing that can resolve to the
+     wrong recording. */
+  assert.match(fn, /now\.track \? now\.track\.id : ""/);
+  assert.match(fn, /"\/api\/track\/" \+ b64url\(id\) \+ "\/waveform"/);
+});
+
+test("the waveform and the bar read the same position", () => {
+  /* Drawn from the same number in the same function, so the two can never
+     disagree about where the track is — and drawn FIRST, because drawWave is
+     what adds and removes .has-wave that fillRange goes on to read. */
+  const body = js.slice(js.indexOf("function paintProgress("));
+  const fn = body.slice(0, body.indexOf("\n}"));
+  const wave = fn.indexOf("drawWave(position)");
+  const fill = fn.indexOf("fillRange(seek, position");
+  assert.ok(wave > -1 && fill > -1 && wave < fill,
+    "drawWave sets the class that fillRange reads, so it has to go first");
+});
+
+/* ------------------------------------------------------------------ */
 /*  Choosing several albums at once                                    */
 /* ------------------------------------------------------------------ */
 

@@ -451,8 +451,16 @@
           <div class="np-artist" id="np-artist"></div>
           <button class="np-album" id="np-album" type="button"></button>
 
-          <div class="np-progress">
-            <input type="range" id="np-seek" class="np-seek" min="0" max="100" step="1" value="0" aria-label="Seek">
+          <div class="np-progress" id="np-progress">
+            <!-- The shape of the track, drawn UNDER the range input and never
+                 in place of it: the input keeps the drag, the keyboard, the
+                 thumb and the disabled state, and if any of this fails the bar
+                 is exactly what it was before. Local files only, which here is
+                 every file — this server has nothing else to play. -->
+            <div class="np-seek-wrap">
+              <canvas id="np-wave" class="np-wave hidden" aria-hidden="true"></canvas>
+              <input type="range" id="np-seek" class="np-seek" min="0" max="100" step="1" value="0" aria-label="Seek">
+            </div>
             <div class="np-times">
               <span id="np-cur" class="np-time">0:00</span>
               <span id="np-tot" class="np-time">0:00</span>

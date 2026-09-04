@@ -112,6 +112,12 @@ const state = {
   /* Whether a text field has the soft keyboard up, which is the third thing
      that decides whether the mini bar is on screen — see trackTyping(). */
   typing: false,
+  /* The shape of the track under the seek bar: the peaks themselves, which
+     track they belong to, and a generation so a slow answer cannot land under
+     a song that has already changed. See loadWaveform(). */
+  wave: null,
+  waveKey: "",
+  waveReq: 0,
   /*
    * Choosing several albums at once. null when off; { ids: [...] } while on,
    * in the order they were tapped.
@@ -1296,6 +1302,9 @@ function renderNow(now) {
 
   $("np-seek").max = Math.max(1, Math.round(now.duration || 0));
   $("np-tot").textContent = mmss(now.duration);
+  /* Before paintProgress below, so the first frame it draws already knows
+     whether there is a waveform to split. */
+  loadWaveform(now);
   /* Anchor the clock the ticker runs off, then let it do the drawing. */
   state.positionAt = Date.now();
   paintProgress();
@@ -2073,6 +2082,10 @@ function paintProgress() {
   if (state.seeking) return;
   const seek = $("np-seek");
   seek.value = Math.round(position);
+  /* The waveform carries the same progress, from the same number, so the two
+     can never disagree about where the track is. Drawn FIRST because this is
+     what adds and removes .has-wave, which fillRange() reads. */
+  drawWave(position);
   fillRange(seek, position, Number(seek.max) || 1);
   $("np-cur").textContent = mmss(position);
 }
@@ -2086,9 +2099,148 @@ function startProgressTicker() {
 }
 
 function fillRange(input, value, max) {
+  /*
+   * WITH A WAVEFORM SHOWING, THE PROPERTY IS REMOVED RATHER THAN OVERRIDDEN.
+   *
+   * The stylesheet says `--fill: transparent` for .has-wave and that alone does
+   * nothing: this function writes --fill INLINE four times a second, and an
+   * inline custom property beats any stylesheet rule however specific. Setting
+   * it here unconditionally is what drew a grey line straight through the
+   * middle of the waveform in MusicD Remote v1.7.90 — both halves are needed,
+   * and this is the half that is easy to leave out.
+   *
+   * Asked HERE rather than at the two call sites, so there is one place that
+   * knows and they cannot drift.
+   */
+  const host = input.closest(".np-progress");
+  if (host && host.classList.contains("has-wave")) {
+    input.style.removeProperty("--fill");
+    return;
+  }
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   input.style.setProperty("--fill",
     `linear-gradient(90deg, var(--accent) 0 ${pct}%, var(--border) ${pct}% 100%)`);
+}
+
+/* ------------------------------------------------------------------ */
+/*  The shape of the track                                             */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The waveform under the seek bar.
+ *
+ * DECORATION UNDER THE RANGE INPUT, never a replacement for it. The input keeps
+ * the drag, the keyboard, the thumb and the disabled state; if the fetch fails,
+ * the canvas is unsupported, or the file cannot be decoded, what is left is
+ * exactly the bar that was there before this existed.
+ *
+ * Every file this server plays is a local file, so unlike MusicD Remote — which
+ * has to keep a plain bar for the Qobuz and TIDAL tracks Roon never hands an
+ * extension any audio for — there is no second case to carry here.
+ */
+
+function drawWave(at) {
+  const canvas = $("np-wave"), host = $("np-progress");
+  const peaks = state.wave;
+  if (!peaks || !peaks.length) {
+    canvas.classList.add("hidden");
+    host.classList.remove("has-wave");
+    return;
+  }
+  canvas.classList.remove("hidden");
+  host.classList.add("has-wave");
+
+  /* Size the backing store to the DEVICE pixels actually on screen, or the bars
+     are soft on every phone made in the last decade. */
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(canvas.clientWidth));
+  const h = Math.max(1, Math.round(canvas.clientHeight));
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr; canvas.height = h * dpr;
+  }
+  const ctx = canvas.getContext("2d");
+  /* No 2d context is a browser this cannot draw on. The plain bar is already
+     underneath, so there is nothing to report and nothing to fall back to. */
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const cs = getComputedStyle(document.documentElement);
+  const played = cs.getPropertyValue("--accent").trim();
+  /* The track ahead is drawn in the TEXT colour rather than the border colour:
+     it is the shape of the music and it should be as legible as the title above
+     it. Both are tokens, so both follow the theme. */
+  const ahead = cs.getPropertyValue("--text").trim();
+
+  const seek = $("np-seek");
+  const max = Number(seek.max) || 0;
+  const pos = Number.isFinite(at) ? at : (Number(seek.value) || 0);
+  const frac = max > 0 ? Math.max(0, Math.min(1, pos / max)) : 0;
+
+  /* One bar per 2 CSS pixels. The stored waveform holds 1000 values and a phone
+     is ~390 CSS px wide, so a wider step throws most of them away; below 2px
+     the bars stop being separable and it reads as a filled shape rather than a
+     waveform. */
+  const barW = 1, step = 2;
+  const bars = Math.max(1, Math.floor(w / step));
+  const mid = h / 2;
+  for (let i = 0; i < bars; i++) {
+    /* Max across the peaks this bar covers, for the same reason the server
+       resamples by max: averaging flattens exactly what is worth seeing. */
+    const a = Math.floor(i * peaks.length / bars);
+    const b = Math.max(a + 1, Math.floor((i + 1) * peaks.length / bars));
+    let v = 0;
+    for (let j = a; j < b && j < peaks.length; j++) if (peaks[j] > v) v = peaks[j];
+    /* A floor of 1px so silence is a line rather than a gap — a gap reads as
+       "the waveform stopped loading", which is a different thing entirely. */
+    const barH = Math.max(1, (v / 255) * (h - 2));
+    const done = (i / bars) <= frac;
+    ctx.fillStyle = done ? played : ahead;
+    /* The played side goes to full strength so the accent still reads as the
+       position marker against a bright track ahead of it. */
+    ctx.globalAlpha = done ? 1 : 0.72;
+    ctx.fillRect(i * step, mid - barH / 2, barW, barH);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/*
+ * Ask for the shape of whatever is playing.
+ *
+ * Keyed on the TRACK ID, which this server has and MusicD Remote does not — it
+ * matches a title and a duration against a streaming service because Roon never
+ * tells it what the file is. Here the id is the file, so there is nothing to
+ * guess and nothing that can resolve to the wrong recording.
+ */
+async function loadWaveform(now) {
+  const id = now && now.track ? now.track.id : "";
+  if (!id) {
+    state.wave = null; state.waveKey = "";
+    drawWave();
+    return;
+  }
+  if (id === state.waveKey) return;          // same track: what we have applies
+  state.waveKey = id;
+  state.wave = null;
+  drawWave();                                // the plain bar while we ask
+  const mine = ++state.waveReq;
+  try {
+    const out = await api("/api/track/" + b64url(id) + "/waveform");
+    /* The track may have moved on while the server was decoding. Landing a
+       stale waveform under a different song is worse than none: it looks
+       authoritative and it is simply the wrong shape. */
+    if (mine !== state.waveReq || state.waveKey !== id) return;
+    if (!out || !out.peaks) return;
+    const bin = atob(out.peaks);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    state.wave = u8;
+    drawWave();
+  } catch {
+    /* No waveform is an ORDINARY answer — an undecodable file, the feature
+       switched off, a server that is busy. The plain bar is already showing and
+       a toast about a decoration nobody asked for would be noise. */
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -3284,6 +3436,10 @@ function wire() {
   seek.addEventListener("pointerdown", holdSeek);
   seek.addEventListener("keydown", holdSeek);
   seek.addEventListener("input", () => {
+    /* Dragging, so the ticker is not painting: the waveform's played/unplayed
+       split has to follow the thumb from here or it would sit frozen at the
+       position the finger started from. */
+    drawWave(Number(seek.value));
     fillRange(seek, Number(seek.value), Number(seek.max));
     $("np-cur").textContent = mmss(seek.value);
   });

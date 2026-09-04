@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.24
+
+### The seek bar draws the shape of the track
+- **The waveform of whatever is playing**, under the Now playing seek bar: where
+  the quiet intro ends, where the loud middle is, and how much of it you have
+  heard. Behind the playhead it is the accent colour; ahead of it, the text
+  colour. Following MusicD Remote v1.8.22, minus the streaming half — this
+  server has only local files, which here means every file it can play.
+- **Decoration under the bar, never a replacement for it.** The range input
+  keeps the drag, the thumb, the keyboard and the disabled state, and a track
+  that cannot be decoded keeps exactly the bar that was there before.
+- **Worked out from your own files, and nothing leaves the network.** The audio
+  is decoded once with ffmpeg, reduced to a thousand numbers and stored for
+  good. The next track on the record is analysed while the current one plays,
+  so listening through an album costs one decode up front.
+- **Peaks are taken by MAXIMUM, never averaged**, which is the one thing a
+  waveform is for — an average turns a sharp track into mush. Each track is
+  scaled to its own loudest moment, so a quietly-mastered record is not a flat
+  line beside a loud one.
+- **A stored waveform is checked before it is believed.** The decode rate, the
+  file's size and its modification time are kept beside it, so a re-rip at the
+  same path is re-analysed rather than drawn with audio that is gone. A file
+  ffmpeg cannot read is remembered as such, so it is not attempted again on
+  every visit.
+- `WAVEFORM=false` removes it. ffmpeg ships with the app and a system one on
+  `PATH` is used if it does not.
+
 ## 0.4.23
 
 ### Choose several albums at once

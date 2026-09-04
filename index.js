@@ -24,6 +24,7 @@ const { createCovers } = require("./lib/covers");
 const { createLastfm } = require("./lib/lastfm");
 const { createInfo } = require("./lib/info");
 const { createRadio } = require("./lib/radio");
+const { createWaveforms } = require("./lib/waveforms");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -69,6 +70,12 @@ const COVER_LOOKUP = process.env.COVER_LOOKUP !== "false";
  * and a container that says no to this says no whatever the app asks for.
  */
 const INFO_LOOKUP = process.env.INFO_LOOKUP !== "false";
+/* The seek bar's waveform. On by default; WAVEFORM=false removes it and the
+   bar is exactly what it was before — no setting to find, nothing disabled on
+   screen, the same shape as COVER_LOOKUP and INFO_LOOKUP above. Worth turning
+   off on a very small box: a decode is a CPU core for a fraction of a second,
+   and it is the only thing this server does that costs one. */
+const WAVEFORM = process.env.WAVEFORM !== "false";
 
 const db = dbLib.open(DATA_DIR);
 const settings = settingsLib.open(db);
@@ -146,6 +153,15 @@ const info = createInfo({
      stand-in over real HTTP, rather than testing a renderer fed by hand. */
   apiRoot: process.env.MUSICD_WIKI_API || undefined
 });
+
+/*
+ * The shape of a track, for the seek bar to draw.
+ *
+ * Nothing outbound and nothing on a timer: it reads a file the user already
+ * owns, the first time a screen asks about it, and writes the answer down for
+ * ever. See lib/waveforms.js.
+ */
+const waveforms = createWaveforms({ db, available: WAVEFORM });
 
 /*
  * Random Album Radio.
@@ -535,6 +551,26 @@ app.get("/api/album/:id/info", api(async (req, res) => {
   const id = decodeId(req.params.id);
   if (!id) return res.status(400).json({ error: "Which album?" });
   res.json({ info: await info.album(id) });
+}));
+
+/*
+ * A track's waveform, asked for by the Now playing screen.
+ *
+ * Cached immutable: a waveform is a property of the audio, and the audio behind
+ * one track id does not change — when the FILE changes, lib/waveforms.js
+ * notices by size and mtime and re-analyses, and the id it is served under is
+ * the same one, so a long browser cache would hold the old picture. A week
+ * matches the artwork policy and is short enough that a re-rip shows up.
+ */
+app.get("/api/track/:id/waveform", api(async (req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which track?" });
+  const out = await waveforms.forTrack(id);
+  if (out.peaks) res.set("Cache-Control", "private, max-age=604800");
+  /* The next track on the same record, decoded while this one plays. Not
+     awaited: the answer above must not wait on a track nobody has reached. */
+  waveforms.warm(id);
+  res.json(out);
 }));
 
 app.get("/api/artist/:name/info", api(async (req, res) => {
