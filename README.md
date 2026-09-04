@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.23` | that exact version, for pinning |
+| `:0.4.24` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -260,6 +260,30 @@ carousels, the full walls, the search results and an artist's albums.
 
 Play Now replaces the room's queue with everything chosen, in the order you
 chose it; Queue adds it all to the end of what is playing.
+
+## The shape of the track
+
+The Now playing seek bar draws the waveform of whatever is playing: where the
+quiet intro ends, where the loud middle is, and how much of it you have heard.
+It is **decoration under the bar, never a replacement for it** — the drag, the
+thumb and the keyboard are the same control they always were, and a track that
+cannot be analysed simply keeps the plain bar.
+
+It is worked out from **your own files** and nothing leaves the network to do
+it: the audio is decoded once with ffmpeg, reduced to a thousand numbers, and
+stored in the database for good. The next track on the record is analysed while
+the current one plays, so listening straight through a record costs one decode
+up front and nothing after that.
+
+A waveform is re-analysed if you replace the file — the size and modification
+time are stored with it, so a re-rip at the same path is noticed rather than
+drawn with the old audio. `WAVEFORM=false` removes the feature and the bar goes
+back to what it was.
+
+**ffmpeg** ships with the app (the `ffmpeg-static` package, ~80 MB), and a
+system ffmpeg on `PATH` is used instead if that is not available. It is invoked
+as a separate program, which is the ordinary way to use it; ffmpeg is licensed
+separately from this app.
 
 ## Random Album Radio
 
@@ -368,6 +392,7 @@ Everything is optional except your music path.
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
 | `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |
 | `INFO_LOOKUP` | `true` | Set to `false` and no album write-up or artist biography is ever fetched. |
+| `WAVEFORM` | `true` | Draw the track's shape in the seek bar. `false` leaves the plain bar and never runs ffmpeg. |
 | `LASTFM_API_KEY` | — | A Last.fm API key. Without one the Last.fm row does not appear. |
 | `LASTFM_API_SECRET` | — | The shared secret that came with it. Both are needed or neither works. |
 

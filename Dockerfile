@@ -14,6 +14,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# This step also brings in ffmpeg-static (~80 MB), which is what decodes a
+# track to draw its waveform. It is a normal dependency rather than an apt
+# package so the binary is pinned with the app and the same one runs on arm64 —
+# a NAS or a Pi — as on anything else. lib/waveform-decode.js falls back to an
+# ffmpeg on PATH if it is ever missing, and to no waveform at all if there is
+# none: the seek bar then looks exactly as it did before the feature existed.
 COPY package*.json ./
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN npm install --omit=dev --no-audit --no-fund --loglevel=error

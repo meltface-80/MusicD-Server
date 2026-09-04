@@ -212,6 +212,26 @@ part of the fix.
   sideways from the same cards the hold starts on, so movement past
   `PICK_SLOP` cancels it — and the click that arrives behind the finger is the
   same gesture, so it is swallowed rather than treated as a tap.
+- **A waveform is averaged nowhere.** Peaks are resampled by MAXIMUM in
+  `lib/waveform.js`, on the server and again in the client's `drawWave()`.
+  Averaging peaks turns a sharp track into mush, which is the one thing a
+  waveform is for. Each track is normalised to its OWN loudest moment: an
+  absolute scale leaves a quietly-mastered record a flat line beside a loud one.
+- **AN INLINE CUSTOM PROPERTY BEATS ANY STYLESHEET RULE, however specific.**
+  `.np-progress.has-wave .np-seek { --fill: transparent }` does nothing on its
+  own, because `fillRange()` writes `--fill` inline four times a second — so the
+  inline one has to be REMOVED. Both halves are needed, and MusicD Remote
+  shipped only the stylesheet half and drew a grey line through the middle of
+  the waveform. Suspect this whenever a stylesheet rule "does not apply".
+- **A stored waveform is only believed when it is still about this file.** The
+  decode rate, size and mtime live beside the peaks, and all three are checked:
+  a rate change is a different-shaped picture, and a re-rip at the same path is
+  the same track id in front of audio that is gone. A MISS is stored too, or a
+  file ffmpeg cannot read is attempted again on every visit to Now playing.
+- **The waveform look-ahead is the ALBUM, not the speaker's queue.** Reading the
+  real queue back off Sonos is a SOAP call — the rule the radio lives under —
+  and this app has no shuffle and no repeat by design, so the next track on the
+  record is the right guess for a database read instead of network traffic.
 - **Play counting watches the speaker, not the button.** Counting on the way out
   would credit an album that was queued and skipped, which is exactly the
   distinction the six-month row depends on.

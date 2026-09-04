@@ -1062,6 +1062,28 @@ main {
 .np-album:empty { display: none; }
 
 .np-progress { width: 100%; margin-top: 18px; }
+/*
+ * The canvas is bound to the SEEK BAR's box, not to the progress block.
+ *
+ * Its own wrapper, sized by the input inside it, so the two can never drift
+ * apart — stretching the canvas over the whole block instead put the waveform
+ * across the running time and the total underneath it. Nothing about the
+ * input's geometry is touched: the track is still 4px and the thumb still
+ * centres on it, which is not a thing to go adjusting by eye.
+ */
+.np-seek-wrap { position: relative; }
+.np-wave {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;               /* the input underneath keeps the drag */
+}
+/* With a waveform showing, the range's own 4px track would draw a line
+   straight through the middle of the shape. The canvas already paints the
+   played/unplayed split, so the track becomes the waveform's background.
+   THIS RULE IS HALF THE FIX — paintProgress() writes --fill INLINE, and an
+   inline custom property beats any stylesheet rule however specific, so the
+   inline one has to be REMOVED as well. See fillRange(). */
+.np-progress.has-wave .np-seek { --fill: transparent; }
 .np-seek {
   -webkit-appearance: none; appearance: none;
   display: block; width: 100%; height: 14px;
