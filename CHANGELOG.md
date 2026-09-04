@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.26
+
+### The Now playing controls stand out, and the menu reads at a comfortable size
+- **Play/pause is a filled disc** in the text colour — near-white on the dark
+  theme, near-black on the light one — instead of a lift so slight it was
+  invisible against the page. Skip and previous stay bare: three equals is not
+  a hierarchy, and play is pressed far more often than either.
+- **Not the accent**, deliberately. The accent already carries the progress and
+  the played half of the waveform directly above; spending it twice on one
+  screen makes neither use mean anything.
+- **The room and volume buttons stop whispering.** Their glyphs were dimmed and
+  their surface barely lifted, which reads as disabled rather than as
+  secondary. Same shapes, legible contrast, and the room name beside them is
+  now in the text colour.
+- **The side menu is 17px rather than 15px**, with its sub-line and footer up a
+  point as well. It is the app's index — every screen is reached from it — and
+  it was set a size below the lists it opens into.
+
 ## 0.4.25
 
 ### The waveform is drawn at a height you can read
