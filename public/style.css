@@ -479,6 +479,11 @@ main {
   background: none; border: 0; padding: 0; margin: 0;
   color: inherit; text-align: left; cursor: pointer;
   transition: transform .08s ease;
+  /* A card is HELD to start choosing several, so iOS must not answer the same
+     gesture with its own "Copy / Save Image" callout over the sleeve — and the
+     hold must not paint a text selection across the title either. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
 }
 .album:hover .album-art-wrap { box-shadow: var(--shadow-card); transform: translateY(-2px); }
 .album:active { transform: scale(.985); }
@@ -1167,6 +1172,67 @@ main {
 .q-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-sub { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-len { flex: 0 0 auto; font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------ */
+/*  Choosing several albums at once                                    */
+/* ------------------------------------------------------------------ */
+
+/* The ring and the tick both sit ON a sleeve, so they are drawn in the accent
+   rather than in a surface colour: a picture the listener chose is as light or
+   as dark as it likes, and "selected" has to read on all of them. */
+.album.is-picked .album-art-wrap {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-color: var(--accent);
+}
+.album-tick {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  display: none; place-items: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  box-shadow: var(--shadow-card);
+}
+.album.is-picked .album-tick { display: grid; }
+.album-tick svg { width: 15px; height: 15px; }
+
+/* The bar itself, in the mini transport's place and to its measurements — the
+   two are never on screen together, and a bar that changed size and position
+   depending on which one it was would read as the screen jumping. */
+.select-bar {
+  position: fixed; z-index: 76;
+  left: 10px; right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom) - var(--kb-inset, 0px));
+  min-height: var(--mini-h);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 0 12px;
+  background: var(--bg-veil); border: 1px solid var(--glass-edge);
+  border-radius: 14px; box-shadow: var(--shadow-card);
+}
+@media (min-width: 720px) { .select-bar { left: auto; right: 22px; width: 420px; } }
+
+.select-count {
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.select-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.select-btn {
+  min-height: var(--ctl-h-sm); padding: 0 12px;
+  background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  font: 600 13px var(--font-sans); cursor: pointer;
+  transition: background .15s ease, transform .08s ease, opacity .15s ease;
+}
+.select-btn:active { transform: scale(.97); }
+.select-btn:hover  { background: var(--bg-elev-2); }
+.select-btn.is-primary {
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+}
+.select-btn.is-quiet { background: none; color: var(--text-dim); border-color: transparent; }
+/* Nothing chosen yet: the mode is on and Cancel is the only thing that can
+   act, so the other two say so rather than failing when pressed. */
+.select-btn:disabled { opacity: .4; cursor: default; }
+.select-btn:disabled:hover { background: var(--bg-elev); }
+.select-btn.is-primary:disabled:hover { background: var(--accent); }
 
 /* ------------------------------------------------------------------ */
 /*  Mini transport                                                     */

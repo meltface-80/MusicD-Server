@@ -376,9 +376,9 @@ test("the keyboard is measured against the viewport that does not move", () => {
  * in every viewport model, and nothing left to paint in the wrong place.
  */
 test("the mini transport is absent while the soft keyboard is up", () => {
-  /* Decided in syncMini with the other two conditions, so there is one place
-     that knows whether the bar is on screen. */
-  assert.match(js, /classList\.toggle\("hidden", onNpFace \|\| state\.typing\)/);
+  /* Decided in syncMini with the other conditions, so there is one place that
+     knows whether the bar is on screen. */
+  assert.match(js, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
   /* From the FOCUS, which is the actual cause of a soft keyboard, rather than
      from a measurement that only correlates with one. */
   assert.match(js, /el\.matches\("input, textarea"\)/);
@@ -1108,15 +1108,98 @@ test("Home does not name itself in the bar", () => {
   assert.ok(!/textContent = title \|\| "MusicD"/.test(js));
 });
 
+/* ------------------------------------------------------------------ */
+/*  Choosing several albums at once                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The selection belongs to the SESSION, not to a screen.
+ *
+ * That is the whole of what was asked for: hold an album in one carousel, walk
+ * back through Home into another, and keep adding to the same set. Every wall
+ * is thrown away and rebuilt as you move between them, so the only way this can
+ * work is for the cards to be painted from the selection rather than the
+ * selection being read back off the cards.
+ */
+test("the selection outlives the screen it was started on", () => {
+  /* On state, beside the other things that survive a screen change. */
+  assert.match(js, /^\s*select: null,/m);
+  /* And nothing on the way in or out of a screen clears it. showView() and
+     openRow() run on every navigation; either one resetting the selection
+     would break the one requirement this feature has. */
+  for (const fn of ["function showView(", "async function openRow("]) {
+    const body = js.slice(js.indexOf(fn));
+    assert.ok(!/state\.select\s*=/.test(body.slice(0, body.indexOf("\n}"))),
+      fn + " must not reset the selection — it has to cross screens");
+  }
+  /* Painted from the selection as each card is built, which is what makes an
+     album ticked on a wall it was never chosen on. */
+  assert.match(js, /if \(picked\(album\.id\)\) card\.classList\.add\("is-picked"\)/);
+});
+
+test("a repaint reaches every card on the page, not just the open wall", () => {
+  const body = js.slice(js.indexOf("function paintPicked()"));
+  /* document-wide: Home's carousels, the search results and an artist's albums
+     are all cards outside #album-grid, and a grid-scoped clear would leave
+     ticks behind on the screens the selection was gathered from. */
+  assert.match(body.slice(0, body.indexOf("\n}")),
+    /document\.querySelectorAll\("\.album\[data-album\]"\)/);
+});
+
+test("a flick along a carousel is a scroll, not a hold", () => {
+  /* The rows scroll sideways and the gesture starts on a card, so without this
+     every flick along a carousel would drop the user into select mode. */
+  const body = js.slice(js.indexOf("function holdToPick("));
+  const fn = body.slice(0, body.indexOf("\n}\n"));
+  assert.match(fn, /Math\.abs\(ev\.clientX - startX\) > PICK_SLOP/);
+  assert.match(fn, /Math\.abs\(ev\.clientY - startY\) > PICK_SLOP/);
+  /* And the browser's own answer to a long press — the desktop menu, the iOS
+     image callout — is not allowed over the top of ours. */
+  assert.match(fn, /"contextmenu", \(e\) => e\.preventDefault\(\)/);
+  /* Longer than the row pads' hold: a card is the app's ordinary tap target. */
+  const hold = /const PICK_HOLD_MS = (\d+);/.exec(js);
+  const drag = /const DRAG_HOLD_MS = (\d+);/.exec(js);
+  assert.ok(hold && drag && Number(hold[1]) > Number(drag[1]),
+    "an unhurried tap on an album must not start choosing albums");
+});
+
+test("the click behind a hold does not undo what the hold just did", () => {
+  /* The same idiom the covers and Last.fm rows use: one gesture arrives as a
+     hold AND as the click that follows the finger coming up, and letting the
+     second through would toggle straight back off the album just chosen. */
+  assert.match(js, /if \(state\.pickHeld\) \{ state\.pickHeld = false; return; \}/);
+  assert.match(js, /state\.pickHeld = true;/);
+});
+
+test("a selection that could not be played is kept, not thrown away", () => {
+  const body = js.slice(js.indexOf("async function playPicked("));
+  const fn = body.slice(0, body.indexOf("\n}\n"));
+  /* exitSelect() belongs to the success path only. Losing a set somebody
+     picked one album at a time because the room was busy is the worse half of
+     the two things that can go wrong. */
+  const success = fn.slice(0, fn.indexOf("} catch"));
+  const failure = fn.slice(fn.indexOf("} catch"));
+  assert.match(success, /exitSelect\(\)/);
+  assert.ok(!/exitSelect\(\)/.test(failure), "a failed play must not clear the selection");
+});
+
+test("the whole selection goes in one request", () => {
+  /* One call with every album rather than one call per album: the server
+     clears the room's queue for a play, so a loop would have each album wipe
+     the one before it and leave only the last playing. */
+  assert.match(js, /post\("\/api\/play", \{ zone: state\.zone\.uuid, albumIds: ids, mode \}\)/);
+});
+
 test("the mini bar is always on screen, because it is the only room picker", () => {
   /* Hiding it when nothing is playing would leave a fresh install with nowhere
      to choose a speaker from, now that the top bar has no button for it. */
   const sync = js.slice(js.indexOf("function syncMini()"));
   const body = sync.slice(0, sync.indexOf("\n}"));
-  /* Two exceptions and no others: the Now playing face, which carries the full
-     transport already, and a soft keyboard, which the bar is meant to be
-     behind. Neither is about whether anything is playing. */
-  assert.match(body, /classList\.toggle\("hidden", onNpFace \|\| state\.typing\)/);
+  /* Three exceptions and no others: the Now playing face, which carries the
+     full transport already; a soft keyboard, which the bar is meant to be
+     behind; and choosing albums, where the selection bar stands in its place.
+     None of them is about whether anything is playing. */
+  assert.match(body, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
   assert.ok(!/!playing/.test(body), "playing state no longer decides whether the bar exists");
   /* And it says something useful when idle. */
   assert.match(js, /"Nothing playing" : "Choose a room"/);

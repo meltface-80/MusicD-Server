@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.23
+
+### Choose several albums at once
+- **Hold an album to start choosing**, then tap the rest. The album you held is
+  the first one chosen. Tapping a chosen album again takes it back off, so a
+  mis-tap costs one tap rather than the whole selection.
+- **Play Now** replaces the room's queue with everything chosen and starts it;
+  **Queue** adds them all to the end of what is already there; **Cancel**
+  unselects everything and leaves the mode. All three sit in a bar that stands
+  in the mini transport's place while you are choosing.
+- **The selection follows you between screens.** Hold an album in one carousel,
+  go back to Home, open a different row and carry on adding to the same set —
+  which is the point of it. An album already chosen shows its tick on every
+  screen it appears on, including rows it was never chosen from.
+- **It works anywhere an album is shown**: the home carousels, the full walls,
+  the search results and an artist's albums are all the same card.
+- **A flick along a carousel is still a scroll.** The rows are dragged sideways
+  from the same cards this gesture starts on, so moving cancels the hold.
+- The whole selection goes to the speaker as ONE queue in the order it was
+  chosen. Sending an album at a time would clear the queue for each one and
+  leave only the last album playing.
+
 ## 0.4.22
 
 ### The mini transport no longer appears over the search results
