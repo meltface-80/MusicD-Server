@@ -1061,22 +1061,38 @@ main {
 .np-album:hover { color: var(--text); text-decoration: underline; }
 .np-album:empty { display: none; }
 
-.np-progress { width: 100%; margin-top: 18px; }
-/*
- * The canvas is bound to the SEEK BAR's box, not to the progress block.
- *
- * Its own wrapper, sized by the input inside it, so the two can never drift
- * apart — stretching the canvas over the whole block instead put the waveform
- * across the running time and the total underneath it. Nothing about the
- * input's geometry is touched: the track is still 4px and the thumb still
- * centres on it, which is not a thing to go adjusting by eye.
- */
-.np-seek-wrap { position: relative; }
+.np-progress {
+  width: 100%; margin-top: 18px; position: relative;
+  /* Chrome's UA stylesheet puts margin: 2px on input[type=range]. The canvas is
+     positioned against the CONTAINER while the input sits in flow below that
+     margin, so without allowing for it the shape is drawn two pixels above the
+     thumb that is supposed to ride along it. Declared once and used by both
+     rules, so the two cannot drift apart. */
+  --seek-inset: 2px;
+  /* The waveform's height, and with it the height of the bar in waveform mode.
+     Named because two rules have to agree on it: the canvas draws at this
+     height and the input is GROWN to match. Bound to the plain bar's 14px
+     instead, the shape is legible in length and unreadable in height — every
+     bar within a few pixels of every other, which is a texture rather than a
+     waveform. */
+  --wave-h: 34px;
+}
 .np-wave {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+  position: absolute;
+  /* Aligned to the INPUT's box, not the container's, so the thumb rides through
+     the middle of the waveform rather than sitting below it. */
+  left: 0; right: 0; top: var(--seek-inset);
+  width: 100%; height: var(--wave-h);
   pointer-events: none;               /* the input underneath keeps the drag */
 }
+/*
+ * The input GROWS to the canvas's height, which is what makes the whole shape
+ * draggable rather than just the 4px line the plain bar occupies — and a range
+ * centres its own track and thumb vertically in its box, so a 34px input puts
+ * the thumb exactly on the waveform's midline with no offset to keep in step.
+ * z-index so the thumb draws above the canvas rather than under it.
+ */
+.np-progress.has-wave .np-seek { height: var(--wave-h); position: relative; z-index: 1; }
 /* With a waveform showing, the range's own 4px track would draw a line
    straight through the middle of the shape. The canvas already paints the
    played/unplayed split, so the track becomes the waveform's background.
@@ -1087,6 +1103,9 @@ main {
 .np-seek {
   -webkit-appearance: none; appearance: none;
   display: block; width: 100%; height: 14px;
+  /* Stated rather than inherited from the UA sheet — .np-wave is positioned
+     against this exact value. */
+  margin: var(--seek-inset) 0;
   background: transparent; cursor: pointer;
   --fill: var(--border);
 }

@@ -217,6 +217,15 @@ part of the fix.
   Averaging peaks turns a sharp track into mush, which is the one thing a
   waveform is for. Each track is normalised to its OWN loudest moment: an
   absolute scale leaves a quietly-mastered record a flat line beside a loud one.
+- **A waveform squeezed into the seek bar's own height is not readable.** At
+  14px every peak lands within a few pixels of every other and the shape reads
+  as a texture. The canvas draws at `--wave-h` (34px) and the INPUT IS GROWN to
+  match: a range centres its own track and thumb in its box, so the thumb lands
+  on the waveform's midline with no offset to maintain, and the whole shape
+  becomes draggable rather than just the 4px line. Chrome's UA sheet also puts
+  `margin: 2px` on `input[type=range]` — the canvas is positioned against the
+  CONTAINER, so `--seek-inset` has to allow for it or the shape sits two pixels
+  above the thumb.
 - **AN INLINE CUSTOM PROPERTY BEATS ANY STYLESHEET RULE, however specific.**
   `.np-progress.has-wave .np-seek { --fill: transparent }` does nothing on its
   own, because `fillRange()` writes `--fill` inline four times a second — so the

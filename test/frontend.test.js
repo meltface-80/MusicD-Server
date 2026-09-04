@@ -1119,10 +1119,27 @@ test("the waveform is decoration under the seek bar, never a replacement", () =>
   assert.match(html, /<canvas id="np-wave" class="np-wave hidden" aria-hidden="true">/);
   assert.match(css, /\.np-wave \{[^}]*pointer-events: none/s,
     "the input underneath has to keep the drag");
-  /* Bound to the seek bar's own box. Stretched over the whole progress block
-     it drew across the running time and the total underneath. */
-  assert.match(css, /\.np-seek-wrap \{ position: relative; \}/);
-  assert.match(css, /\.np-wave \{[^}]*position: absolute; inset: 0;/s);
+  /*
+   * THE HEIGHT IS THE POINT, and it was wrong first time round.
+   *
+   * Bound to the plain bar's 14px the waveform is right in length and
+   * unreadable in height — every bar within a few pixels of every other, which
+   * is a texture rather than a shape. The canvas draws at --wave-h and the
+   * INPUT IS GROWN to match: a range centres its own track and thumb in its
+   * box, so a 34px input puts the thumb exactly on the waveform's midline with
+   * no offset to keep in step, and the whole shape becomes draggable rather
+   * than just the 4px line the plain bar occupies.
+   */
+  assert.match(css, /--wave-h: 34px;/);
+  assert.match(css, /\.np-progress\.has-wave \.np-seek \{ height: var\(--wave-h\);/);
+  assert.match(css, /\.np-wave \{[^}]*height: var\(--wave-h\)/s);
+  /* Chrome's UA sheet puts margin: 2px on input[type=range]. The canvas is
+     positioned against the CONTAINER while the input sits in flow below that
+     margin, so without allowing for it the shape is drawn two pixels above the
+     thumb meant to ride along it. One token, read by both rules. */
+  assert.match(css, /--seek-inset: 2px;/);
+  assert.match(css, /\.np-wave \{[^}]*top: var\(--seek-inset\)/s);
+  assert.match(css, /\.np-seek \{[^}]*margin: var\(--seek-inset\) 0;/s);
 });
 
 test("the seek bar's own track is REMOVED, not overridden, under a waveform", () => {
