@@ -112,6 +112,21 @@ const state = {
   /* Whether a text field has the soft keyboard up, which is the third thing
      that decides whether the mini bar is on screen — see trackTyping(). */
   typing: false,
+  /*
+   * Choosing several albums at once. null when off; { ids: [...] } while on,
+   * in the order they were tapped.
+   *
+   * It lives HERE, on the session, rather than on any screen — that is the
+   * whole feature. Hold an album in one carousel, go back to Home, open
+   * another row and carry on adding: the wall is rebuilt from scratch each
+   * time and the selection is not, because nothing about it belongs to the
+   * screen it was started on.
+   */
+  select: null,
+  /* A hold just fired, so the click coming up behind the finger is that same
+     gesture arriving late and must not also be treated as a tap. The same
+     idiom the covers row and the Last.fm row use. */
+  pickHeld: false,
   now: null,
   grid: null,            // the row on screen, and how far into it we have read
   seeking: false,
@@ -238,6 +253,176 @@ window.addEventListener("popstate", (event) => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Choosing several albums at once                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Hold an album to start choosing; tap the rest to add them.
+ *
+ * THE SELECTION OUTLIVES THE SCREEN. That is the point of it, and it is why
+ * nothing here is stored on a wall, a row or a grid: hold an album in one
+ * carousel, step back to Home, open a different row and keep adding to the
+ * same set. Every screen is thrown away and rebuilt as you move between them,
+ * so the cards are painted FROM the selection each time they are built rather
+ * than the selection being read back off the cards.
+ *
+ * MusicD Remote arms the mode without choosing the album under the finger, on
+ * the grounds that pressing something and having it become selected gives you
+ * a selection you did not ask for. This does the opposite, as asked: the hold
+ * is what says "this one, and more to come", and needing a second tap on the
+ * album you are already holding would be a gesture that starts by doing
+ * nothing.
+ */
+
+/* Longer than the row pads' 320ms, deliberately. A pad is a small control
+   whose only job is to be held; an album card is the ordinary tap target of
+   the whole app, and at 320ms an unhurried tap would start choosing albums. */
+const PICK_HOLD_MS = 500;
+/* The same eight pixels the row pads allow, stated here rather than borrowed
+   from them: that one is a vertical drag inside a menu, this one is a hold on
+   a card that a carousel can be flicked sideways from. */
+const PICK_SLOP = 8;
+
+const selecting = () => !!state.select;
+const picked = (id) => !!state.select && state.select.ids.includes(id);
+
+/*
+ * The hold, in pointer events so one path covers a finger and a mouse — the
+ * same shape as beginRowDrag() below.
+ *
+ * Movement cancels it, which is what keeps the carousels usable: a flick along
+ * a row of albums starts on a card, and without the slop check every scroll
+ * would end in select mode.
+ */
+function holdToPick(card, albumId) {
+  let timer = null;
+  const drop = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+  card.addEventListener("pointerdown", (e) => {
+    if (e.button != null && e.button > 0) return;      // right-click is not a hold
+    const startX = e.clientX, startY = e.clientY;
+    drop();
+    timer = setTimeout(() => {
+      timer = null;
+      state.pickHeld = true;
+      if (navigator.vibrate) navigator.vibrate(8);
+      if (selecting()) togglePick(albumId);
+      else enterSelect(albumId);
+    }, PICK_HOLD_MS);
+
+    const move = (ev) => {
+      if (Math.abs(ev.clientX - startX) > PICK_SLOP ||
+          Math.abs(ev.clientY - startY) > PICK_SLOP) { drop(); done(); }
+    };
+    const done = () => {
+      drop();
+      card.removeEventListener("pointermove", move);
+      for (const ev of ["pointerup", "pointercancel", "pointerleave"]) {
+        card.removeEventListener(ev, done);
+      }
+    };
+    card.addEventListener("pointermove", move);
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) {
+      card.addEventListener(ev, done);
+    }
+  });
+
+  /* A held card on a desktop otherwise opens the browser's own menu over the
+     sleeve, and on iOS the image callout — both of them answering the gesture
+     that was meant for us. */
+  card.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
+function enterSelect(albumId) {
+  state.select = { ids: [albumId] };
+  paintSelection();
+}
+
+function togglePick(albumId) {
+  if (!state.select) return;
+  const ids = state.select.ids;
+  const at = ids.indexOf(albumId);
+  /* Tapping a chosen album again removes it. Without that the only way out of
+     a mis-tap is Cancel and starting the whole selection again. */
+  if (at === -1) ids.push(albumId);
+  else ids.splice(at, 1);
+  paintSelection();
+}
+
+/*
+ * Leaving the mode. Cancel does it, and so does a finished action — a set of
+ * albums that has just been played is not a set you are still choosing.
+ */
+function exitSelect() {
+  state.select = null;
+  paintSelection();
+}
+
+/*
+ * Every card on the page, brought into line with the selection.
+ *
+ * Document-wide rather than scoped to a grid: Home's carousels, the search
+ * results and an artist's albums are all cards outside #album-grid, and a
+ * grid-scoped repaint would leave ticks behind on the screens the selection
+ * was gathered from.
+ */
+function paintPicked() {
+  for (const card of document.querySelectorAll(".album[data-album]")) {
+    const on = picked(card.dataset.album);
+    card.classList.toggle("is-picked", on);
+    if (selecting()) card.setAttribute("aria-pressed", on ? "true" : "false");
+    else card.removeAttribute("aria-pressed");
+  }
+}
+
+function paintSelectBar() {
+  const bar = $("select-bar");
+  bar.classList.toggle("hidden", !selecting());
+  if (!selecting()) return;
+  const n = state.select.ids.length;
+  $("select-count").textContent = n
+    ? `${n} album${n === 1 ? "" : "s"} selected`
+    : "Tap albums to select";
+  /* With nothing chosen the mode is still on — Cancel is the documented way
+     out — but there is nothing for the other two to act on. */
+  $("select-play").disabled = !n;
+  $("select-queue").disabled = !n;
+}
+
+/* The three things a change to the selection has to keep in step: the cards,
+   the bar, and the mini transport the bar stands in for. */
+function paintSelection() {
+  paintPicked();
+  paintSelectBar();
+  syncMini();
+}
+
+async function playPicked(mode) {
+  if (!selecting() || !state.select.ids.length) return;
+  if (!await requireZone()) return;
+  const ids = state.select.ids.slice();
+  const buttons = [$("select-play"), $("select-queue")];
+  for (const b of buttons) b.disabled = true;
+  try {
+    const result = await post("/api/play", { zone: state.zone.uuid, albumIds: ids, mode });
+    const albums = `${ids.length} album${ids.length === 1 ? "" : "s"}`;
+    toast(mode === "queue"
+      ? `Added ${albums} to ${result.room}.`
+      : (result.skipped
+          ? `Playing ${albums} in ${result.room} — ${result.skipped} file(s) Sonos cannot play were skipped.`
+          : `Playing ${albums} in ${result.room}.`));
+    exitSelect();
+    if (mode !== "queue") setTimeout(pollNow, 900);
+  } catch (e) {
+    toast(e.message, true);
+    /* The selection is deliberately kept on a failure: the room was busy or the
+       network dropped, and losing the albums somebody just picked one at a time
+       would be the worse half of the two. */
+    paintSelectBar();
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Album cards                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -294,13 +479,38 @@ function albumCard(album, { showReason = false } = {}) {
     wrap.classList.add("no-image");
   }
 
+  /* Always built, shown by CSS only when this album is chosen. Painting it in
+     and out as the selection changes would mean every repaint touching the
+     card's children; a class on the card is one write. */
+  const tick = el("span", "album-tick");
+  tick.setAttribute("aria-hidden", "true");
+  tick.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+    '<polyline points="20 6 9 17 4 12"/></svg>';
+  wrap.appendChild(tick);
+
   const meta = el("div", "album-meta");
   meta.appendChild(el("div", "album-title", album.title));
   meta.appendChild(el("div", "album-artist", album.artist || "Unknown artist"));
   if (showReason && album.reason) meta.appendChild(el("div", "album-reason", album.reason));
 
   card.append(wrap, meta);
-  card.addEventListener("click", () => openAlbum(album.id));
+
+  /* The id on the element, so a selection that outlived this screen can find
+     its cards again after the wall has been rebuilt — see paintPicked(). */
+  card.dataset.album = album.id;
+  if (picked(album.id)) card.classList.add("is-picked");
+  if (selecting()) card.setAttribute("aria-pressed", picked(album.id) ? "true" : "false");
+
+  card.addEventListener("click", () => {
+    /* The hold already acted. The click behind it is the same gesture, and
+       letting it through would toggle straight back off the album the hold
+       just chose. */
+    if (state.pickHeld) { state.pickHeld = false; return; }
+    if (selecting()) return togglePick(album.id);
+    openAlbum(album.id);
+  });
+  holdToPick(card, album.id);
   return card;
 }
 
@@ -1319,10 +1529,11 @@ function syncMini() {
      nowhere to choose a speaker from. The one face that hides it is Now
      playing, which has the full transport on it already. */
   const onNpFace = state.face === "np" && !$("album-modal").classList.contains("hidden");
-  /* And the third: not while the soft keyboard is up. See trackTyping() — the
+  /* And two more: not while the soft keyboard is up (see trackTyping() — the
      bar was always meant to be behind the keys, and being absent is the only
-     version of that which no viewport can paint wrong. */
-  $("mini").classList.toggle("hidden", onNpFace || state.typing);
+     version of that which no viewport can paint wrong), and not while albums
+     are being chosen, because the selection bar is standing in its place. */
+  $("mini").classList.toggle("hidden", onNpFace || state.typing || selecting());
 }
 
 function openModal() {
@@ -2975,6 +3186,11 @@ function wire() {
   $("menu-theme").addEventListener("click", () => {
     applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
   });
+
+  /* Choosing several albums */
+  $("select-play").addEventListener("click", () => playPicked("play"));
+  $("select-queue").addEventListener("click", () => playPicked("queue"));
+  $("select-cancel").addEventListener("click", exitSelect);
 
   $("sort-open").addEventListener("click", openSortSheet);
   for (const node of document.querySelectorAll("[data-close-sort]")) {

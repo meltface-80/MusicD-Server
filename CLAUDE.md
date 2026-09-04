@@ -197,6 +197,21 @@ part of the fix.
   album is due, and the rest says what must not be offered again — and at the
   moment a top-up is due the tail is EMPTY, so a tail-only read excludes
   nothing. The fake Sonos honours `StartingIndex` because a real one does.
+- **Several albums are ONE enqueue, not a loop.** `enqueue()` clears the room's
+  queue when `replace` is set, so playing a selection an album at a time would
+  have each one wipe the one before it and leave only the last playing.
+  `playAlbums()` concatenates the tracks and sends them once, in the order they
+  were chosen.
+- **A selection belongs to the session, not to a screen.** Multi-select has to
+  survive walking from one carousel to another through Home, so `state.select`
+  is the truth and the cards are painted FROM it every time a wall is rebuilt —
+  never the other way round. Nothing in `showView()` or `openRow()` may reset
+  it, and the repaint is document-wide because Home's carousels, the search
+  results and an artist's albums are all cards outside `#album-grid`.
+- **A hold on a card must lose to a scroll.** The carousels are flicked
+  sideways from the same cards the hold starts on, so movement past
+  `PICK_SLOP` cancels it — and the click that arrives behind the finger is the
+  same gesture, so it is swallowed rather than treated as a tap.
 - **Play counting watches the speaker, not the button.** Counting on the way out
   would credit an album that was queued and skipped, which is exactly the
   distinction the six-month row depends on.

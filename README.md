@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.22` | that exact version, for pinning |
+| `:0.4.23` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -246,6 +246,20 @@ Albums with no year, and albums never played, are treated as *unknown* rather
 than as zero: they stay at the end of the wall whichever way the arrow points.
 Random is seeded so the wall stays consistent as it pages; the control becomes
 **Shuffle**.
+
+## Choosing several albums
+
+**Hold** an album to start choosing and **tap** the rest to add them; tapping a
+chosen album again takes it back off. A bar takes the mini transport's place
+with **Play Now**, **Queue** and **Cancel**.
+
+The selection follows you between screens: hold an album in one carousel, go
+back to Home, open another row and carry on adding to the same set. An album
+already chosen shows its tick everywhere it appears. It works on the home
+carousels, the full walls, the search results and an artist's albums.
+
+Play Now replaces the room's queue with everything chosen, in the order you
+chose it; Queue adds it all to the end of what is playing.
 
 ## Random Album Radio
 

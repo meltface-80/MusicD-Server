@@ -275,6 +275,23 @@
   </div>
 
 
+  <!-- ---------------------------------------------------------------- -->
+  <!--  Choosing several albums at once                                  -->
+  <!-- ---------------------------------------------------------------- -->
+  <!-- Takes the mini bar's place rather than stacking above it: one bar at the
+       foot of the screen, and while you are choosing albums that is the job in
+       hand. It lives outside every view because the selection outlives the
+       screen it started on — hold an album in one carousel, walk to another
+       through Home, and carry on adding. -->
+  <div id="select-bar" class="select-bar hidden" role="toolbar" aria-label="Selected albums">
+    <span id="select-count" class="select-count" aria-live="polite">Tap albums to select</span>
+    <div class="select-actions">
+      <button id="select-play" class="select-btn is-primary" type="button">Play Now</button>
+      <button id="select-queue" class="select-btn" type="button">Queue</button>
+      <button id="select-cancel" class="select-btn is-quiet" type="button">Cancel</button>
+    </div>
+  </div>
+
   <!-- The mini bar's volume, just above the bar. Floating, not in flow: opening it must not move the screen
        underneath, which is the whole reason it is not a panel. -->
   <div class="vol-sheet mt-vol-sheet hidden" id="mt-vol-sheet" role="dialog" aria-label="Volume">

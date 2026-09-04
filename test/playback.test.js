@@ -171,6 +171,80 @@ test("queueing appends without clearing and without starting playback", async ()
   } finally { await r.cleanup(); }
 });
 
+/* ---------------------------------------------------------------- */
+/*  Several albums at once, from the grid's select mode              */
+/* ---------------------------------------------------------------- */
+
+test("several albums play as one queue, in the order they were chosen", async () => {
+  const r = await rig();
+  try {
+    const result = await r.playback.playAlbums(r.kitchen(),
+      [r.albumId("Hex"), r.albumId("Spirit of Eden"), r.albumId("Souvlaki")]);
+
+    /* Three albums, one clear. Enqueueing them one album at a time would clear
+       the queue three times and leave only the last album on the speaker —
+       which is the whole reason this is one call rather than a loop. */
+    assert.strictEqual(r.fake.actions().filter(a => a === "RemoveAllTracksFromQueue").length, 1);
+    assert.strictEqual(result.queued, 3 + 6 + 3);
+    assert.strictEqual(r.fake.state.queue.length, 3 + 6 + 3);
+
+    const albums = r.fake.state.queue.map(item =>
+      /<upnp:album>([^<]*)<\/upnp:album>/.exec(item.metadata)[1]);
+    assert.deepStrictEqual([...new Set(albums)], ["Hex", "Spirit of Eden", "Souvlaki"],
+      "the order chosen is the order queued, not whatever order the library is in");
+
+    assert.strictEqual(r.fake.state.transportState, "PLAYING");
+    assert.strictEqual(r.fake.state.track, 1, "and it starts at the first of them");
+  } finally { await r.cleanup(); }
+});
+
+test("queueing several albums appends them all and starts nothing", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    const before = r.fake.state.queue.length;
+    r.fake.state.calls.length = 0;
+
+    await r.playback.playAlbums(r.kitchen(),
+      [r.albumId("Hex"), r.albumId("Spirit of Eden")], { replace: false });
+
+    assert.ok(!r.fake.actions().includes("RemoveAllTracksFromQueue"), "nothing was cleared");
+    assert.ok(!r.fake.actions().includes("Play"), "and nothing was restarted");
+    assert.strictEqual(r.fake.state.queue.length, before + 3 + 6);
+  } finally { await r.cleanup(); }
+});
+
+test("each album in a multi-album queue keeps its own sleeve and artist", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbums(r.kitchen(), [r.albumId("Hex"), r.albumId("Souvlaki")]);
+    /* enqueue() looks each album up once for the metadata. Handing every track
+       the FIRST album's details would show one sleeve down the whole queue,
+       which is exactly what the Sonos app would then display. */
+    for (const item of r.fake.state.queue) {
+      assert.match(item.metadata, /RINCON_AssociatedZPUDN/);
+      assert.match(item.metadata, /<upnp:album>(Hex|Souvlaki)<\/upnp:album>/);
+    }
+    const arts = new Set(r.fake.state.queue.map(item =>
+      (/<upnp:albumArtURI>([^<]*)<\/upnp:albumArtURI>/.exec(item.metadata) || [])[1]));
+    assert.strictEqual(arts.size, 2, "two albums, two covers");
+  } finally { await r.cleanup(); }
+});
+
+test("a selection of albums that are all gone says so rather than clearing the room", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Souvlaki"));
+    const before = r.fake.state.queue.length;
+    await assert.rejects(
+      () => r.playback.playAlbums(r.kitchen(), ["a:gone", "a:alsogone"]),
+      /no playable files/);
+    /* The check is BEFORE the queue is cleared, so a stale selection cannot
+       cost somebody the queue they were listening to. */
+    assert.strictEqual(r.fake.state.queue.length, before);
+  } finally { await r.cleanup(); }
+});
+
 test("a room that is not on the network fails with something a person can read", async () => {
   const r = await rig();
   try {

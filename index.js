@@ -658,12 +658,16 @@ app.get("/api/queue", api(async (req, res) => {
 }));
 
 app.post("/api/play", api(async (req, res) => {
-  const { zone, albumId, trackIds, startIndex = 0, mode = "play" } = req.body || {};
+  const { zone, albumId, albumIds, trackIds, startIndex = 0, mode = "play" } = req.body || {};
   if (!zone) return res.status(400).json({ error: "Choose a room first." });
 
   let result;
   if (Array.isArray(trackIds) && trackIds.length) {
     result = await playback.playTracks(zone, trackIds, { replace: mode !== "queue" });
+  } else if (Array.isArray(albumIds) && albumIds.length) {
+    /* A hand-picked set, from the grid's select mode. Ahead of albumId so a
+       client that sends both is not silently served the single-album path. */
+    result = await playback.playAlbums(zone, albumIds, { replace: mode !== "queue" });
   } else if (albumId) {
     result = mode === "queue"
       ? await playback.queueAlbum(zone, albumId)
