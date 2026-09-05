@@ -630,13 +630,13 @@ function renderHomeRows() {
 
     const name = el("span", "home-row-name", state.rowTitles[row.id] || row.id);
 
-    const toggle = el("button", "home-row-switch");
+    const toggle = el("button", "toggle home-row-switch");
     toggle.type = "button";
     toggle.setAttribute("role", "switch");
     toggle.setAttribute("aria-checked", row.on !== false ? "true" : "false");
     toggle.setAttribute("aria-label", (state.rowTitles[row.id] || row.id) + " carousel");
     toggle.classList.toggle("is-on", row.on !== false);
-    toggle.appendChild(el("span", "home-row-knob"));
+    toggle.appendChild(el("span", "toggle-knob"));
     toggle.addEventListener("click", () => {
       /* Painted from the answer the server gives, not from the tap — the same
          rule the covers and radio switches follow. */
@@ -2668,10 +2668,35 @@ function banner(text, isError = false) {
  * turned it on is reflected on this one within the poll rather than the two
  * disagreeing until a reload.
  */
+/*
+ * Which way a two-state row is set, shown as well as said.
+ *
+ * One place that knows how, because five rows do it and five copies of two
+ * lines is five chances for one of them to stop agreeing with its own words.
+ */
+function paintToggle(rowId, on) {
+  const row = $(rowId);
+  const knob = row.querySelector(".toggle");
+  if (knob) knob.classList.toggle("is-on", !!on);
+  /* The ROW carries the state for a screen reader — the switch inside it is
+     decoration, and announcing both would say everything twice. */
+  if (row.getAttribute("role") === "switch") {
+    row.setAttribute("aria-checked", on ? "true" : "false");
+  }
+}
+
+/* Which of a named pair is chosen. */
+function paintPair(pairId, chosen) {
+  for (const opt of $(pairId).querySelectorAll(".pair-opt")) {
+    opt.classList.toggle("is-on", opt.dataset.opt === chosen);
+  }
+}
+
 function showRadio(radio) {
   state.radio = radio;
   const row = $("menu-radio");
   row.classList.toggle("is-off", !radio.enabled);
+  paintToggle("menu-radio", radio.enabled);
   $("radio-sub").textContent = radio.enabled
     ? "On — keeps the queue full with random albums"
     : "Off — the queue ends where you left it";
@@ -2679,6 +2704,7 @@ function showRadio(radio) {
   const genre = $("menu-radio-genre");
   genre.classList.toggle("hidden", !radio.enabled);
   genre.classList.toggle("is-off", !radio.matchGenre);
+  paintToggle("menu-radio-genre", radio.matchGenre);
   $("radio-genre-sub").textContent = radio.matchGenre
     ? "On — picks from the genre that is playing"
     : "Off — anything in the library";
@@ -2691,6 +2717,7 @@ function showCovers(covers) {
   if (!covers.available) return;
 
   row.classList.toggle("is-off", !covers.enabled);
+  paintToggle("menu-covers", covers.enabled);
   $("covers-sub").textContent =
     !covers.enabled ? "Off — album art comes from your files only"
     : covers.running ? `Looking — ${covers.done} of ${covers.total}`
@@ -3197,9 +3224,12 @@ const NP_LEFT_KEY = "musicd.npLeft";
 
 function applyNpLeft(mode) {
   state.npLeft = mode === "back" ? "back" : "home";
+  paintPair("npleft-pair", state.npLeft);
+  /* The pair names the choice, so the line under it only has to say what the
+     choice DOES rather than repeat which one it is. */
   $("npleft-sub").textContent = state.npLeft === "back"
-    ? "Back · to the screen you came from"
-    : "Home · to the home screen";
+    ? "to the screen you came from"
+    : "to the home screen";
   try { localStorage.setItem(NP_LEFT_KEY, state.npLeft); } catch { /* storage off */ }
   /* Repainted rather than left until the next face change: the panel can be
      open behind the menu, and a setting that only takes effect next time reads
@@ -3211,7 +3241,8 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   document.querySelector('meta[name="theme-color"]')
     .setAttribute("content", theme === "light" ? "#f6f5f2" : "#1d2125");
-  $("theme-sub").textContent = theme === "light" ? "Light" : "Dark";
+  /* No sub-line: it said "Dark", which is exactly what the pair now shows. */
+  paintPair("theme-pair", theme === "light" ? "light" : "dark");
   try { localStorage.setItem("musicd.theme", theme); } catch { /* storage off */ }
 }
 

@@ -269,6 +269,60 @@ button, input { font-family: inherit; }
 [data-theme="light"] .menu-brand { filter: invert(1); }
 /* 17px rather than 15px. This is the app's index — every screen is reached
    from it — and it was set a size below the lists it opens into. */
+/* ------------------------------------------------------------------ */
+/*  The state of a two-state setting                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A row that says what it is set to, rather than only in words.
+ *
+ * The control SHOWS the state; the row is still the button. One handler, one
+ * tap target the width of the menu, and no way for a small switch and the row
+ * under it to disagree about what a press meant — which is the bug a nested
+ * control invites. Every row here was already a button that toggled, so this
+ * changes what is on screen and nothing about how any of it is operated.
+ */
+.menu-item.has-toggle {
+  flex-direction: row; align-items: center; gap: 12px;
+}
+.menu-text { flex: 1 1 auto; min-width: 0; }
+
+/* An on/off switch, for the settings that really are on or off. */
+.toggle {
+  flex: 0 0 auto; width: 46px; height: 28px; padding: 3px;
+  display: inline-flex; align-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background .15s ease, border-color .15s ease;
+}
+.toggle-knob {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform .15s ease, background .15s ease;
+}
+.toggle.is-on { background: var(--accent); border-color: var(--accent); }
+.toggle.is-on .toggle-knob { background: var(--on-accent); transform: translateX(18px); }
+
+/*
+ * A named pair, for the settings that are a choice rather than a switch.
+ *
+ * "On" says nothing about whether a theme is light or dark, or whether a
+ * corner button goes home or back — the two words do, and showing both is what
+ * makes the alternative discoverable at all.
+ */
+.pair {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  padding: 3px; gap: 2px;
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.pair-opt {
+  padding: 0 10px; line-height: 22px; border-radius: 999px;
+  font: 600 12.5px var(--font-sans); color: var(--text-faint);
+  transition: background .15s ease, color .15s ease;
+}
+.pair-opt.is-on { background: var(--accent); color: var(--on-accent); }
+
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   width: 100%; min-height: var(--tap-min);
@@ -278,7 +332,10 @@ button, input { font-family: inherit; }
 }
 .menu-item:hover  { background: var(--bg-elev-2); }
 .menu-item:active { background: var(--accent-soft); }
-.menu-sub { font-size: 13px; color: var(--text-dim); }
+/* Its own line. It used to get one from .menu-item being a flex COLUMN; a row
+   with a control beside it is not, so the sub-line has to say so itself or it
+   runs on after the title. */
+.menu-sub { display: block; font-size: 13px; color: var(--text-dim); }
 .menu-sep { flex: 0 0 auto; height: 1px; margin: 8px 18px; background: var(--border); }
 .menu-foot {
   flex: 0 0 auto;
@@ -312,22 +369,8 @@ button, input { font-family: inherit; }
   padding: 4px 18px 4px 0;
 }
 .home-row-name { flex: 1 1 auto; min-width: 0; font-size: 17px; color: var(--text); }
-/* A switch rather than a checkbox: the row is a thing that is on or off, and
-   the state has to read at a glance down a list of seven. */
-.home-row-switch {
-  flex: 0 0 auto; width: 46px; height: 28px; padding: 3px;
-  display: inline-flex; align-items: center;
-  background: var(--bg-elev-2); border: 1px solid var(--border);
-  border-radius: 999px; cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
-}
-.home-row-knob {
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--text-faint);
-  transition: transform .15s ease, background .15s ease;
-}
-.home-row-switch.is-on { background: var(--accent); border-color: var(--accent); }
-.home-row-switch.is-on .home-row-knob { background: var(--on-accent); transform: translateX(18px); }
+/* ONE switch, used by this list and by the settings rows — see .toggle in the
+   side menu section. A second one that merely looked the same would drift. */
 /* The row being dragged, and the ones getting out of its way — the same
    treatment the menu entries had when the arranging lived there. */
 .home-row.is-dragging {

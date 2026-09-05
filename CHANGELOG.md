@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.32
+
+### Settings show what they are set to
+- **Every two-state setting now carries a control**, and the control suits the
+  setting: an on/off switch for Random Album Radio, Match the current genre and
+  Find missing covers; a named pair for Theme (**Dark / Light**) and the Now
+  playing button (**Home / Back**), where "on" would not have answered the
+  question.
+- **Nothing changed about how any of them is operated.** Each of these rows was
+  already a button that toggled, and it still is — the control shows the state
+  and does not compete with the row for the tap. Find missing covers still taps
+  to look now and holds to switch, with the difference that its state is no
+  longer invisible.
+- Theme's line underneath said "Dark", which is exactly what the pair shows, so
+  it is gone; the Now playing button's now says only what the choice does.
+
 ## 0.4.31
 
 ### The home screen's carousels can be switched off
