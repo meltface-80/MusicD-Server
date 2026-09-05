@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.31
+
+### The home screen's carousels can be switched off
+- **Settings › Home screen** is a new screen listing all seven carousels, each
+  with a pad to drag and a switch. Switching one off takes it off the home
+  screen **and** out of the side menu — a carousel you have turned off is not a
+  place worth offering — and **Smart Picks stops being worked out**, because
+  nothing is on a timer: not asking for it is the off switch.
+- **Everything is on for a new install**, and an update never changes what you
+  have already arranged. The on/off state is stored separately from the order,
+  so an existing install keeps its arrangement untouched and simply gains
+  "nothing is off".
+- **The side menu is now a fixed order** and no longer where the home screen is
+  arranged: Home, Library, Artists, then whichever of the rest are on, then
+  Settings. A menu whose entries move about is one you have to read rather than
+  reach for. Library and Artists are always there — Artists has no carousel,
+  and Library is the way into the whole collection, so switching its carousel
+  off is a statement about the home screen rather than about the shelf.
+
 ## 0.4.30
 
 - **The update notice no longer scrolls out of sight.** It sat in the page

@@ -141,16 +141,34 @@ test("what is inside the bar grew with it", () => {
   assert.match(css, /\.mt-btn svg \{ width: 24px; height: 24px/, "the icons with them");
 });
 
-test("the menu lists every row the home screen can show", () => {
-  /* Reordering the menu only means anything if the menu IS the home screen's
-     order — a list missing two of the rows would leave them stranded wherever
-     they happened to be. */
-  const server = require(path.join(__dirname, "..", "lib", "settings"));
-  assert.match(js, /api\("\/api\/rows"\)/, "the client asks the server which rows exist");
+test("the side menu's order is fixed, and it is not the home screen's", () => {
+  /*
+   * It used to BE the home screen's order, and dragging happened here. A menu
+   * whose entries move about is one you have to read rather than reach for, so
+   * the order is now stated once and arranging moved to Settings › Home screen.
+   */
+  const order = /const MENU_ORDER = \[([^\]]*)\]/s.exec(js);
+  assert.ok(order, "the menu order is stated in one place");
+  const ids = order[1].split(",").map(x => x.trim().replace(/"/g, "")).filter(Boolean);
+  assert.deepStrictEqual(ids,
+    ["library", "artists", "favourites", "added", "picks", "random", "unplayed", "played"]);
+
+  /* Library and Artists are always there: Artists has no carousel to switch
+     off, and Library is the way into the whole collection — switching its
+     carousel off says something about the home screen, not about the shelf. */
+  assert.match(js, /const MENU_ALWAYS = new Set\(\["library", "artists"\]\)/);
+
   const render = js.slice(js.indexOf("function renderMenuRows("));
   const body = render.slice(0, render.indexOf("\n}"));
-  assert.match(body, /state\.rowOrder/, "and builds the list from that order");
+  assert.match(body, /if \(!MENU_ALWAYS\.has\(key\) && !on\.has\(key\)\) continue;/,
+    "a carousel that is switched off is not a place worth offering");
+  assert.ok(!/menu-grip/.test(body), "and there is nothing left to drag here");
+
+  const server = require(path.join(__dirname, "..", "lib", "settings"));
   assert.strictEqual(server.DEFAULT_ROWS.length, 7);
+  /* Every row the settings screen can list has a place in the menu order, or
+     switching it on would put it nowhere. */
+  for (const row of server.DEFAULT_ROWS) assert.ok(ids.includes(row), row + " has a place");
 });
 
 test("a drag is a hold first, so scrolling the menu still scrolls", () => {
@@ -181,17 +199,25 @@ test("the drag follows the window, not the pad it started on", () => {
   assert.match(css, /\.menu-grip \{[^}]*touch-action: none/s);
 });
 
-test("releasing saves the order, and only when it changed", () => {
+test("releasing saves the arrangement, and only when it changed", () => {
   const up = js.slice(js.indexOf("const up = ()"));
   const body = up.slice(0, up.indexOf("\n  };"));
-  assert.match(body, /saveRowOrder\(order\)/);
-  assert.match(body, /order\.join\(\) === state\.rowOrder\.join\(\)/,
+  assert.match(body, /saveHomeRows\(/);
+  assert.match(body, /order\.join\(\) === state\.homeRows\.map\(r => r\.id\)\.join\(\)/,
     "a row put back where it started is not a change worth a round trip");
-  const save = js.slice(js.indexOf("async function saveRowOrder("));
+  /* A drag changed the order and nothing else, so every row keeps the switch
+     it already had — a save that reset them would be a reorder quietly turning
+     things back on. */
+  assert.match(body, /on\.get\(id\) !== false/);
+
+  const save = js.slice(js.indexOf("async function saveHomeRows("));
   const saveBody = save.slice(0, save.indexOf("\n}"));
-  assert.match(saveBody, /post\("\/api\/rows"/, "it is saved on the server, not in the phone");
+  assert.match(saveBody, /post\("\/api\/rows", \{ rows \}\)/,
+    "both halves go together, or the two drift apart");
   assert.match(saveBody, /loadHome\(\)|homeStale/, "and the home screen is told to follow");
-  assert.match(saveBody, /state\.rowOrder = previous/, "a failed save puts the list back");
+  assert.match(saveBody, /renderMenuRows\(\)/,
+    "so is the menu — switching one off takes its entry out of the list");
+  assert.match(saveBody, /state\.homeRows = previous/, "a failed save puts the list back");
 });
 
 test("the head carries exactly one viewport, set to cover the display", () => {
@@ -280,12 +306,15 @@ test("the menu keeps places and settings apart", () => {
   const settings = html.slice(html.indexOf('<div id="menu-settings"'),
                               html.indexOf('</div>\n      </div>\n\n      <div class="menu-sep">'));
 
-  for (const place of ['data-go="home"', 'data-go="artists"', 'id="menu-rows"']) {
+  /* Artists is no longer written into the markup — it is built by
+     renderMenuRows with the rest of the fixed list, so the menu has one source
+     rather than two that can disagree about the order. */
+  for (const place of ['data-go="home"', 'id="menu-rows"']) {
     assert.ok(main.includes(place), `${place} is somewhere you go, so it stays on the first view`);
     assert.ok(!settings.includes(place), `${place} is not a setting`);
   }
   for (const setting of ["menu-rescan", "menu-theme", "menu-npleft", "menu-covers",
-                         "menu-lastfm", "menu-update", "menu-version"]) {
+                         "menu-lastfm", "menu-update", "menu-version", "menu-home-open"]) {
     assert.ok(settings.includes(`id="${setting}"`), `${setting} belongs behind Settings`);
     assert.ok(!main.includes(`id="${setting}"`), `${setting} is no longer on the first view`);
   }

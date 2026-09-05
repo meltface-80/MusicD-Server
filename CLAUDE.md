@@ -357,6 +357,21 @@ part of the fix.
   covers it rather than moving it. `window.innerHeight` is the viewport that
   does NOT change when the keyboard opens — measuring against `visualViewport`
   alone yields zero for ever.
+- **The side menu's order is FIXED; the home screen's is not.** They used to be
+  the same list, dragged from the menu. A menu whose entries move about is one
+  you have to read rather than reach for, so `MENU_ORDER` states it once and
+  arranging moved to Settings › Home screen. The menu only ever answers WHICH
+  carousels are on — `MENU_ALWAYS` keeps Library and Artists whatever the home
+  screen is doing, because Artists has no carousel and Library is the way into
+  the whole collection.
+- **`state.rows` is the home screen's built payload; `state.homeRows` is the
+  arrangement.** They are different things and the names nearly collided —
+  renaming `rowOrder` to `rows` produced a DUPLICATE KEY in the state literal,
+  which JavaScript accepts silently and the last one wins. Every switch then
+  did nothing. Grep the whole tree before reusing a name.
+- **Switching a carousel off is what stops its work, because nothing is on a
+  timer.** Smart Picks is rebuilt once a local day the first time something
+  asks; `/api/home` not asking IS the off switch. There is nothing to cancel.
 - **A notice nobody scrolls to is a notice nobody reads.** The update banner
   sat in the page flow, so anyone halfway down a wall never learned a version
   was waiting. It is FIXED under the top bar now, above the page and below the
