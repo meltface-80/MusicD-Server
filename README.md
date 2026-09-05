@@ -13,9 +13,10 @@ Basic music server - under development
 A simple music server for Sonos. It reads your music folders, shows your albums
 as they are, and plays them to your speakers.
 
-There is no metadata service, no album identification, no release matching and
-no streaming accounts. An album is a folder, its title is what the tags say, and
-its cover is the image sitting next to the files. What it does keep is a small
+There is no metadata service, no automatic matching and no streaming accounts.
+An album is a folder, its title is what the tags say, and its cover is the image
+sitting next to the files. You can confirm which release an album is by hand —
+that stores an id and nothing else. What it does keep is a small
 database of your listening — when an album arrived, when you last played it, and
 how often — because that is what the home screen is built out of.
 
@@ -36,6 +37,34 @@ runs on a timer, and neither writes anything to your files.
 The UI follows [MusicD Remote](https://github.com/meltface-80/MusicD-Remote), and
 the Sonos side follows the
 [UPnP to Sonos UPnP bridge](https://github.com/meltface-80/UPnP-to-Sonos-UPnP-bridge).
+
+---
+
+## Features
+
+| | |
+| --- | --- |
+| **Your library, as it is** | An album is a folder. Title, artist and cover come from the tags and the folder name. |
+| **Plays to Sonos** | Rooms and groups read from the speakers. Gapless through the Sonos queue, nothing transcoded. |
+| **Now playing** | Seek, volume, the live queue — and the [track's own waveform](#the-shape-of-the-track) drawn in the seek bar. |
+| **Remembers what you play** | Date added, last played and play counts, [counted by watching the speaker](#what-the-database-keeps). |
+| **[Home screen you arrange](#arranging-the-home-screen)** | Seven rows. Switch any off and reorder them in Settings › Home screen. |
+| **[Smart Picks](#smart-picks)** | A taste profile from your last 90 days. Every pick says why it is there. Local files only. |
+| **Search and browse** | Albums, artists and tracks in one box. Every row opens a full grid that pages as you scroll. |
+| **[Sort the library](#sorting-the-library)** | Artist, album, year, recently added, most played, last played or shuffle. The choice sticks. |
+| **Favourites** | Tap the heart. They get their own row, which is absent rather than empty until there is one. |
+| **[Play or queue several at once](#choosing-several-albums)** | Hold an album to start a selection, keep picking across screens, then Play now or Queue. |
+| **[Random Album Radio](#random-album-radio)** | Keeps the queue topped up with whole albums, optionally matching the genre playing. |
+| **One album, however many copies** | The album and its deluxe reissue are one card with a tab per version. [Matched locally](#your-files). |
+| **[Covers for albums that have none](#covers-for-albums-that-have-none)** | Found in the background from MusicBrainz and the Cover Art Archive. No key, no account, only the missing ones. |
+| **[Missing covers screen](#seeing-what-is-still-missing)** | The albums still without one, as a wall you can work through, each saying why. |
+| **[Find a cover by hand](#when-a-cover-cannot-be-found)** | For records the sweep cannot name. Searches with what you type and shows the sleeves to choose from. |
+| **[Identify a release](#telling-it-which-record-this-is)** | Confirm which MusicBrainz release a folder is. Stores the id and nothing else, which makes its cover exact. |
+| **[Correct a title or artist](#correcting-a-title-or-an-artist)** | Type it. Kept in the database; your files are never touched. |
+| **[What a record is](#what-a-record-is-and-who-made-it)** | The opening of its Wikipedia article and the artist's biography, fetched when you open the screen, with credit. |
+| **[Scrobbles to Last.fm](#scrobbling-to-lastfm)** | Optional, and off until you connect an account. Queued, so a reboot never loses one. |
+| **[Updates in the app](#updating)** | A banner when a new version is out, with the release notes and one tap to install it. |
+| **Phone-first** | Dark and light, a mini transport on every screen, and it installs to the home screen. |
 
 ---
 
@@ -199,11 +228,10 @@ Six rows, each one a carousel that opens into a full grid when you tap its title
 | **Not played in 6 months** | Albums you played longer than six months ago, and albums that have sat in the library that long unplayed. Longest gap first. |
 | **Smart Picks** | Below. |
 
-**The rows are in the order you put them in.** Open the side menu: every row
-is listed there with a pad on the right. Hold the pad, drag the row where you
-want it, let go. The home screen follows, and so does every other phone in the
-house — the arrangement is kept in the library's own database rather than in
-one browser, so it survives a reinstalled shortcut and an update alike.
+**The rows are in the order you put them in, and only the ones you want.**
+See [Arranging the home screen](#arranging-the-home-screen). The arrangement is
+kept in the library's own database rather than in one browser, so every phone in
+the house agrees and it survives a reinstalled shortcut and an update alike.
 
 **Not played in 6 months is empty to begin with, and that is correct.** Nothing
 in a library scanned last week can have gone six months unplayed. The row fills

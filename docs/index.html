@@ -287,7 +287,7 @@
   <h1>MusicD Server</h1>
   <p class="tag">A simple music server for <b>Sonos</b>. It reads your music folders, shows your
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
-     album identification, no streaming accounts.</p>
+     automatic matching, no streaming accounts.</p>
   <div class="badges">
     <span class="badge" id="ver-badge">v0.4.37</span>
     <span class="badge plain">Docker</span>
@@ -305,56 +305,112 @@
     <div class="grid">
       <div class="card">
         <h3><span class="em">📁</span>Your library, as it is</h3>
-        <p>Folder-based scanning with cover art taken from the folder or the tags. No title, artist,
-           year or genre is ever fetched or matched against an online release, so nothing is renamed
-           behind your back.</p>
+        <p>Folder-based scanning, with the cover taken from the folder or the tags. Nothing is
+           renamed behind your back.</p>
       </div>
       <div class="card">
         <h3><span class="em">🔊</span>Plays to Sonos</h3>
-        <p>Rooms and groups are read from the speakers themselves. Playback goes through the Sonos
-           queue, so tracks run gapless, and the audio streams straight from the server to the
-           speaker with nothing transcoded in between.</p>
+        <p>Rooms and groups read from the speakers themselves. Gapless through the Sonos queue,
+           streamed straight from the server with nothing transcoded.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🎚️</span>Now playing</h3>
+        <p>Seek, volume and the live queue — with the track's own waveform drawn in the seek bar,
+           from the audio on your disk.</p>
       </div>
       <div class="card">
         <h3><span class="em">📅</span>Remembers what you play</h3>
-        <p>Date added, date last played and play counts, for albums and tracks separately —
-           counted by watching the speaker, so a queued album you skip past never counts.</p>
+        <p>Date added, last played and play counts, for albums and tracks. Counted by watching the
+           speaker, so a queued album you skip never counts.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🏠</span>A home screen you arrange</h3>
+        <p>Seven rows, each opening into a full grid. Switch any of them off and put the rest in
+           your own order in Settings &rsaquo; Home screen.</p>
       </div>
       <div class="card">
         <h3><span class="em">✨</span>Smart Picks, local only</h3>
-        <p>Built from a taste profile of what you actually played in the last 90 days, and every
-           pick tells you why it was chosen. Nothing leaves your network to build it.</p>
+        <p>A taste profile from what you actually played in the last 90 days. Every pick says why
+           it was chosen, and nothing leaves your network to build it.</p>
       </div>
       <div class="card">
         <h3><span class="em">🔍</span>Search and browse</h3>
-        <p>Albums, artists and tracks in one box, an artists index, and every home row opens into a
-           full grid that pages as you scroll.</p>
+        <p>Albums, artists and tracks in one box, an artists index, and grids that page as you
+           scroll.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">↕️</span>Sort the library</h3>
+        <p>Artist, album, year, recently added, most played, last played or shuffle. The choice is
+           remembered across restarts and updates.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">❤️</span>Favourites</h3>
+        <p>Tap the heart on any album. They get their own row, which stays absent until there is
+           something in it.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">➕</span>Play or queue several at once</h3>
+        <p>Hold an album to start a selection and keep picking — across carousels, through Home and
+           back — then Play now or Queue the lot.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">📻</span>Random Album Radio</h3>
+        <p>Keeps the queue topped up with whole albums as it empties, optionally matching the genre
+           of what is playing. Runs on the server, not on your phone.</p>
       </div>
       <div class="card">
         <h3><span class="em">🗂️</span>One album, however many copies</h3>
-        <p>The album and its deluxe reissue are one card and one screen, with a tab for each
-           version. The plain title is the album; the tabs swap the track list and the cover. The
-           matching is local — artist, title without its edition marker, and the track names as a
-           second opinion, so the four different albums called <i>Weezer</i> stay four albums.</p>
+        <p>The album and its deluxe reissue are one card with a tab per version. Matched locally —
+           artist, title without its edition marker, and the track names as a second opinion, so the
+           four albums called <i>Weezer</i> stay four albums.</p>
       </div>
       <div class="card">
         <h3><span class="em">🖼️</span>Covers for albums that have none</h3>
-        <p>An album with no picture in its folder and none in its tags gets one found for it, in the
-           background, from MusicBrainz and the Cover Art Archive. <b>No key and no account.</b>
-           Only the missing ones, only the image, and nothing is ever written next to your music.
-           Switch it off with one tap, or for good with <code>COVER_LOOKUP=false</code>.</p>
+        <p>Found in the background from MusicBrainz and the Cover Art Archive. <b>No key and no
+           account.</b> Only the missing ones, only the image, and nothing is written next to your
+           music. <code>COVER_LOOKUP=false</code> stops it for good.</p>
       </div>
       <div class="card">
-        <h3><span class="em">📻</span>Scrobbles to Last.fm</h3>
-        <p>Optional, and off until you connect an account. Every track the server counts as played
-           is sent — the same half-way rule, so a skipped track is never scrobbled. Listens are
-           saved before they are sent, so a reboot never loses one. Needs a free API key; see
-           <a href="#install">the installer</a>.</p>
+        <h3><span class="em">📋</span>The ones still missing</h3>
+        <p>A wall of the albums that still have no cover, each saying what the last look made of it,
+           so you can work through them.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🔎</span>Find a cover by hand</h3>
+        <p>For records the background search cannot name. It searches with the name you type and
+           shows you the sleeves to choose from.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🏷️</span>Identify a release</h3>
+        <p>Confirm which MusicBrainz release a folder is, and it stores <b>the id and nothing
+           else</b> — which is what makes that album's cover exact instead of searched for. By hand,
+           never automatic.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">✏️</span>Correct a title or artist</h3>
+        <p>Type it. Kept in the database and shown everywhere; <b>your files are never
+           touched.</b> Clear a field to go back to what the tags say.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">📖</span>What a record is</h3>
+        <p>The opening of the album's Wikipedia article and the artist's biography, fetched when you
+           open the screen and kept afterwards. Credited and linked, and off with
+           <code>INFO_LOOKUP=false</code>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">🎧</span>Scrobbles to Last.fm</h3>
+        <p>Optional, and off until you connect an account. The same half-way rule as a play count,
+           and listens are saved before they are sent so a reboot never loses one. Needs a free API
+           key; see <a href="#install">the installer</a>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="em">⬆️</span>Updates in the app</h3>
+        <p>A banner when a new version is out, with the release notes and one tap to install it.</p>
       </div>
       <div class="card">
         <h3><span class="em">📱</span>Phone-first interface</h3>
         <p>The same palette and layout as MusicD Remote, in dark and light, with a mini transport on
-           every screen and a Now Playing view with seek, volume and the live queue.</p>
+           every screen. Installs to the home screen.</p>
       </div>
     </div>
   </div>
@@ -528,8 +584,8 @@
   <div class="wrap">
     <h2>The home screen</h2>
     <p class="lead">Seven rows, each a carousel that opens into a full grid when you tap its title.
-       Hold the pad beside a row in the side menu and drag it to put them in your own order — the
-       arrangement lives in the database, so every phone in the house agrees.</p>
+       Switch any of them off, or drag them into your own order, in <b>Settings &rsaquo; Home
+       screen</b> — the arrangement lives in the database, so every phone in the house agrees.</p>
     <div class="tablewrap prose">
       <table>
         <thead><tr><th>Row</th><th>What is in it</th></tr></thead>
@@ -577,6 +633,9 @@
           <tr><td>SCAN_ON_START</td><td>true</td><td>Scan when the container starts.</td></tr>
           <tr><td>SCAN_INTERVAL_HOURS</td><td>6</td><td>Hours between automatic rescans. <code>0</code> turns them off.</td></tr>
           <tr><td>COVER_LOOKUP</td><td>true</td><td>Look online for covers albums do not have. <code>false</code> switches it off for good.</td></tr>
+          <tr><td>INFO_LOOKUP</td><td>true</td><td>Album write-ups and artist biographies. <code>false</code> and none is ever fetched.</td></tr>
+          <tr><td>IDENTIFY</td><td>true</td><td>Offer <b>Identify</b> in the edit dialog. Never automatic — nothing is asked until you press it.</td></tr>
+          <tr><td>WAVEFORM</td><td>true</td><td>Draw the track's shape in the seek bar. <code>false</code> leaves the plain bar and never runs ffmpeg.</td></tr>
           <tr><td>LASTFM_API_KEY</td><td>—</td><td>A Last.fm API key, from <code>last.fm/api/account/create</code>. Without one the Last.fm row does not appear.</td></tr>
           <tr><td>LASTFM_API_SECRET</td><td>—</td><td>The shared secret that came with it. Both are needed or neither works.</td></tr>
         </tbody>
@@ -620,19 +679,23 @@
     <div class="nope">
       <div><b>No metadata fetching</b>Titles, artists, years and genres come from your tags and
            nowhere else.</div>
-      <div><b>No album identification</b>Nothing is matched against an online release, and no tag
-           is ever rewritten.</div>
+      <div><b>No automatic identification</b>You can confirm which MusicBrainz release an album
+           is, by hand, and that stores the id and nothing else. Nothing is matched for you, and no
+           tag is ever rewritten.</div>
       <div><b>No record labels</b>No Discogs, no FanArt.tv.</div>
       <div><b>No streaming services</b>No Qobuz, no TIDAL.</div>
       <div><b>No reviews or scores</b>No Pitchfork.</div>
       <div><b>No wall display</b>This one is a remote and a server, not a screen.</div>
     </div>
-    <p class="lead" style="margin-top:22px"><b>Two things do leave your network, and only these
-       two.</b> A <b>missing cover</b> is looked up at MusicBrainz and the Cover Art Archive —
-       covers only, only for albums that have none, no key and no account, and
-       <code>COVER_LOOKUP=false</code> stops it for good. And <b>scrobbles go to Last.fm</b> if you
-       connect an account, which needs a key you supply and does nothing at all until you do.
-       Neither one can change a single thing about your library.</p>
+    <p class="lead" style="margin-top:22px"><b>Two things leave your network on their own.</b> A
+       <b>missing cover</b> is looked up at MusicBrainz and the Cover Art Archive — covers only,
+       only for albums that have none, no key and no account, and <code>COVER_LOOKUP=false</code>
+       stops it for good. And <b>scrobbles go to Last.fm</b> if you connect an account, which needs
+       a key you supply and does nothing at all until you do.</p>
+    <p class="lead"><b>Two more happen only when you press a button</b> — a <b>write-up</b> for the
+       album on screen (<code>INFO_LOOKUP=false</code>), and <b>Identify</b>
+       (<code>IDENTIFY=false</code>). Neither runs on a timer. None of the four can change a single
+       thing about your library or your files.</p>
   </div>
 </section>
 
