@@ -200,6 +200,203 @@ function build(db, extra = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  The article an ID names                                            */
+/* ------------------------------------------------------------------ */
+
+const WIKIDATA = "https://wikidata.test/w/api.php";
+
+/*
+ * A stand-in for lib/covers.js's share of the gate. It refuses an unidentified
+ * client the way MusicBrainz does, so a caller that stopped saying who it is
+ * fails here instead of in production.
+ */
+function fakeCovers({ group = "rg-hex", relations = [], seen = [], agent = "MusicD/9.9.9 ( https://x )" } = {}) {
+  const check = () => {
+    if (!/\S+\/\d/.test(agent) || !/https?:\/\//.test(agent)) {
+      throw new Error("MusicBrainz answered 403");
+    }
+  };
+  return {
+    groupOfRelease: async (id, options) => {
+      seen.push({ call: "groupOfRelease", id, urgent: !!(options && options.urgent) });
+      check();
+      return group;
+    },
+    lookupMusicBrainz: async (entity, id, inc) => {
+      seen.push({ call: "lookup", entity, id, inc });
+      check();
+      return { id, relations };
+    }
+  };
+}
+
+/* Wikipedia and Wikidata in one stand-in, since both are the same Action API
+   and the caller reaches them through the same asker. */
+function fakeWikimedia({ onCall = () => {}, entities = {} } = {}) {
+  const wiki = fakeWikipedia({ onCall });
+  return async (url, options) => {
+    if (!url.startsWith(WIKIDATA)) return wiki(url, options);
+    const q = new URL(url).searchParams;
+    onCall({ url, params: q, agent: (options.headers || {})["User-Agent"] || "" });
+    /* The real one only returns the sitelinks that were asked for. */
+    assert.strictEqual(q.get("props"), "sitelinks");
+    assert.strictEqual(q.get("sitefilter"), "enwiki");
+    const id = q.get("ids");
+    return reply(200, { entities: { [id]: entities[id] || { sitelinks: {} } } });
+  };
+}
+
+const WD_HEX = { sitelinks: { enwiki: { site: "enwiki", title: "Hex (Bark Psychosis album)" } } };
+
+test("a confirmed release gets THE article, with no search at all", async () => {
+  /*
+   * The whole reason identification is worth having twice over. A search
+   * always answers — Wikipedia ranks the disambiguation page for "Hex" above
+   * the Bark Psychosis album — so a searched page has to be checked against
+   * the library's own facts, and an album whose tags are wrong has no facts
+   * worth checking against. An id has none of that trouble.
+   */
+  const { ws, db } = await scanned();
+  try {
+    const id = albumId(db, "Hex");
+    db.prepare("UPDATE albums SET mbid_chosen = ? WHERE id = ?")
+      .run("11111111-2222-3333-4444-555555555555", id);
+
+    const calls = [];
+    const seen = [];
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: fakeCovers({ relations: [
+        { type: "wikidata", url: { resource: "https://www.wikidata.org/wiki/Q42" } }
+      ], seen }),
+      fetchImpl: fakeWikimedia({ onCall: (c) => calls.push(c), entities: { Q42: WD_HEX } })
+    });
+
+    const out = await info.album(id);
+    assert.ok(out, "an album with an id gets a write-up");
+    assert.strictEqual(out.title, "Hex (Bark Psychosis album)");
+    assert.match(out.summary, /debut studio album by the English post-rock band/);
+    assert.match(out.review, /Simon Reynolds/, "and the reception, out of the same request");
+    assert.strictEqual(out.source, "wikipedia");
+    assert.strictEqual(out.licence, "CC BY-SA 4.0");
+
+    /* NOTHING was searched for. That is the point. */
+    assert.ok(!calls.some(c => c.params.get("generator") === "search"),
+      calls.map(c => c.url).join(" | "));
+    /* And it asked MusicBrainz which RECORD the pressing belongs to, urgently,
+       because somebody has a screen open. */
+    assert.deepStrictEqual(seen[0],
+      { call: "groupOfRelease", id: "11111111-2222-3333-4444-555555555555", urgent: true });
+    assert.deepStrictEqual(seen[1],
+      { call: "lookup", entity: "release-group", id: "rg-hex", inc: "url-rels" });
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a direct Wikipedia relation skips Wikidata entirely", async () => {
+  /* MusicBrainz moved these to Wikidata, but the older direct link is still
+     on plenty of release groups and costs one request fewer. */
+  const { ws, db } = await scanned();
+  try {
+    const id = albumId(db, "Hex");
+    db.prepare("UPDATE albums SET mbid_chosen = ? WHERE id = ?")
+      .run("11111111-2222-3333-4444-555555555555", id);
+    const calls = [];
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: fakeCovers({ relations: [
+        { type: "wikipedia",
+          url: { resource: "https://en.wikipedia.org/wiki/Hex_(Bark_Psychosis_album)" } }
+      ] }),
+      fetchImpl: fakeWikimedia({ onCall: (c) => calls.push(c) })
+    });
+    const out = await info.album(id);
+    assert.strictEqual(out.title, "Hex (Bark Psychosis album)", "the title is read out of the URL");
+    assert.ok(!calls.some(c => c.url.startsWith(WIKIDATA)), "Wikidata was never asked");
+    /* And it came from the LINK, not from a search that happens to reach the
+       same page — without this the test passes with the relation ignored. */
+    assert.ok(!calls.some(c => c.params.get("generator") === "search"),
+      calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a release group with no article falls back to the search", async () => {
+  /* Most release groups have no link at all. The id path answering nothing is
+     the ordinary case, not a failure, and the album must still get whatever a
+     search can verify. */
+  const { ws, db } = await scanned();
+  try {
+    const id = albumId(db, "Hex");
+    db.prepare("UPDATE albums SET mbid_chosen = ? WHERE id = ?")
+      .run("11111111-2222-3333-4444-555555555555", id);
+    const calls = [];
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: fakeCovers({ relations: [] }),
+      fetchImpl: fakeWikimedia({ onCall: (c) => calls.push(c) })
+    });
+    const out = await info.album(id);
+    assert.ok(out, "the search still found it");
+    assert.strictEqual(out.title, "Hex (Bark Psychosis album)");
+    assert.ok(calls.some(c => c.params.get("generator") === "search"), "by searching");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("MusicBrainz being down falls back to the search rather than failing", async () => {
+  const { ws, db } = await scanned();
+  try {
+    const id = albumId(db, "Hex");
+    db.prepare("UPDATE albums SET mbid_chosen = ? WHERE id = ?")
+      .run("11111111-2222-3333-4444-555555555555", id);
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: { groupOfRelease: async () => { throw new Error("unreachable"); },
+                lookupMusicBrainz: async () => { throw new Error("unreachable"); } },
+      fetchImpl: fakeWikimedia({})
+    });
+    const out = await info.album(id);
+    assert.ok(out && out.title === "Hex (Bark Psychosis album)");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("an album with no id is unaffected", async () => {
+  /* Most albums have none, and nothing about them may change: no extra
+     request, and the same verified search as before. */
+  const { ws, db } = await scanned();
+  try {
+    const seen = [];
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: fakeCovers({ seen }),
+      fetchImpl: fakeWikimedia({})
+    });
+    const out = await info.album(albumId(db, "Hex"));
+    assert.strictEqual(out.title, "Hex (Bark Psychosis album)");
+    assert.deepStrictEqual(seen, [], "MusicBrainz was never troubled");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("the id path is kept like any other hit — asked once, ever", async () => {
+  const { ws, db } = await scanned();
+  try {
+    const id = albumId(db, "Hex");
+    db.prepare("UPDATE albums SET mbid_chosen = ? WHERE id = ?")
+      .run("11111111-2222-3333-4444-555555555555", id);
+    const seen = [];
+    const info = build(db, {
+      wikidataRoot: WIKIDATA,
+      covers: fakeCovers({ relations: [
+        { type: "wikidata", url: { resource: "https://www.wikidata.org/wiki/Q42" } }
+      ], seen }),
+      fetchImpl: fakeWikimedia({ entities: { Q42: WD_HEX } })
+    });
+    await info.album(id);
+    const after = seen.length;
+    await info.album(id);
+    assert.strictEqual(seen.length, after, "the second open asked nobody anything");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
 /*  Asking correctly                                                   */
 /* ------------------------------------------------------------------ */
 

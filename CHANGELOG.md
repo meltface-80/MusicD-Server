@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.38
+
+### A write-up for an album you have identified is the right one, not a guess
+- **An identified album gets THE article**, not the best search result. Nothing
+  is searched for and nothing has to be verified, because nothing was guessed:
+  MusicBrainz says which record the pressing belongs to, the record says which
+  encyclopaedia entry it is.
+- **That is exactly the albums that had no write-up at all.** A searched page
+  has to be checked against the library's own facts before it is believed —
+  and an album whose tags are wrong has no facts worth checking against, so it
+  got nothing. Identify it and it gets its write-up too.
+- **Identifying an album now clears what its NAME decided.** The cover miss and
+  the write-up miss were both recorded against "what is this called", and
+  confirming a release changes the question. A write-up miss lasts a week, so
+  without this you could identify an album correctly and still see nothing
+  about it for seven days.
+- Albums with no id are completely unaffected: same verified search, not one
+  extra request.
+
 ## 0.4.37
 
 ### Identify and Find cover no longer hang, and a correct identification now finds the cover
