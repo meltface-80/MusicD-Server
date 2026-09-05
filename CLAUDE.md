@@ -343,6 +343,42 @@ part of the fix.
 
 ## Rules that come from how this thing actually breaks
 
+- **THE PROTOCOL IS NOT THE DIALECT.** `lib/upnp.js` holds SOAP, SSDP, the
+  H:MM:SS time format and the play-mode enum; `lib/sonos.js` holds what only
+  Sonos has — ZoneGroupTopology, the fixed table of control URLs, the queue
+  extensions, anything spelled `x-rincon`. THE TEST for which file something
+  belongs in is whether a device that never heard of Sonos would still need it.
+  `soap()` is TOLD its control path rather than looking one up, because Sonos
+  publishes a table every player shares and a stock renderer names its own in
+  its device description — a table in the shared file would be one
+  manufacturer's paths pretending to be the protocol. `test/upnp.test.js`
+  fails the build if a Sonos word reappears in `lib/upnp.js`, matching on CODE
+  with the block comments stripped, for the same reason the iOS metas are
+  guarded by tag: a check its own rationale trips is a check somebody deletes.
+- **NOTHING IS RE-EXPORTED ACROSS THAT LINE.** `lib/sonos.js` could have
+  re-exported `hmsToSeconds` and saved a dozen import edits. Two import paths
+  for one function is exactly how a partial migration hides — the day somebody
+  changes it, they change it for whichever half of the tree they grepped.
+- **A QUEUE IS A THING A ROOM HAS, NOT A THING A SPEAKER IS.** Sonos owns its
+  queue; standard AVTransport has NO QUEUE AT ALL, one URI playing and at most
+  one to play next. So `lib/queue.js` states what a queue is — `list`,
+  `length`, `add`, `clear`, `startAt`, `jumpTo` — and `lib/playback.js` asks a
+  queue rather than a speaker. `queueFor()` is the ONE place that decides which
+  kind a room has, so a queue held by the server is one more branch there and
+  no change anywhere else. A test asserts `playback.js` names no SOAP action,
+  no `x-rincon`, and requires no `didl`: what a track IS comes from the
+  library, what a player wants to be TOLD about it is protocol.
+- **`startAt` AND `jumpTo` ARE TWO CALLS BECAUSE ON SONOS THEY ARE.** A jump on
+  a playing queue is one Seek; starting has to point the transport at the queue
+  first, because the player may be on a radio stream and Play would resume
+  THAT. A server-side queue will implement both identically — that it CAN is a
+  fact about that protocol, not a licence to merge them.
+- **A SEAM IS ASSERTED BY WHAT THE SPEAKER IS ASKED, NOT BY WHAT THE SOURCE
+  SAYS.** The first version of that test looked for `setAvTransportUri` in the
+  TEXT of `jumpTo()`, and passed happily when `jumpTo` was changed to call
+  `startAt()` — the string had left its body and the extra SOAP call went out
+  all the same. Source-reading guards are for things that must be ABSENT from
+  a file; behaviour is driven against the fake.
 - **A stream URL a speaker cannot reach is silently unplayable.** Sonos fetches
   audio itself, so `localhost`, `127.0.0.1` and container-internal addresses all
   produce a queue that loads and then does nothing. Every URI handed to a player
