@@ -160,34 +160,59 @@
             Rescan library
             <span class="menu-sub" id="rescan-sub"></span>
           </button>
-          <button class="menu-item" type="button" id="menu-theme">
-            Theme
-            <span class="menu-sub" id="theme-sub"></span>
+          <!-- A named pair rather than an on/off switch: "on" says nothing
+               about whether that means light or dark, and the two words do.
+               The whole row is still the button — the control shows the state
+               and does not compete with it for the tap. -->
+          <button class="menu-item has-toggle" type="button" id="menu-theme">
+            <span class="menu-text">Theme</span>
+            <span class="pair" id="theme-pair" aria-hidden="true">
+              <span class="pair-opt" data-opt="dark">Dark</span>
+              <span class="pair-opt" data-opt="light">Light</span>
+            </span>
           </button>
           <!-- Which control sits in the corner of Now playing, and so where
                leaving it takes you. See paintModalLeft() in app.js. -->
-          <button class="menu-item" type="button" id="menu-npleft">
-            Now playing button
-            <span class="menu-sub" id="npleft-sub"></span>
+          <button class="menu-item has-toggle" type="button" id="menu-npleft">
+            <span class="menu-text">Now playing button
+              <span class="menu-sub" id="npleft-sub"></span>
+            </span>
+            <span class="pair" id="npleft-pair" aria-hidden="true">
+              <span class="pair-opt" data-opt="home">Home</span>
+              <span class="pair-opt" data-opt="back">Back</span>
+            </span>
           </button>
           <!-- A queue that does not run out. The genre row below only means
                anything while this is on, so it is absent while it is off —
                see showRadio() in app.js. -->
-          <button class="menu-item" type="button" id="menu-radio">
-            Random Album Radio
-            <span class="menu-sub" id="radio-sub"></span>
+          <button class="menu-item has-toggle" type="button" role="switch"
+                  aria-checked="false" id="menu-radio">
+            <span class="menu-text">Random Album Radio
+              <span class="menu-sub" id="radio-sub"></span>
+            </span>
+            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
           </button>
-          <button class="menu-item hidden" type="button" id="menu-radio-genre">
-            Match the current genre
-            <span class="menu-sub" id="radio-genre-sub"></span>
+          <button class="menu-item has-toggle hidden" type="button" role="switch"
+                  aria-checked="false" id="menu-radio-genre">
+            <span class="menu-text">Match the current genre
+              <span class="menu-sub" id="radio-genre-sub"></span>
+            </span>
+            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
           </button>
           <!-- The one thing this server asks the internet about, so it is the
                one thing with a switch. Hidden entirely when the container was
                started with COVER_LOOKUP=false — a switch that cannot do
                anything is worse than no switch. -->
-          <button class="menu-item hidden" type="button" id="menu-covers">
-            Find missing covers
-            <span class="menu-sub" id="covers-sub"></span>
+          <!-- The switch SHOWS the state; it does not take the tap. The tap is
+               still "go and look now" and the hold is still the switch, which
+               is the split this row has always had — burying "look now" behind
+               a switch would mean waiting for the next sweep every time. What
+               changes is that the state is no longer invisible. -->
+          <button class="menu-item has-toggle hidden" type="button" id="menu-covers">
+            <span class="menu-text">Find missing covers
+              <span class="menu-sub" id="covers-sub"></span>
+            </span>
+            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
           </button>
           <!-- Hidden unless this container was given a Last.fm key. Last.fm has
                no anonymous mode, so without one there is nothing this row could

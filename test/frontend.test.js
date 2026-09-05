@@ -1138,6 +1138,66 @@ test("Home does not name itself in the bar", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Two-state settings show what they are set to                       */
+/* ------------------------------------------------------------------ */
+
+test("a two-state setting shows its state, not only says it", () => {
+  /* Five rows, and the control suits what each one IS: on/off where that is
+     the question, and the two names where "on" would not answer it. */
+  for (const id of ["menu-radio", "menu-radio-genre", "menu-covers"]) {
+    const row = html.slice(html.indexOf(`id="${id}"`));
+    assert.match(row.slice(0, row.indexOf("</button>")), /<span class="toggle"/,
+      id + " is on or off, so it gets a switch");
+  }
+  for (const [id, a, b] of [["theme-pair", "dark", "light"], ["npleft-pair", "home", "back"]]) {
+    const pair = html.slice(html.indexOf(`id="${id}"`));
+    const body = pair.slice(0, pair.indexOf("</span>\n            </span>") + 40);
+    assert.match(body, new RegExp(`data-opt="${a}"`), id + " names its first state");
+    assert.match(body, new RegExp(`data-opt="${b}"`), id + " names its second");
+  }
+});
+
+test("the row is still the button; the control is decoration", () => {
+  /*
+   * A switch nested inside the row would be a second tap target over the
+   * first, and the two disagreeing about what a press meant is the bug that
+   * invites. Every one of these rows was already a button that toggled — this
+   * changes what is on screen and nothing about how any of it is operated.
+   */
+  for (const id of ["menu-theme", "menu-npleft", "menu-radio", "menu-radio-genre", "menu-covers"]) {
+    const row = html.slice(html.indexOf(`id="${id}"`), html.indexOf(`id="${id}"`) + 700);
+    const inner = row.slice(0, row.indexOf("</button>"));
+    assert.ok(!/<button/.test(inner), id + " has no nested button");
+    assert.match(inner, /aria-hidden="true"/, id + "'s control is not announced twice");
+  }
+  /* The ROW carries the state for a screen reader on the ones that are on or
+     off; a named pair is a choice, not a switch, so it does not claim to be. */
+  for (const id of ["menu-radio", "menu-radio-genre"]) {
+    const row = html.slice(html.indexOf(`id="${id}"`) - 200, html.indexOf(`id="${id}"`) + 60);
+    assert.match(row, /role="switch"/, id + " says what it is");
+  }
+  const body = js.slice(js.indexOf("function paintToggle("));
+  assert.match(body.slice(0, body.indexOf("\n}")), /role"?\)? === "switch"/,
+    "and only those rows have their aria-checked written");
+});
+
+test("the sub-line keeps its own line beside a control", () => {
+  /* It used to get one from .menu-item being a flex COLUMN. A row with a
+     control beside it is not, so the title and the line under it ran together
+     — which is how this shipped the first time it was looked at. */
+  assert.match(css, /\.menu-sub \{ display: block;/);
+  assert.match(css, /\.menu-item\.has-toggle \{\n  flex-direction: row;/);
+});
+
+test("there is one switch, not one per screen that wanted one", () => {
+  /* Settings and the Home screen list both use it. A second that merely looked
+     the same would drift the first time either was touched. */
+  assert.match(css, /^\.toggle \{/m);
+  assert.ok(!/\.home-row-switch \{/.test(css), "the Home screen list reuses it");
+  assert.match(js, /el\("button", "toggle home-row-switch"\)/);
+});
+
+/* ------------------------------------------------------------------ */
 /*  The update notice                                                  */
 /* ------------------------------------------------------------------ */
 

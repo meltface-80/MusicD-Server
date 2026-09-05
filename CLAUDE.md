@@ -372,6 +372,15 @@ part of the fix.
 - **Switching a carousel off is what stops its work, because nothing is on a
   timer.** Smart Picks is rebuilt once a local day the first time something
   asks; `/api/home` not asking IS the off switch. There is nothing to cancel.
+- **A control that shows a state does not have to take the tap.** Every
+  two-state settings row was already a button that toggled, so the switch and
+  the named pair added in 0.4.32 are DECORATION — `aria-hidden`, no nested
+  button, and the row keeps `role="switch"` where on/off is really the
+  question. A small control nested in a big one is two tap targets that can
+  disagree about what a press meant.
+- **`.menu-sub` needs `display: block` of its own.** It used to get its line
+  from `.menu-item` being a flex COLUMN; a row with a control beside it is a
+  flex ROW, and the sub-line then runs on after the title.
 - **A notice nobody scrolls to is a notice nobody reads.** The update banner
   sat in the page flow, so anyone halfway down a wall never learned a version
   was waiting. It is FIXED under the top bar now, above the page and below the
