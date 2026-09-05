@@ -87,13 +87,22 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
       const [service, action] = soapAction.split("#");
       state.calls.push({ action, service, body, path: req.url });
 
-      const fault = state.faults.get(action);
-      if (fault) {
+      /* A SOAP fault, in the shape UPnP defines and Sonos actually sends. */
+      const fault = (code, text = "") => {
         res.writeHead(500, { "Content-Type": "text/xml" });
-        return res.end(`<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">` +
-          `<s:Body><s:Fault><detail><UPnPError><errorCode>${fault}</errorCode>` +
+        return res.end(
+          `<?xml version="1.0"?><s:Envelope ` +
+          `xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault>` +
+          `<faultcode>s:Client</faultcode><faultstring>UPnPError</faultstring><detail>` +
+          `<UPnPError xmlns="urn:schemas-upnp-org:control-1-0">` +
+          `<errorCode>${code}</errorCode><errorDescription>${esc(text)}</errorDescription>` +
           `</UPnPError></detail></s:Fault></s:Body></s:Envelope>`);
-      }
+      };
+
+      /* An error a test asked for, so a caller's handling of one can be
+         driven rather than described. */
+      const injected = state.faults.get(action);
+      if (injected) return fault(injected);
 
       const reply = (fields) => {
         res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8" });
@@ -110,6 +119,42 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
           const uri = tag(body, "EnqueuedURI");
           state.queue.push({ uri, metadata: tag(body, "EnqueuedURIMetaData") || "" });
           return reply({ FirstTrackNumberEnqueued: state.queue.length, NewQueueLength: state.queue.length });
+        }
+
+        /*
+         * Many at once, the way a real player takes them: the URIs space
+         * separated, and ONE DIDL-Lite document holding an item per URI in the
+         * same order. A caller that sends a document per URI, or whose item
+         * count disagrees with its URI count, is refused here — because a real
+         * one refuses it too, and a stand-in that shrugged would let that ship.
+         */
+        case "AddMultipleURIsToQueue": {
+          const uris = String(tag(body, "EnqueuedURIs") || "").split(" ").filter(Boolean);
+          const meta = tag(body, "EnqueuedURIsMetaData") || "";
+          const items = meta.match(/<item\b[\s\S]*?<\/item>/g) || [];
+          const said = Number(tag(body, "NumberOfURIs") || 0);
+          if (!uris.length || uris.length !== said || items.length !== uris.length) {
+            return fault(402, "Invalid Args");
+          }
+          if ((meta.match(/<DIDL-Lite/g) || []).length !== 1) return fault(402, "Invalid Args");
+          uris.forEach((uri, i) => state.queue.push({ uri, metadata: items[i] }));
+          return reply({
+            FirstTrackNumberEnqueued: state.queue.length - uris.length + 1,
+            NumTracksAdded: uris.length, NewQueueLength: state.queue.length
+          });
+        }
+
+        /* A run of positions, numbered from 1, and everything after it shuffles
+           down — which is the whole reason the caller works backwards. */
+        case "RemoveTrackRangeFromQueue": {
+          const start = Number(tag(body, "StartingIndex") || 0);
+          const count = Number(tag(body, "NumberOfTracks") || 0);
+          if (start < 1 || count < 1 || start + count - 1 > state.queue.length) {
+            return fault(402, "Invalid Args");
+          }
+          state.queue.splice(start - 1, count);
+          if (state.track > state.queue.length) state.track = state.queue.length;
+          return reply({ NewUpdateID: 1 });
         }
 
         case "SetAVTransportURI":
@@ -184,9 +229,17 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
           });
         }
 
+        /*
+         * AN UNKNOWN ACTION IS REFUSED, because a real player refuses it.
+         *
+         * This used to answer 200 with an empty envelope, so a caller invoking
+         * something no speaker implements looked like it had worked — and that
+         * is precisely how AddMultipleURIsToQueue was able to enqueue nothing
+         * at all while every transport test stayed green. A permissive fake
+         * proves nothing about what the caller ASKS FOR.
+         */
         default:
-          res.writeHead(200, { "Content-Type": "text/xml" });
-          return res.end(envelope(action || "Unknown", service || "urn:x", {}));
+          return fault(401, "Invalid Action");
       }
     });
   });
