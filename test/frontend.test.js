@@ -1109,6 +1109,39 @@ test("Home does not name itself in the bar", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  The update notice                                                  */
+/* ------------------------------------------------------------------ */
+
+test("the update notice floats rather than scrolling away", () => {
+  /* In flow it scrolled off with the page, so anyone halfway down a wall never
+     knew a version was waiting — which is the entire purpose of the thing. */
+  assert.match(css, /\.update-banner \{[^}]*position: fixed; z-index: 60;/s);
+  assert.match(css, /\.update-banner \{[^}]*top: calc\(var\(--topbar-h\) \+ 8px\);/s,
+    "under the top bar, so it never covers the menu or the search");
+  /* Below the album panel (70): a notice floating over Now playing would
+     overlap that screen's own header. */
+  const z = Number(/\.update-banner \{[^}]*z-index: (\d+);/s.exec(css)[1]);
+  const modal = Number(/\.modal \{ position: fixed; inset: 0; z-index: (\d+); \}/.exec(css)[1]);
+  assert.ok(z > 40 && z < modal, `${z} must sit above the top bar and below the panel (${modal})`);
+});
+
+test("the floating notice is opaque, or the wall shows through it", () => {
+  /* --accent-soft and --danger-soft are translucent TINTS. Painted straight
+     onto the page that was fine; over a moving wall of sleeves it is not. Both
+     are layered over a solid ground instead. */
+  assert.match(css, /\.update-banner \{[^}]*background: linear-gradient\(var\(--accent-soft\), var\(--accent-soft\)\), var\(--bg-elev-2\);/s);
+  assert.match(css, /\.update-banner\.is-error \{[^}]*linear-gradient\(var\(--danger-soft\), var\(--danger-soft\)\), var\(--bg-elev-2\);/s);
+});
+
+test("Release notes is not the browser's link blue", () => {
+  /* The one colour on that screen belonging to no palette and following no
+     theme. --text is near-white on the dark themes and near-black on the light
+     ones; :visited is named too, or a followed link goes the browser's purple. */
+  assert.match(css, /\.update-link, \.update-link:visited \{[^}]*color: var\(--text\); text-decoration: underline;/s);
+  assert.match(css, /\.update-link, \.update-link:visited \{[^}]*font-weight: 700;/s);
+});
+
+/* ------------------------------------------------------------------ */
 /*  Looking for a cover by hand                                        */
 /* ------------------------------------------------------------------ */
 

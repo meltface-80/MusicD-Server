@@ -357,6 +357,12 @@ part of the fix.
   covers it rather than moving it. `window.innerHeight` is the viewport that
   does NOT change when the keyboard opens — measuring against `visualViewport`
   alone yields zero for ever.
+- **A notice nobody scrolls to is a notice nobody reads.** The update banner
+  sat in the page flow, so anyone halfway down a wall never learned a version
+  was waiting. It is FIXED under the top bar now, above the page and below the
+  album panel (70) — over Now playing it would overlap that screen's own
+  header. A tint token like `--accent-soft` is translucent, so a floating
+  banner has to layer it over a solid ground or the sleeves show through it.
 - **A stale installed PWA looks exactly like a regression. Rule it out first.**
   Ask for a delete-and-re-add of the shortcut before diagnosing a
   "you broke X in version N" report.
