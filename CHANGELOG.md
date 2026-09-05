@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.41
+
+### A long queue no longer empties itself with "This operation was aborted"
+- **The queue is read in pages of fifty**, not in one request for the lot. A
+  Browse is not a control message: the speaker has to build a document with an
+  entry per track, and it does that while it is also starting a track and
+  answering the poll. Two hundred at once is where it gave up — and the batched
+  enqueue added in 0.4.39 made queues that long easy to have.
+- **A Browse gets fifteen seconds rather than six**, because it is a much
+  bigger job than a Play or a Seek, and **one retry** when the player says
+  nothing at all. A refusal is still not retried: that is an answer.
+- **A refresh that fails leaves the tracks on screen.** It used to empty the
+  list first and rebuild it from the answer, so a read that could not happen
+  left a blank screen with an error on it — and a queue read fails exactly when
+  the player is busiest, which is the moment after you jump to another track.
+  The reason now goes where the summary is, and the tracks stay.
+- **Jumping to another track no longer asks the speaker two things at once.**
+  The transport poll goes first and the queue follows a moment behind it.
+
 ## 0.4.40
 
 ### Picking tracks out of the queue shows a tick box

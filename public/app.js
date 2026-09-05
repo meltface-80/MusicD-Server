@@ -1480,24 +1480,45 @@ async function openNowPlaying(tab = "np") {
  * than listed: a queue that has run through two albums would otherwise open
  * scrolled past everything you can still act on.
  */
+let queueReq = 0;
+
 async function loadQueue() {
   const list = $("queue-list");
   const summary = $("queue-summary");
   const earlier = $("queue-earlier");
   const empty = $("queue-empty");
 
-  list.textContent = "";
-  earlier.textContent = "";
-  empty.classList.add("hidden");
-  summary.textContent = "Loading queue…";
-  /* A selection describes POSITIONS in the queue that is about to be replaced
-     by whatever the speaker now says, so it cannot survive the read. */
-  qClearSelection();
-  state.queueItems = [];
-  if (!state.zone) { $("queue-clear-all").disabled = true; return; }
+  /*
+   * NOTHING IS TORN DOWN UNTIL THERE IS SOMETHING TO PUT BACK.
+   *
+   * It used to empty the list first and rebuild it from the answer, so a read
+   * that FAILED left a blank screen with the error where a hundred tracks had
+   * been — and a queue read fails exactly when the player is busiest, which is
+   * the moment after you jump to a different track. A refresh that cannot
+   * happen should leave what is on screen alone and say so.
+   */
+  const mine = ++queueReq;
+  const had = list.children.length > 0;
+  if (!had) summary.textContent = "Loading queue…";
+  if (!state.zone) {
+    list.textContent = "";
+    $("queue-clear-all").disabled = true;
+    return;
+  }
 
   try {
     const q = await api("/api/queue?zone=" + encodeURIComponent(state.zone.uuid));
+    /* A slower read that finally lands must not paint over a newer one — the
+       same rule the edit dialog's searches follow. */
+    if (mine !== queueReq) return;
+
+    /* NOW it is safe to replace what is on screen. A selection describes
+       POSITIONS in the queue that is about to be replaced, so it goes with
+       it — but only now that the replacement has actually arrived. */
+    qClearSelection();
+    list.textContent = "";
+    earlier.textContent = "";
+    empty.classList.add("hidden");
     /* Kept so Play now can turn positions back into track ids without asking
        the speaker again for a list it was just given. */
     state.queueItems = q.items || [];
@@ -1532,7 +1553,16 @@ async function loadQueue() {
       list.appendChild(queueRow(item, item.index === current));
     }
   } catch (e) {
+    if (mine !== queueReq) return;
+    /* Something is on screen and it is still the truth as far as anybody
+       knows — the speaker was too busy to say otherwise. Keep it, and put the
+       reason where a summary goes rather than over the top of the tracks. */
+    if (had) {
+      summary.textContent = "Could not refresh the queue just now.";
+      return;
+    }
     summary.textContent = "";
+    state.queueItems = [];
     $("queue-clear-all").disabled = true;
     empty.textContent = e.message;
     empty.classList.remove("hidden");
@@ -1688,7 +1718,13 @@ async function qClearAll() {
 async function jumpTo(item) {
   try {
     await post("/api/transport", { zone: state.zone.uuid, action: "seek_track", value: item.index });
-    setTimeout(() => { pollNow(); loadQueue(); }, 700);
+    /* Staggered: a speaker that has just been told to start a different track
+       is the busiest it ever is, and the poll and a whole-queue read arriving
+       together is what made the read time out. The poll is the one that
+       matters immediately — it moves the transport bar — so the queue follows
+       a moment behind it. */
+    setTimeout(pollNow, 500);
+    setTimeout(loadQueue, 1400);
   } catch (e) {
     toast(e.message, true);
   }

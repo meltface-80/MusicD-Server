@@ -370,6 +370,30 @@ part of the fix.
   album is due, and the rest says what must not be offered again — and at the
   moment a top-up is due the tail is EMPTY, so a tail-only read excludes
   nothing. The fake Sonos honours `StartingIndex` because a real one does.
+- **A BROWSE IS A DOCUMENT, NOT A MESSAGE, so it is paged and it is patient.**
+  Asking for two hundred queue items in one Browse made the speaker build a
+  DIDL entry per track while it was also starting a track and answering the
+  poll, and it aborted — reaching a screen as "Browse to 192.168.0.93 failed:
+  This operation was aborted". `browseQueue()` walks it in `BROWSE_PAGE` (50)
+  chunks through `browsePage()`, which gets `BROWSE_TIMEOUT_MS` rather than
+  `soap()`'s six seconds. The batched enqueue is what made queues that long
+  ordinary, so the two arrived together.
+- **A REFUSAL IS AN ANSWER; A SILENCE IS NOT.** `UPnPError.answered` says
+  which, set by `soap()` — false when the fetch itself threw. A Browse is
+  retried ONCE on a silence and never on a refusal, because repeating a refusal
+  just gets the same answer twice. Decide with the flag, never by reading the
+  message: that is prose and will be reworded.
+- **NEVER TEAR A SCREEN DOWN BEFORE THERE IS SOMETHING TO PUT BACK.**
+  `loadQueue()` emptied the list first and rebuilt it from the answer, so a
+  read that failed left a blank screen with an error where a hundred tracks had
+  been — and a queue read fails exactly when the player is busiest, the moment
+  after a jump. Fetch, then replace; and when a refresh fails with rows already
+  on screen, keep them and put the reason where the summary goes. It takes a
+  request ticket too, for the same reason the edit dialog's searches do.
+- **TWO THINGS ASKED OF A SPEAKER AT ONCE IS ONE TOO MANY WHEN IT IS BUSY.**
+  `jumpTo()` fired the poll and a whole-queue read together 700ms after a seek.
+  They are staggered: the poll first, because it moves the transport bar, and
+  the queue a moment behind it.
 - **ONE CALL PER TRACK IS A QUEUE THAT TRICKLES.** `AddURIToQueue` takes one
   track, so ten albums was a hundred and twelve SOAP round trips awaited in
   turn — the tracks appearing a few at a time over several seconds, which is
@@ -529,6 +553,11 @@ part of the fix.
   service in `test/` now refuses the way the real one does — GitHub 415s an
   octet-stream archive request, MusicBrainz 403s an unidentified client, and
   Last.fm rejects a wrong signature. Keep it that way when adding another.
+- **THE FAKE SONOS CAN ALSO SAY NOTHING AT ALL.** `state.faults` makes it
+  refuse; `state.dropOnce` makes it drop the connection once, which is what a
+  busy player looks like from here. Both are needed to drive the two halves of
+  `UPnPError.answered` — a stand-in that could only refuse would leave the
+  retry path untested.
 - **AND THE FAKE SONOS REFUSES AN ACTION IT DOES NOT IMPLEMENT.** Its `default`
   branch used to answer 200 with an empty envelope, so a caller invoking
   something no speaker implements looked like it had worked — which is exactly

@@ -1333,6 +1333,34 @@ test("the queue can be worked on, not only read", () => {
   assert.match(js, /holdToPick\(li, \(\) => \{/);
 });
 
+test("a queue that cannot be refreshed keeps the tracks it has", () => {
+  /*
+   * "Browse to 192.168.0.93 failed: This operation was aborted", on a screen
+   * where a hundred tracks had been a second earlier. loadQueue() emptied the
+   * list FIRST and rebuilt it from the answer — so a read that failed left a
+   * blank screen with an error on it, and a queue read fails exactly when the
+   * player is busiest, which is the moment after you jump to another track.
+   */
+  const load = js.slice(js.indexOf("async function loadQueue("));
+  const body = load.slice(0, load.indexOf("\n}\n"));
+  /* Nothing is torn down before the answer arrives. Measured inside the TRY,
+     because the no-room branch above it legitimately empties the list — there
+     is no room, so there is nothing that could still be true. */
+  const attempt = body.slice(body.indexOf("  try {"));
+  assert.ok(attempt.indexOf('const q = await api("/api/queue') < attempt.indexOf('list.textContent = ""'),
+    "the fetch comes before the clear");
+  /* And a failure with rows on screen leaves them there. */
+  assert.match(body, /if \(had\) \{[\s\S]{0,200}Could not refresh/);
+  /* A slower read must not paint over a newer one. */
+  assert.match(body, /if \(mine !== queueReq\) return;/);
+
+  /* The seek and the queue read do not reach the player together: it is at its
+     busiest the moment it has been told to start a different track. */
+  const jump = js.slice(js.indexOf("async function jumpTo("));
+  assert.match(jump.slice(0, jump.indexOf("\n}")),
+    /setTimeout\(pollNow, \d+\);\s*\n\s*setTimeout\(loadQueue, \d+\);/);
+});
+
 test("what is picked is said with a box, not by tinting the row", () => {
   /*
    * The row used to be tinted, and on a queue of a hundred that read as noise:
