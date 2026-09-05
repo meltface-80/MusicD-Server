@@ -561,10 +561,31 @@
 
         <!-- ---------------- Queue ---------------- -->
         <div id="queue-pane" class="queue-pane hidden">
-          <div class="queue-summary" id="queue-summary"></div>
-          <div class="queue-earlier" id="queue-earlier"></div>
+          <div class="queue-head">
+            <div class="queue-head-text">
+              <div class="queue-summary" id="queue-summary"></div>
+              <div class="queue-earlier" id="queue-earlier"></div>
+            </div>
+            <!-- Always here, selection or not: emptying the room's queue is
+                 the thing somebody wants when they have stopped wanting any
+                 of it, and hunting for it behind a selection is the opposite
+                 of that. -->
+            <button class="q-clear-all" id="queue-clear-all" type="button">Clear all</button>
+          </div>
           <ol id="queue-list" class="queue-list"></ol>
           <div class="queue-empty hidden" id="queue-empty">Nothing is queued in this room.</div>
+          <!-- The selection's own bar. Not the album wall's #select-bar: that
+               one holds ALBUM ids and follows you between screens, and a queue
+               position means nothing anywhere but here. -->
+          <div id="qsel-bar" class="select-bar qsel-bar hidden" role="toolbar"
+               aria-label="Selected tracks">
+            <span id="qsel-count" class="select-count" aria-live="polite"></span>
+            <div class="select-actions">
+              <button id="qsel-play" class="select-btn is-primary" type="button">Play Now</button>
+              <button id="qsel-remove" class="select-btn" type="button">Remove</button>
+              <button id="qsel-cancel" class="select-btn is-quiet" type="button">Cancel</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -407,7 +407,7 @@ test("the keyboard is measured against the viewport that does not move", () => {
 test("the mini transport is absent while the soft keyboard is up", () => {
   /* Decided in syncMini with the other conditions, so there is one place that
      knows whether the bar is on screen. */
-  assert.match(js, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
+  assert.match(js, /classList\.toggle\("hidden",\s*\n?\s*onNpFace \|\| state\.typing \|\| selecting\(\) \|\| qSelecting\(\)\)/);
   /* From the FOCUS, which is the actual cause of a soft keyboard, rather than
      from a measurement that only correlates with one. */
   assert.match(js, /el\.matches\("input, textarea"\)/);
@@ -1294,6 +1294,45 @@ test("identifying an album is by hand, from the edit dialog, and stores an id", 
   assert.match(js, /el\("span", "edit-match-fit"/);
 });
 
+test("the queue can be worked on, not only read", () => {
+  /*
+   * Clear all is at the TOP and always there: emptying the room's queue is
+   * what somebody wants when they have stopped wanting any of it, and hiding
+   * it behind a selection is the opposite of that.
+   */
+  const pane = html.slice(html.indexOf('id="queue-pane"'));
+  const body = pane.slice(0, pane.indexOf('id="queue-list"'));
+  assert.match(body, /id="queue-clear-all"/, "before the list, not after it");
+  assert.match(html, /id="qsel-bar"[\s\S]{0,400}id="qsel-play"/);
+  assert.match(html, /id="qsel-remove"/);
+  assert.match(html, /id="qsel-cancel"/);
+
+  /* Its own selection, and deliberately NOT state.select: that one holds album
+     ids and follows you between screens, and a queue POSITION means nothing
+     anywhere else — nor here once the queue has changed. */
+  assert.match(js, /qsel: null,/);
+  const load = js.slice(js.indexOf("async function loadQueue("));
+  assert.match(load.slice(0, load.indexOf("\n}")), /qClearSelection\(\)/,
+    "a re-read of the queue drops a selection that no longer describes anything");
+
+  /* The bar stands where the mini transport does, so the mini transport goes.
+     Without this it is drawn OVER the buttons: visible, and unpressable. */
+  const mini = js.slice(js.indexOf("function syncMini("));
+  assert.match(mini.slice(0, mini.indexOf("\n}")), /qSelecting\(\)/);
+  /* And something has to ASK it when the selection changes — knowing the rule
+     is not the same as applying it, and the bar was drawn over its own buttons
+     until this call existed. */
+  const paint = js.slice(js.indexOf("function paintQueuePicks("));
+  assert.match(paint.slice(0, paint.indexOf("\n}")), /syncMini\(\);/);
+  assert.ok(!/\.qsel-bar \{ position:/.test(css),
+    "and it keeps .select-bar's own position rather than fighting it");
+
+  /* One hold gesture, two kinds of thing — the slop handling is not written
+     twice. */
+  assert.match(js, /function holdToPick\(card, onHold\)/);
+  assert.match(js, /holdToPick\(li, \(\) => \{/);
+});
+
 test("Look now moved onto the wall it acts on", () => {
   /*
    * It was a row in the drawer view that has gone. It belongs on the screen
@@ -1616,7 +1655,7 @@ test("the mini bar is always on screen, because it is the only room picker", () 
      full transport already; a soft keyboard, which the bar is meant to be
      behind; and choosing albums, where the selection bar stands in its place.
      None of them is about whether anything is playing. */
-  assert.match(body, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
+  assert.match(body, /classList\.toggle\("hidden",\s*\n?\s*onNpFace \|\| state\.typing \|\| selecting\(\) \|\| qSelecting\(\)\)/);
   assert.ok(!/!playing/.test(body), "playing state no longer decides whether the bar exists");
   /* And it says something useful when idle. */
   assert.match(js, /"Nothing playing" : "Choose a room"/);

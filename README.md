@@ -191,7 +191,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.38` | that exact version, for pinning |
+| `:0.4.39` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -388,7 +388,27 @@ already chosen shows its tick everywhere it appears. It works on the home
 carousels, the full walls, the search results and an artist's albums.
 
 Play Now replaces the room's queue with everything chosen, in the order you
-chose it; Queue adds it all to the end of what is playing.
+chose it; Queue adds it all to the end of what is playing. However many albums
+that is, they go to the speaker in batches rather than one track at a time — a
+hundred-track selection is a handful of calls instead of a hundred, which is
+the difference between a queue that appears and one that trickles in.
+
+## Working on the queue
+
+The queue screen is not read-only. **Tap** a track to jump to it, or **hold**
+one to start picking and tap the rest to add them.
+
+A bar takes the mini transport's place with **Play Now** — which plays just the
+tracks you picked — **Remove**, which takes them out of the queue, and
+**Cancel**.
+
+**Clear all** sits at the top of the queue and is always there, whether
+anything is picked or not: emptying the room's queue is what you want when you
+have stopped wanting any of it, not something to go hunting for.
+
+Removing several at once is worked out as runs of neighbouring positions and
+applied from the end backwards, because Sonos renumbers the queue the instant
+anything leaves it.
 
 ## The shape of the track
 

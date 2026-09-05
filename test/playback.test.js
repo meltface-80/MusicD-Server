@@ -107,7 +107,15 @@ test("playing an album clears the queue, loads it, and starts it", async () => {
 
     const actions = r.fake.actions();
     assert.ok(actions.includes("RemoveAllTracksFromQueue"), "the old queue went first");
-    assert.strictEqual(actions.filter(a => a === "AddURIToQueue").length, 6);
+    /*
+     * ONE call, not six. It used to be an AddURIToQueue per track, awaited in
+     * turn, so ten albums was a hundred and twelve round trips one after
+     * another — a queue that filled itself a few tracks at a time over several
+     * seconds. A six-track album is one batch.
+     */
+    assert.strictEqual(actions.filter(a => a === "AddMultipleURIsToQueue").length, 1);
+    assert.strictEqual(actions.filter(a => a === "AddURIToQueue").length, 0);
+    assert.strictEqual(r.fake.state.queue.length, 6, "and all six arrived");
 
     /* The transport must be pointed at the QUEUE, not at a single track — that
        is what makes Sonos move between tracks by itself. */
@@ -115,6 +123,97 @@ test("playing an album clears the queue, loads it, and starts it", async () => {
     assert.strictEqual(r.fake.state.playMode, "NORMAL");
     assert.strictEqual(r.fake.state.transportState, "PLAYING");
     assert.strictEqual(r.fake.state.track, 1, "started at the first track");
+  } finally { await r.cleanup(); }
+});
+
+test("a big selection goes in batches, not one call per track", async () => {
+  /*
+   * The report this exists for: ten albums added, and only some of the tracks
+   * appeared, the rest arriving slowly over the next several seconds. That was
+   * a hundred and twelve SOAP round trips, awaited one after another.
+   */
+  const r = await rig();
+  try {
+    /* Every album there is, so the selection is bigger than one batch. */
+    const albums = r.db.prepare(
+      "SELECT id FROM albums WHERE present = 1 AND version_of = ''").all().map(a => a.id);
+    const result = await r.playback.playAlbums(r.kitchen(), albums);
+    const actions = r.fake.actions();
+    const batches = actions.filter(a => a === "AddMultipleURIsToQueue").length;
+
+    assert.strictEqual(r.fake.state.queue.length, result.queued, "every track arrived");
+    assert.ok(result.queued > 16, "and there were enough to need more than one batch: " + result.queued);
+    assert.strictEqual(batches, Math.ceil(result.queued / 16), actions.join(", "));
+    assert.ok(batches < result.queued / 4,
+      `${batches} calls for ${result.queued} tracks, not one each`);
+  } finally { await r.cleanup(); }
+});
+
+test("a player that refuses the batch still gets its queue", async () => {
+  /*
+   * This cannot be tried against every speaker that exists, so the old path
+   * stays as the fallback: a refusal must end in a full queue, not an error.
+   * Sonos takes a batch whole or not at all, so there is nothing half-added to
+   * undo.
+   */
+  const r = await rig();
+  try {
+    r.fake.state.faults.set("AddMultipleURIsToQueue", "401");
+    const result = await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    assert.strictEqual(result.queued, 6);
+    assert.strictEqual(r.fake.state.queue.length, 6, "the queue was filled anyway");
+    assert.strictEqual(r.fake.actions().filter(a => a === "AddURIToQueue").length, 6,
+      "one at a time, which is what the fallback is");
+    assert.strictEqual(r.fake.state.transportState, "PLAYING", "and it still started");
+  } finally { await r.cleanup(); }
+});
+
+test("removing picked positions removes exactly those, and nothing shifts under it", async () => {
+  /*
+   * THE ORDER OF THE CALLS IS THE WHOLE OF THE CORRECTNESS. Sonos numbers the
+   * queue from 1 and renumbers what is left the instant anything goes, so a
+   * caller working forwards deletes the wrong tracks from the second range on.
+   * Contiguous positions are collapsed into one range and the ranges applied
+   * from the END backwards.
+   */
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    const before = r.fake.state.queue.map(q => q.uri);
+    assert.strictEqual(before.length, 6);
+
+    /* 2 and 3 are a run; 5 is on its own. */
+    const out = await r.playback.removeFromQueue(r.kitchen(), [3, 2, 5, 2]);
+    assert.strictEqual(out.removed, 3, "duplicates counted once");
+
+    const after = r.fake.state.queue.map(q => q.uri);
+    assert.deepStrictEqual(after, [before[0], before[3], before[5]],
+      "1, 4 and 6 are what is left");
+    /* Two runs, so two calls — not three, and not six. */
+    assert.strictEqual(
+      r.fake.actions().filter(a => a === "RemoveTrackRangeFromQueue").length, 2);
+  } finally { await r.cleanup(); }
+});
+
+test("clearing the queue is one call, whatever is in it", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    await r.playback.clearQueue(r.kitchen());
+    assert.deepStrictEqual(r.fake.state.queue, []);
+    assert.strictEqual(
+      r.fake.actions().filter(a => a === "RemoveAllTracksFromQueue").length, 2,
+      "once for the Play that replaced, once for the clear");
+  } finally { await r.cleanup(); }
+});
+
+test("a position that is not one is refused rather than guessed at", async () => {
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    const out = await r.playback.removeFromQueue(r.kitchen(), [0, -1, "x", null]);
+    assert.strictEqual(out.removed, 0);
+    assert.strictEqual(r.fake.state.queue.length, 6, "and nothing was touched");
   } finally { await r.cleanup(); }
 });
 

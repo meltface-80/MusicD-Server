@@ -370,6 +370,20 @@ part of the fix.
   album is due, and the rest says what must not be offered again — and at the
   moment a top-up is due the tail is EMPTY, so a tail-only read excludes
   nothing. The fake Sonos honours `StartingIndex` because a real one does.
+- **ONE CALL PER TRACK IS A QUEUE THAT TRICKLES.** `AddURIToQueue` takes one
+  track, so ten albums was a hundred and twelve SOAP round trips awaited in
+  turn — the tracks appearing a few at a time over several seconds, which is
+  what the user reported. `AddMultipleURIsToQueue` is what the Sonos app uses:
+  `QUEUE_BATCH` (16) URIs space-separated and ONE DIDL-Lite document holding an
+  item each, built by `trackItems()` in `lib/didl.js` so metadata still has one
+  home. The old path stays as the FALLBACK — this cannot be tried against every
+  player that exists, and a refusal must end in a full queue rather than an
+  error.
+- **SONOS RENUMBERS THE QUEUE THE INSTANT ANYTHING LEAVES IT.** So the order of
+  the removals is the whole of the correctness: `removeFromQueue()` collapses
+  neighbouring positions into runs and applies them from the END backwards,
+  because a caller working forwards deletes the wrong tracks from the second
+  range on. Positions, never track ids — a queue can hold the same track twice.
 - **Several albums are ONE enqueue, not a loop.** `enqueue()` clears the room's
   queue when `replace` is set, so playing a selection an album at a time would
   have each one wipe the one before it and leave only the last playing.
@@ -381,6 +395,17 @@ part of the fix.
   never the other way round. Nothing in `showView()` or `openRow()` may reset
   it, and the repaint is document-wide because Home's carousels, the search
   results and an artist's albums are all cards outside `#album-grid`.
+- **A QUEUE POSITION IS NOT AN ALBUM ID, so it gets its own selection.**
+  `state.select` holds album ids and deliberately follows you between screens;
+  `state.qsel` holds POSITIONS, which mean nothing on another screen and
+  nothing on this one once the queue has changed — so `loadQueue()` clears it
+  on every read. Rows are still painted FROM it, never the other way round.
+- **A SECOND BAR IN THE SAME PLACE NEEDS THE SAME EXEMPTION.** The queue's
+  selection bar is a `.select-bar`, so `syncMini()` has to hide the mini
+  transport for it exactly as it does for the album wall's — and
+  `paintQueuePicks()` has to CALL `syncMini()`, because knowing the rule is not
+  applying it. Positioning it inside the queue pane instead put it under the
+  mini bar: visible, and unpressable. Only a real browser caught that.
 - **A hold on a card must lose to a scroll.** The carousels are flicked
   sideways from the same cards the hold starts on, so movement past
   `PICK_SLOP` cancels it — and the click that arrives behind the finger is the
@@ -497,6 +522,13 @@ part of the fix.
   service in `test/` now refuses the way the real one does — GitHub 415s an
   octet-stream archive request, MusicBrainz 403s an unidentified client, and
   Last.fm rejects a wrong signature. Keep it that way when adding another.
+- **AND THE FAKE SONOS REFUSES AN ACTION IT DOES NOT IMPLEMENT.** Its `default`
+  branch used to answer 200 with an empty envelope, so a caller invoking
+  something no speaker implements looked like it had worked — which is exactly
+  how `AddMultipleURIsToQueue` was able to enqueue NOTHING while every
+  transport test stayed green. It sends a UPnP `401 Invalid Action` fault now,
+  as a real player does. Implement the action in the fake or expect the
+  refusal; never both silently.
 
 ## Front end
 

@@ -1327,8 +1327,35 @@ main {
 /* ------------------------------------------------------------------ */
 
 .queue-pane { width: 100%; }
-.queue-summary { font-size: 14px; color: var(--text); margin: 4px 2px 2px; }
-.queue-earlier { font-size: 13px; color: var(--text-faint); margin: 0 2px 14px; }
+/* The count on the left, Clear all on the right — and the text takes the
+   space, so a long summary wraps rather than squeezing the button away. */
+.queue-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  margin: 4px 0 14px;
+}
+.queue-head-text { flex: 1 1 auto; min-width: 0; }
+.q-clear-all {
+  flex: 0 0 auto;
+  min-height: var(--ctl-h-sm); padding: 0 12px;
+  background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  font: 600 13px var(--font-sans); cursor: pointer;
+  transition: background .15s ease, transform .08s ease;
+}
+.q-clear-all:hover  { background: var(--bg-elev-2); }
+.q-clear-all:active { transform: scale(.97); }
+.q-clear-all[disabled] { opacity: .5; cursor: default; }
+/* No positioning of its own: it IS a .select-bar, in the same place and at the
+   same height as the album wall's, and the mini transport steps aside for it
+   exactly as it does for that one — see syncMini(). Overriding this to sit
+   inside the queue pane put it UNDER the mini bar, where it could be seen and
+   not pressed. */
+.queue-list li.is-picked {
+  background: var(--accent-soft);
+  border-radius: 10px;
+}
+.queue-summary { font-size: 14px; color: var(--text); margin: 0 2px 2px; }
+.queue-earlier { font-size: 13px; color: var(--text-faint); margin: 0 2px; }
 .queue-earlier:empty { display: none; }
 .queue-empty { color: var(--text-faint); font-size: 14px; padding: 24px 2px; }
 

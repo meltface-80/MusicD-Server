@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.39
+
+### The queue arrives all at once
+- **A big selection no longer trickles in.** Adding ten albums was a hundred
+  and twelve separate calls to the speaker, sent one after another — which is
+  exactly what a queue filling itself a few tracks at a time over several
+  seconds looks like. It now goes in batches of sixteen, the way the Sonos app
+  does it: **seven calls instead of a hundred**. A player that will not take
+  the batched form still gets its queue the old way rather than an error.
+
+### The queue can be worked on, not only read
+- **Hold a track to start picking**, then tap to add more — the same gesture
+  the album wall uses. Tapping without a selection still jumps to that track.
+- **Play Now** plays the picked tracks, **Remove** takes them out of the queue,
+  and **Cancel** drops the selection.
+- **Clear all** sits at the top of the queue and is always there, selection or
+  not — emptying the room's queue is what you want when you have stopped
+  wanting any of it.
+- Removing several tracks at once is worked out as runs and applied from the
+  end backwards, because Sonos renumbers the queue the instant anything goes.
+
 ## 0.4.38
 
 ### A write-up for an album you have identified is the right one, not a guess
