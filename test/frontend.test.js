@@ -1139,6 +1139,18 @@ test("the search uses what is in the fields, not what is saved", () => {
   assert.match(fn, /encodeURIComponent\(\$\("edit-artist"\)\.value\.trim\(\)\)/);
 });
 
+test("the cover section provides its own gap above Save", () => {
+  /* .edit-actions has NO top margin — the space above Cancel and Save has
+     always come from whatever sits above them. So a section inserted between
+     the note and the actions has to bring its own bottom margin, or Find cover
+     and Save read as one crowded block, which is exactly what shipped. */
+  assert.match(css, /\.edit-actions \{ display: flex; gap: 10px; justify-content: flex-end; \}/,
+    "if this grows a margin-top, the rule below is no longer the only thing holding the gap");
+  const rule = /\.edit-cover \{ margin: (\d+)px 0 (\d+)px; \}/.exec(css);
+  assert.ok(rule, "the cover section sets its own margins");
+  assert.ok(Number(rule[2]) >= 14, "and the bottom one is a real gap: " + (rule && rule[2]));
+});
+
 test("the dialog can always reach its own Save button", () => {
   /* It grew a grid of covers. A panel with no ceiling pushes Save off the
      bottom of a phone the moment there are two rows of them. */

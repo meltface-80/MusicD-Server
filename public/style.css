@@ -1244,7 +1244,13 @@ main {
 /*  Looking for a cover by hand                                        */
 /* ------------------------------------------------------------------ */
 
-.edit-cover { margin-top: 4px; }
+/* The gap BELOW is the one that matters and it was missing: .edit-actions has
+   no top margin of its own — the space above Cancel and Save used to come from
+   the note's bottom margin, and the cover section then sat between the two with
+   nothing underneath it, so Find cover and Save read as one crowded block.
+   A little more than the note's 14px, because this is a group ending rather
+   than a paragraph ending. */
+.edit-cover { margin: 4px 0 18px; }
 .edit-cover-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .edit-why { margin: 8px 0 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 /* Three across on a phone, which is enough to tell one sleeve from another
