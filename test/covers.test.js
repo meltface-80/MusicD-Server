@@ -386,6 +386,164 @@ test("an album with nothing specific to search on is not searched for", async ()
   ws.cleanup();
 });
 
+/* ------------------------------------------------------------------ */
+/*  The id the files already carry                                     */
+/* ------------------------------------------------------------------ */
+
+const MBID = "8f4b1d0e-3c2a-4e77-9a55-1b2c3d4e5f60";
+
+/* music-metadata normalises every format's spelling of the MusicBrainz album
+   id into common.musicbrainz_albumid, so the scanner reads one field. Setting
+   the column directly is what a Picard-tagged library arrives with — the WAV
+   fixtures here have no frame to carry it. */
+function tagWith(db, albumTitle, mbid) {
+  return db.prepare(
+    `UPDATE tracks SET mbid = ? WHERE album_id =
+       (SELECT id FROM albums WHERE title = ?)`).run(mbid, albumTitle).changes;
+}
+
+test("an album whose files name the release is fetched by id, not guessed at", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    assert.ok(tagWith(db, "Souvlaki", MBID) > 0);
+    const net = fakeInternet({ [`coverartarchive\\.org/release/${MBID}`]: image() });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+
+    assert.match(library.album(db, library.library(db, 10)[0].id).art, /^\/art\//);
+    /* Not one MusicBrainz request. The id IS the answer, so there is nothing to
+       search for and nothing to score — which is also why this path costs the
+       rate gate nothing. */
+    assert.strictEqual(net.calls.filter(c => /musicbrainz\.org/.test(c.url)).length, 0);
+    assert.ok(net.calls.some(c => c.url.includes("/release/" + MBID)));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a Various Artists record with a tagged id is found, though no search could", async () => {
+  /* The sweep refuses to search for these — there is no query that would not
+     match half a catalogue — so before the id was read they were unreachable. */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Various/Comp", { album: "Comp", artist: "", tracks: ["One", "Two"] }));
+  try {
+    assert.ok(tagWith(db, "Comp", MBID) > 0);
+    const net = fakeInternet({ [`coverartarchive\\.org/release/${MBID}`]: image() });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.status().fetched, 1);
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a malformed id in the tags is ignored rather than turned into a URL", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    tagWith(db, "Souvlaki", "../../etc/passwd");
+    const net = fakeInternet({});
+    await coversFor(db, ws, net).sweep();
+    assert.ok(!net.calls.some(c => /passwd/.test(c.url)), "nothing built a URL out of it");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
+/*  iTunes, last                                                       */
+/* ------------------------------------------------------------------ */
+
+const itunes = (results) => reply(200, { results }, "application/json");
+
+test("iTunes is asked only after MusicBrainz has said no", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "musicbrainz\\.org/ws/2/release-group": releaseGroups([
+        { id: "rg-1", score: 100, title: "Souvlaki", "artist-credit": [{ name: "Slowdive" }] }
+      ]),
+      "coverartarchive\\.org": image()
+    });
+    await coversFor(db, ws, net).sweep();
+    assert.ok(!net.calls.some(c => /itunes\.apple\.com/.test(c.url)),
+      "MusicBrainz answered, so Apple was never troubled");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("iTunes rescues an album MusicBrainz does not have", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Slowdive",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg" }
+      ]),
+      "mzstatic\\.com": image()
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.status().fetched, 1);
+    /* The thumbnail's own size is swapped for a real one — a documented
+       property of these URLs, and the whole reason the 100px result is usable. */
+    assert.ok(net.calls.some(c => /600x600bb\.jpg/.test(c.url)),
+      net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("an iTunes result by a different artist is not this album's cover", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Some Greek Restaurant",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/y/100x100bb.jpg" }
+      ])
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.status().fetched, 0, "a shared title is not a match");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
+/*  A miss is only as good as the sources it was recorded against      */
+/* ------------------------------------------------------------------ */
+
+test("adding a source retries the albums that had already failed", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({});
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.pending().length, 0, "the miss is inside its week");
+
+    /* The miss said "none of the places we knew about had it", which stops
+       being true the moment a place is added. Without this a library's misses
+       sit out a week against sources that were never asked — which is exactly
+       what "I still have 24 missing and nothing is happening" looks like. */
+    db.prepare("UPDATE cover_lookups SET gen = 0").run();
+    assert.strictEqual(covers.pending().length, 1);
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a hit is never re-fetched, whatever the sources do", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "musicbrainz\\.org/ws/2/release-group": releaseGroups([
+        { id: "rg-1", score: 100, title: "Souvlaki", "artist-credit": [{ name: "Slowdive" }] }
+      ]),
+      "coverartarchive\\.org": image()
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    db.prepare("UPDATE cover_lookups SET gen = 0").run();
+    assert.strictEqual(covers.pending().length, 0,
+      "the file is on disk; no new source changes that");
+  } finally { db.close(); ws.cleanup(); }
+});
+
 test("a release with no art at any size costs one request, not three", async () => {
   const { ws, db } = await scanned((w) => putAlbum(w.music, "Slowdive/Souvlaki",
     { album: "Souvlaki", artist: "Slowdive", year: 1993, tracks: SOUVLAKI }));

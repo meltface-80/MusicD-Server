@@ -604,6 +604,21 @@
         Your music files are never changed.</p>
       <p class="edit-err hidden" id="edit-err"></p>
 
+      <!-- Looking for a cover, from the same dialog the name is corrected in.
+           The two belong together: the album the automatic sweep cannot find is
+           almost always the one whose tags do not say who made it, and the fix
+           is to type the name and then look with it. -->
+      <div class="edit-cover">
+        <div class="edit-cover-head">
+          <span class="edit-label">Cover</span>
+          <button class="action-btn" type="button" id="edit-find">Find cover</button>
+        </div>
+        <!-- What the automatic search recorded when it gave up, so "still
+             missing and nothing is happening" has an answer on screen. -->
+        <p class="edit-why hidden" id="edit-why"></p>
+        <div class="edit-grid hidden" id="edit-grid"></div>
+      </div>
+
       <div class="edit-actions">
         <button class="action-btn" type="button" id="edit-cancel" data-edit-close>Cancel</button>
         <button class="action-btn primary" type="button" id="edit-save">Save</button>

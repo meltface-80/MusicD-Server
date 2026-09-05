@@ -59,9 +59,37 @@ set:
   a SEPARATE column from `art` because the scan rewrites `art` on every pass.
 - **A miss is written down.** Without `cover_lookups` a library of coverless
   bootlegs re-asks about all of them every six hours forever.
-- **It is not a manual fetch.** No picker, no candidate grid, no per-album
-  button — one row in the side menu that says what is happening, and
-  `COVER_LOOKUP=false` to remove even that.
+- **The SWEEP is not a manual fetch.** No picker and no per-album button in the
+  background path — one row in the side menu that says what is happening, and
+  `COVER_LOOKUP=false` to remove even that. A sweep that asked a person to
+  choose four hundred times would not be a sweep.
+- **BY HAND IS THE EXCEPTION, added in 0.4.27 at the user's request, and only
+  from the album screen.** The sweep refuses an album whose files name no
+  artist — there is no query that would not match half a catalogue — so the
+  records it leaves behind are the ones somebody has to name themselves. That
+  is the same gesture the 0.4.15 name editor exists for, which is why Find
+  cover lives in that dialog and searches with what is IN THE FIELDS rather
+  than what is saved. It is still not identification: nothing is written back
+  to the album but a picture.
+- **The client picks a candidate by POSITION, never by URL.** The server holds
+  the list it offered. A server that fetches a URL a client hands it is an open
+  proxy onto the network it sits in, and this one sits beside somebody's router.
+  `hostAllowed()` guards the download as well, because the check belongs where
+  the fetch is rather than where the caller is trusted.
+- **A MISS IS ONLY AS GOOD AS THE SOURCES IT WAS RECORDED AGAINST.** A miss
+  means "none of the places we knew about had it", which stops being true the
+  moment a place is added — so `cover_lookups.gen` records which set of sources
+  answered, and `LOOKUP_GEN` in `lib/covers.js` is bumped whenever that set
+  changes. Without it, adding a source leaves every album that already failed
+  sitting out its week-long cooldown against sources nobody asked. Hits are
+  untouched: the file is on disk.
+- **The MusicBrainz release id in the files is the only exact identity this app
+  gets for free.** Picard writes it and most libraries carry it. With it there
+  is no search, no scoring and no way to match the wrong record — so it is
+  tried FIRST, it costs no MusicBrainz request at all, and it is the only thing
+  that can find a cover for a Various Artists record. `TAG_SCHEMA` was bumped
+  to 3 to read it, because a file whose size and mtime have not changed is
+  otherwise never opened again.
 
 ## Write-ups: `lib/info.js`
 

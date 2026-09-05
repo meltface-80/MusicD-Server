@@ -1109,6 +1109,49 @@ test("Home does not name itself in the bar", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Looking for a cover by hand                                        */
+/* ------------------------------------------------------------------ */
+
+test("a candidate is chosen by position, never by URL", () => {
+  /*
+   * A server that fetches a URL a client hands it is an open proxy onto the
+   * network it sits in — and this one sits on somebody's home network, beside
+   * a router's admin page. The server holds the list it offered and the client
+   * names an entry in it.
+   */
+  const body = js.slice(js.indexOf("async function chooseCover("));
+  const fn = body.slice(0, body.indexOf("\n}"));
+  assert.match(fn, /post\("\/api\/album\/" \+ b64url\(playing\(editing\)\) \+ "\/cover", \{ index \}\)/);
+  assert.ok(!/url:/.test(fn), "no URL is ever posted back");
+  /* And the download refuses anything off the allowlist even so, because the
+     check belongs where the fetch is rather than where the caller is trusted. */
+  const covers = fs.readFileSync(path.join(__dirname, "..", "lib", "covers.js"), "utf8");
+  assert.match(covers, /if \(!hostAllowed\(url[^)]*\)\) throw new Error\("not a cover source"\)/);
+});
+
+test("the search uses what is in the fields, not what is saved", () => {
+  /* The album the sweep cannot find is very often the one whose files name no
+     artist — which is the album somebody is in this dialog to name. Searching
+     with the saved value would mean saving before you could look. */
+  const body = js.slice(js.indexOf("async function findCovers("));
+  const fn = body.slice(0, body.indexOf("\n}\n"));
+  assert.match(fn, /encodeURIComponent\(\$\("edit-title"\)\.value\.trim\(\)\)/);
+  assert.match(fn, /encodeURIComponent\(\$\("edit-artist"\)\.value\.trim\(\)\)/);
+});
+
+test("the dialog can always reach its own Save button", () => {
+  /* It grew a grid of covers. A panel with no ceiling pushes Save off the
+     bottom of a phone the moment there are two rows of them. */
+  assert.match(css, /\.edit-panel \{[^}]*max-height:/s);
+  assert.match(css, /\.edit-panel \{[^}]*overflow-y: auto; overscroll-behavior: contain;/s);
+});
+
+test("last album's covers are never offered for this one", () => {
+  const body = js.slice(js.indexOf("function openEditDialog()"));
+  assert.match(body.slice(0, body.indexOf("\n}")), /resetCoverSearch\(\)/);
+});
+
+/* ------------------------------------------------------------------ */
 /*  The shape of the track                                             */
 /* ------------------------------------------------------------------ */
 
