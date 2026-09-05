@@ -46,7 +46,7 @@ the Sonos side follows the
 | --- | --- |
 | **Your library, as it is** | An album is a folder. Title, artist and cover come from the tags and the folder name. |
 | **Plays to Sonos** | Rooms and groups read from the speakers. Gapless through the Sonos queue, nothing transcoded. |
-| **Now playing** | Seek, volume, the live queue — and the [track's own waveform](#the-shape-of-the-track) drawn in the seek bar. |
+| **Now playing** | Seek, volume, [the live queue](#the-queue) — and the [track's own waveform](#the-shape-of-the-track) drawn in the seek bar. |
 | **Remembers what you play** | Date added, last played and play counts, [counted by watching the speaker](#what-the-database-keeps). |
 | **[Home screen you arrange](#arranging-the-home-screen)** | Seven rows. Switch any off and reorder them in Settings › Home screen. |
 | **[Smart Picks](#smart-picks)** | A taste profile from your last 90 days. Every pick says why it is there. Local files only. |
@@ -191,7 +191,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.41` | that exact version, for pinning |
+| `:0.4.42` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -393,24 +393,16 @@ that is, they go to the speaker in batches rather than one track at a time — a
 hundred-track selection is a handful of calls instead of a hundred, which is
 the difference between a queue that appears and one that trickles in.
 
-## Working on the queue
+## The queue
 
-The queue screen is not read-only. **Tap** a track to jump to it, or **hold**
-one to start picking and tap the rest to add them. While you are picking, every
-row shows a box where its duration was — empty on the tracks you have not
-chosen, ticked on the ones you have.
+The queue is the live queue on the speaker, read back from it. **Tap** a track
+to jump to it; the one playing is marked and everything before it is dimmed.
+That is the whole of it — it is a list you tap, not something to administer.
 
-A bar takes the mini transport's place with **Play Now** — which plays just the
-tracks you picked — **Remove**, which takes them out of the queue, and
-**Cancel**.
-
-**Clear all** sits at the top of the queue and is always there, whether
-anything is picked or not: emptying the room's queue is what you want when you
-have stopped wanting any of it, not something to go hunting for.
-
-Removing several at once is worked out as runs of neighbouring positions and
-applied from the end backwards, because Sonos renumbers the queue the instant
-anything leaves it.
+It is read in pages of fifty rather than in one large request, because a
+speaker that is starting a track has to build a document per page and a big
+one times out. A refresh that fails leaves the tracks on screen and says so,
+rather than replacing them with an error.
 
 ## The shape of the track
 

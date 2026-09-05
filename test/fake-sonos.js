@@ -154,19 +154,6 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
           });
         }
 
-        /* A run of positions, numbered from 1, and everything after it shuffles
-           down — which is the whole reason the caller works backwards. */
-        case "RemoveTrackRangeFromQueue": {
-          const start = Number(tag(body, "StartingIndex") || 0);
-          const count = Number(tag(body, "NumberOfTracks") || 0);
-          if (start < 1 || count < 1 || start + count - 1 > state.queue.length) {
-            return fault(402, "Invalid Args");
-          }
-          state.queue.splice(start - 1, count);
-          if (state.track > state.queue.length) state.track = state.queue.length;
-          return reply({ NewUpdateID: 1 });
-        }
-
         case "SetAVTransportURI":
           state.currentUri = tag(body, "CurrentURI") || "";
           return reply({});
