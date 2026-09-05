@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.35
+
+### Wrong covers were being offered, and the reason was the artist's name
+- **A name that merely contains the artist is no longer treated as the
+  artist.** The agreement rule accepted a match anywhere inside a name, and
+  `REM` folds to `rem` — which sits inside Remedy, Extreme, Cremation, and
+  inside an anime character called Rem. That is why asking for R.E.M.'s
+  *Accelerate* offered a cartoon. A featured credit is always appended, so a
+  prefix is the whole of what the rule was ever for, and a prefix now has to be
+  long enough to be a name rather than a syllable.
+- **Find cover no longer answers with the artist's whole catalogue.** It
+  demanded nothing at all of an album's title, so a bootleg no store carries —
+  *Beyond Live & Rare* — came back as eight Judas Priest sleeves with nothing
+  to say which was which. The title has to answer too, though loosely: a folder
+  called "Peter Gabriel - Scratch My Back 2010" still reaches *Scratch My Back*.
+- **The results are ordered by how strongly they are believed**, so the id in
+  your own files comes first and a store's guess comes last, instead of
+  whichever source happened to reply soonest.
+- **A grid that empties itself now says why.** A release the Cover Art Archive
+  knows by name but holds no picture for used to appear and then silently
+  vanish, which reads as the app breaking rather than as an answer.
+
+### A discography folder names an artist; it is not one
+- **`REM - Discography/Accelerate/` is an album by REM.** Untagged files fall
+  back to the folder above, and that filed every record under an "artist"
+  called *REM - Discography* or *Peter Gabriel - Studio Discography* — names
+  that match nothing at MusicBrainz, nothing at the iTunes store and nothing in
+  a Wikipedia search, so those albums lost their cover and their write-up at
+  once. A plain `Discography` folder is read through to the artist above it.
+- **A folder that repeats the artist is not an album called that.**
+  "Peter Gabriel - Scratch My Back 2010" is an album called *Scratch My Back*.
+  Only the folder fallback is trimmed — a title that came from a tag is left
+  exactly as it is.
+- Nothing is looked up for either: both read the name with a vocabulary that
+  has to match wholly, so an unknown word means "this is part of the name" and
+  the folder is left alone. **Your files are still never changed.**
+- Every recorded miss is retried after this update, because the names those
+  misses were recorded against have changed.
+
 ## 0.4.34
 
 ### The missing covers are a wall of albums

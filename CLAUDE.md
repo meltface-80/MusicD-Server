@@ -76,6 +76,37 @@ set:
   proxy onto the network it sits in, and this one sits beside somebody's router.
   `hostAllowed()` guards the download as well, because the check belongs where
   the fetch is rather than where the caller is trusted.
+- **A SUBSTRING IS NOT AN IDENTITY.** `artistAgrees()` accepted containment
+  anywhere, which is a trap for a short name: `artistKey("REM")` is "rem", and
+  "rem" sits inside Remedy, Extreme, Cremation and an anime character called
+  Rem — which is how a picker asked for R.E.M.'s "Accelerate" offered a
+  cartoon. A featured credit is APPENDED, never inserted, so a PREFIX is the
+  whole of what containment was ever for, and it needs a length floor
+  (`MIN_ARTIST_PREFIX`). An exact key match can still be two different acts, so
+  the TITLE has to agree as well — neither check alone is enough.
+- **A PICKER THAT DEMANDS NOTHING OF A TITLE IS A SEARCH PAGE.** "A person can
+  see a wrong sleeve" is true of one wrong sleeve and false of eight: asked for
+  a bootleg no store carries, the picker offered the artist's whole catalogue
+  with nothing to say which was which, and picking any of them would have given
+  that record somebody else's cover. `titleRank()` is loose rather than exact
+  — the names this feature exists for are the BAD ones, so a folder called
+  "Peter Gabriel - Scratch My Back 2010" must still reach "Scratch My Back" —
+  but zero relevance is still zero. Candidates are ORDERED by it, because
+  without an order the leading sleeve is whichever source replied first.
+- **A FOLDER NAME IS A FILING HABIT, NOT A NAME.** `REM - Discography/` and
+  `Peter Gabriel - Studio Discography/` are how a great many collections are
+  kept, and the artist fallback read them verbatim — filing every record under
+  an artist that matches nothing at MusicBrainz, nothing at the iTunes store
+  and nothing in a Wikipedia search, so those albums lost their cover AND their
+  write-up at once. `readContainer()` and `withoutArtist()` in `lib/scanner.js`
+  read those two shapes with the same discipline `splitEdition()` uses: a
+  vocabulary that must match WHOLLY, so an unknown word means "this is part of
+  the name". Only the FOLDER fallback is trimmed — a title that came from a tag
+  is evidence and is left alone.
+- **A MISS RECORDED AGAINST A NAME THAT HAS CHANGED IS A STALE MISS.**
+  `LOOKUP_GEN` is not only about which sources were asked; it is about whether
+  the QUESTION is still the same one. Changing how a name is derived is as much
+  a reason to bump it as adding a source.
 - **A MISS IS ONLY AS GOOD AS THE SOURCES IT WAS RECORDED AGAINST.** A miss
   means "none of the places we knew about had it", which stops being true the
   moment a place is added — so `cover_lookups.gen` records which set of sources

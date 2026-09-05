@@ -301,6 +301,63 @@ test("with no artist tag at all, the folder above the album is used", () => {
   }
 });
 
+test("a discography folder names the artist, it is not the artist", () => {
+  /*
+   * "R.E.M. - Discography/Accelerate/" is a very common way to keep a
+   * collection, and it filed every album under an artist called
+   * "REM - Discography" — a name that matches nothing at MusicBrainz, nothing
+   * at the iTunes store and nothing in a Wikipedia search, so every album
+   * under it lost its cover AND its write-up at once. That is the "bad
+   * metadata, then falls back to folder names" report.
+   */
+  const untagged = [{ albumartist: "", artist: "" }, { albumartist: "", artist: "" }];
+  const artist = (dir) => scanner.deriveAlbumArtist(untagged, dir, ["/music"]);
+
+  assert.strictEqual(artist("/music/REM - Discography/Accelerate"), "REM");
+  assert.strictEqual(artist("/music/Peter Gabriel - Studio Discography/Scratch My Back"),
+    "Peter Gabriel");
+  assert.strictEqual(artist("/music/Judas Priest Complete Discography/Painkiller"),
+    "Judas Priest");
+  assert.strictEqual(artist("/music/Slowdive - The Albums/Souvlaki"), "Slowdive");
+  /* Nothing but a container: the artist is a level further up. */
+  assert.strictEqual(artist("/music/Talk Talk/Discography/Spirit of Eden"), "Talk Talk");
+
+  /* A word that is not in the vocabulary means "this is part of the name", so
+     an ordinary folder is left exactly as it is — including one whose name
+     merely mentions a container word. */
+  assert.strictEqual(artist("/music/Khemmis/Deceiver"), "Khemmis");
+  assert.strictEqual(artist("/music/Collection of Colonies of Bees/Set"),
+    "Collection of Colonies of Bees");
+  /* A tail of fillers alone is not a container. */
+  assert.strictEqual(artist("/music/Godspeed You! Black Emperor - The Studio/Lift"),
+    "Godspeed You! Black Emperor - The Studio");
+});
+
+test("a folder that repeats the artist is not an album called that", () => {
+  /* "Peter Gabriel - Scratch My Back 2010" is an album called Scratch My Back.
+     The prefix is a filing habit, and left in it is searched for verbatim —
+     which finds nothing, at every source this app has. */
+  const untagged = [{ album: "" }, { album: "" }];
+  const title = (dir, who) => scanner.deriveAlbumTitle(untagged, dir, who);
+
+  assert.strictEqual(title("/m/Peter Gabriel - Scratch My Back", "Peter Gabriel"),
+    "Scratch My Back");
+  assert.strictEqual(title("/m/REM_Accelerate", "REM"), "Accelerate");
+  /* Only when the artist is named in full and something is left after it. */
+  assert.strictEqual(title("/m/Peter Gabriel", "Peter Gabriel"), "Peter Gabriel",
+    "a record really called that keeps its name");
+  assert.strictEqual(title("/m/Peter Gabriel III", "Peter Gabriel"), "Peter Gabriel III",
+    "no separator, so nothing was repeated");
+  assert.strictEqual(title("/m/Scratch My Back", "Peter Gabriel"), "Scratch My Back");
+
+  /* A TAG is left exactly as it is. A folder inside an artist's directory
+     saying the artist's name is a convention; a tag saying it is evidence. */
+  assert.strictEqual(
+    scanner.deriveAlbumTitle([{ album: "Peter Gabriel - Car" }, { album: "Peter Gabriel - Car" }],
+      "/m/whatever", "Peter Gabriel"),
+    "Peter Gabriel - Car");
+});
+
 test("a year in the folder name becomes the year, not part of the title", () => {
   assert.deepStrictEqual(scanner.titleFromFolder("/m/Deceiver (2021)"), { title: "Deceiver", year: 2021 });
   assert.deepStrictEqual(scanner.titleFromFolder("/m/Dark Angel (2008)"), { title: "Dark Angel", year: 2008 });

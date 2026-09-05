@@ -2068,8 +2068,17 @@ async function findCovers() {
       img.src = cand.thumb;
       /* A candidate whose thumbnail will not load is one whose full image
          probably will not either, so it is removed rather than left as a hole
-         somebody can still press. */
-      img.addEventListener("error", () => cell.remove());
+         somebody can still press. When the LAST one goes — a release the Cover
+         Art Archive knows by name but holds no picture for — the dialog says
+         so, because a grid that appears and then empties itself reads as the
+         app breaking rather than as an answer. */
+      img.addEventListener("error", () => {
+        cell.remove();
+        if (grid.children.length) return;
+        grid.classList.add("hidden");
+        why.textContent = "Nothing usable came back — the covers offered could not be loaded.";
+        why.classList.remove("hidden");
+      });
       cell.appendChild(img);
       cell.appendChild(el("span", "edit-cand-src", cand.source));
       cell.addEventListener("click", () => chooseCover(cand.i, cell));
