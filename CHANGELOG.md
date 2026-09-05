@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.29
+
+- **Find cover no longer crowds Save.** The dialog's action row has no top
+  margin of its own — the space above Cancel and Save had always come from the
+  note above them — so the cover section inserted between the two left the two
+  buttons touching. It brings its own gap now.
+
 ## 0.4.28
 
 ### Seeing which albums carry a MusicBrainz id
