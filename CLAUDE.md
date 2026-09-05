@@ -59,6 +59,46 @@ set:
   test's stand-in for MusicBrainz must refuse an unidentified client the way
   the real one does — a permissive fake tests the happy path and nothing about
   whether the caller is asking correctly.
+- **A POLITE QUEUE MUST NOT BE RUDE TO THE PERSON HOLDING THE PHONE.** The gate
+  was strictly first-come, so pressing Identify during a sweep of two hundred
+  albums put that press behind two hundred turns — four minutes of a screen
+  that looked hung, because it was. `wait({urgent})` puts work nobody is
+  waiting on at the back and a button press at the front; the RATE is
+  untouched, only the order. Anything a person triggered is urgent, and a
+  backoff longer than `URGENT_PATIENCE_MS` tells them to come back rather than
+  spinning silently through it. Whenever background work and interactive work
+  share a resource, ask which one somebody is watching.
+- **A REDIRECT IS AN ANSWER; DO NOT FOLLOW IT TO FIND OUT.** The Cover Art
+  Archive's `/front` endpoints 307 to the image on archive.org, which is
+  regularly slow — so checking whether a cover EXISTS by fetching it downloaded
+  a thumbnail to learn a yes or no, and a slow one aborted and printed the
+  browser's own "This operation was aborted" into the dialog. `archiveHolds()`
+  asks with `redirect: "manual"`: 3xx is yes, 404 is no, neither costs a byte.
+- **A TIMEOUT IS NOT ONE LENGTH.** The sweep gets `REQUEST_TIMEOUT_MS`, because
+  nobody is watching it. A press gets seconds, because somebody is: an
+  existence check is `EXISTS_TIMEOUT_MS`, and each rung of the size ladder in a
+  chosen-sleeve save is `CHOSEN_TIMEOUT_MS`. And a DOMException's own wording
+  must never reach a screen — `get()` turns an abort into a sentence naming
+  what to do.
+- **A SHORTENED FOLDER NAME IS THE SAME RECORD.** `byTitle()` demanded the
+  title EXACTLY, so a folder called "When The Pawn" never matched the ninety-
+  word title Fiona Apple's album is filed under — the search found the right
+  release group and threw it away, which is how an album that had just been
+  identified CORRECTLY still reported "nothing found for that name". It uses
+  `titleRank() >= 2` now: one name inside the other, more than a single word.
+- **A RELEASE ID NAMES A PRESSING, NOT A RECORD.** The archive very often holds
+  art against the album rather than against the Mexican CD of it, so an exact
+  id can still find nothing. `groupOfRelease()` asks which record the pressing
+  belongs to and tries that — still exact, still no search, and only when the
+  pressing itself came up empty.
+- **A SIZE LADDER IS FOR EVERY CALLER.** The sweep walked `SIZES`; the picker
+  asked for 1200px once and lost the whole save when that one request failed,
+  on a cover sitting right there at 500. Where two paths fetch the same thing,
+  they get the same retry.
+- **"NOTHING FOUND" MUST NOT BE SAID WHEN THE TRUTH IS "COULD NOT ASK".**
+  `candidatesFor()` keeps the first source's error and throws it only when
+  every source came back empty. Blaming the name sends somebody off correcting
+  a name that was never the problem.
 - **Covers only, and only missing ones.** An album with a picture in its folder
   or embedded in its files is never looked up.
 - **Nothing is written next to the music.** The mount is very often read-only
@@ -509,6 +549,13 @@ part of the fix.
   minute. It is safe to call from inside the popstate that closed the panel
   because `navOpen()` REPLACES a layer that is already on top rather than
   stacking one.
+- **A SLOW ANSWER THAT FINALLY FAILS MUST NOT LAND ON A NEWER ONE.** An aborted
+  Identify wrote its error over a list of results that had arrived perfectly
+  well, because nothing said which request the answer belonged to. Every dialog
+  search takes a ticket (`matchReq`, `coverReq`) and drops anything but the
+  newest — the same discipline `loadGridPage()` uses with `state.grid`. Applies
+  to the `finally` too: a stale response must not re-enable a button the live
+  one is still using.
 - **A stale installed PWA looks exactly like a regression. Rule it out first.**
   Ask for a delete-and-re-add of the shortcut before diagnosing a
   "you broke X in version N" report.

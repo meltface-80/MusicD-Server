@@ -716,6 +716,236 @@ test("the named release outranks the store's guess", async () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  A shortened title is the same record                               */
+/* ------------------------------------------------------------------ */
+
+test("a folder named short of the real title still finds the record", async () => {
+  /*
+   * Fiona Apple's second album is filed at MusicBrainz under its full ninety-
+   * word title. A folder called "When The Pawn" is the same record — and the
+   * exact-title check threw the right release group away after the search had
+   * already found it, so an album that had just been identified CORRECTLY
+   * still came back "nothing found for that name".
+   */
+  const LONG = "When the Pawn Hits the Conflicts He Thinks Like a King What He " +
+               "Knows Throws the Blows When He Goes to the Fight and He'll Win " +
+               "the Whole Thing 'Fore He Enters the Ring";
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Fiona Apple/When The Pawn",
+      { album: "When The Pawn", artist: "Fiona Apple", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "release-group/\\?query": releaseGroups([
+        { id: "rg-pawn", score: 100, title: LONG, "artist-credit": [{ name: "Fiona Apple" }] }
+      ]),
+      "coverartarchive\\.org": image()
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.status().fetched, 1, net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("but a single shared word is still not a match", async () => {
+  /* Loose is not "anything". "Live" is in half a catalogue, and rank 2 needs
+     more than one word. */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Live", { album: "Live", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "release-group/\\?query": releaseGroups([
+        { id: "rg-x", score: 100, title: "Live at Leeds", "artist-credit": [{ name: "Slowdive" }] }
+      ]),
+      "coverartarchive\\.org": image()
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();
+    assert.strictEqual(covers.status().fetched, 0, net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
+/*  The gate lets a person through                                     */
+/* ------------------------------------------------------------------ */
+
+test("a press does not queue behind a sweep's backlog", async () => {
+  /*
+   * The gate was a plain promise chain, which is strictly first-come — so
+   * pressing Identify while two hundred albums were being swept put that press
+   * behind two hundred turns. The screen looked hung because it was: the rate
+   * limit honoured at the person's expense.
+   *
+   * Driven through the real thing — a real sweep, and the real call
+   * lib/identify.js makes — rather than a seam that exists to be tested.
+   */
+  const ws = workspace();
+  for (let i = 0; i < 6; i++) {
+    putAlbum(ws.music, `Artist ${i}/Record ${i}`,
+      { album: `Record ${i}`, artist: `Artist ${i}`, tracks: SOUVLAKI });
+  }
+  const db = dbLib.open(ws.data);
+  await scanner.scan(db, [ws.music], { artDir: ws.art });
+  try {
+    const net = fakeInternet({});
+    const covers = coversFor(db, ws, net, { gapMs: 40 });
+
+    const sweeping = covers.sweep();
+    /* Pressed a moment later, with the sweep's turns already queued. */
+    await new Promise(r => setTimeout(r, 60));
+    await covers.searchMusicBrainz("release", 'artist:"Someone"');
+    const at = net.calls.findIndex(c => /\/release\/\?query/.test(c.url));
+    const before = net.calls.slice(0, at).length;
+    await sweeping;
+
+    assert.ok(at >= 0, "the press was made: " + net.calls.map(c => c.url).join(" | "));
+    assert.ok(before <= 2,
+      `the press went ahead of the backlog, not behind ${before} of it`);
+    assert.ok(net.calls.length > before + 1, "and the sweep carried on afterwards");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a backoff tells a press to come back rather than hanging on it", async () => {
+  /* A 503 means back off, and that is not negotiable — but making somebody
+     watch a spinner for the rest of a minute, with nothing on screen saying
+     why, is the silence this dialog exists to end. */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "release-group/\\?query": reply(503, { error: "slow down" }, "application/json")
+    });
+    const covers = coversFor(db, ws, net);
+    await covers.sweep();                                   // records the hold
+    const started = Date.now();
+    await assert.rejects(() => covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive"),
+      /slow down|Try again in a minute/);
+    assert.ok(Date.now() - started < 2000, "and it said so at once");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a timeout is said in words, not in the browser's", async () => {
+  /*
+   * "This operation was aborted" is the DOMException's own wording. It names
+   * no service, suggests nothing to do, and it is what the edit dialog printed
+   * at somebody.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = { calls: [], impl: async () => {
+      const e = new Error("This operation was aborted");
+      e.name = "AbortError";
+      throw e;
+    } };
+    const covers = coversFor(db, ws, net);
+    await assert.rejects(
+      () => covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive"),
+      (e) => {
+        assert.ok(!/operation was aborted/i.test(e.message), e.message);
+        assert.match(e.message, /took too long|Try again/);
+        return true;
+      });
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("asking whether a cover exists does not download one", async () => {
+  /*
+   * The archive's /front endpoints REDIRECT to the image on archive.org, which
+   * is regularly slow — so following the redirect meant fetching a thumbnail
+   * to learn a yes or no, and a slow one timed out and printed the browser's
+   * abort message into the dialog. The redirect ITSELF is the answer.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
+    const asked = [];
+    const net = { calls: [], impl: async (url, options) => {
+      asked.push({ url, redirect: options && options.redirect });
+      /* What the real archive answers when it HAS one, without being
+         followed: a redirect to where the picture lives. */
+      return { ok: false, status: 307, headers: { get: () => null },
+               json: async () => ({}), arrayBuffer: async () => Buffer.alloc(0) };
+    } };
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].why, "the release you confirmed");
+    const check = asked.find(a => /front-250/.test(a.url));
+    assert.ok(check, asked.map(a => a.url).join(" | "));
+    assert.strictEqual(check.redirect, "manual",
+      "a 3xx is the answer; following it fetches an image for nothing");
+    assert.strictEqual(asked.length, 1, "and one question was enough: " +
+      asked.map(a => a.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a pressing with no art falls back to the record, not to a search", async () => {
+  /*
+   * A release id names one PRESSING, and the archive very often holds art
+   * against the record rather than against the Mexican CD of it. That is how
+   * an album which had just been identified CORRECTLY still came back
+   * "nothing found for that name". The group is the same record by
+   * definition — no search, no scoring, no way to reach a different one.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Fiona Apple/When The Pawn",
+      { album: "When The Pawn", artist: "Fiona Apple", tracks: SOUVLAKI }));
+  try {
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
+    const net = fakeInternet({
+      /* The pressing has none. */
+      "coverartarchive\\.org/release/1111": reply(404, Buffer.alloc(0), "text/plain"),
+      /* MusicBrainz says which record it is a pressing of. */
+      "musicbrainz\\.org/ws/2/release/1111": reply(200,
+        { id: "11111111-2222-3333-4444-555555555555",
+          "release-group": { id: "rg-pawn" } }, "application/json"),
+      /* And the record has one. */
+      "coverartarchive\\.org/release-group/rg-pawn": image()
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "When The Pawn"), "When The Pawn", "Fiona Apple");
+
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.match(out[0].why, /this record's own cover/);
+    assert.ok(!net.calls.some(c => /\?query=|itunes/.test(c.url)),
+      "still no search: " + net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a chosen sleeve falls back down the size ladder rather than failing", async () => {
+  /*
+   * It used to ask for the 1200px image and give up if that one request
+   * failed — so a big scan on a slow morning at the archive lost the whole
+   * save, with a timeout for a message, on a cover sitting right there at
+   * 500px. The sweep has always walked the ladder; the picker did not.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const asked = [];
+    const net = fakeInternet({
+      "release-group/\\?query": releaseGroups([
+        { id: "rg-1", score: 100, title: "Souvlaki", "artist-credit": [{ name: "Slowdive" }] }
+      ]),
+      "coverartarchive\\.org": (url) => {
+        asked.push(url);
+        /* The big one is not there; the middle one is. */
+        if (/front-1200/.test(url)) return reply(503, Buffer.alloc(0), "text/plain");
+        return image();
+      }
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.ok(out.length >= 1, JSON.stringify(out));
+    const file = await covers.chooseFor(idOf(db, "Souvlaki"), 0);
+    assert.ok(file, "the cover was saved anyway");
+    assert.ok(asked.some(u => /front-500/.test(u)), asked.join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
 /*  A miss is only as good as the sources it was recorded against      */
 /* ------------------------------------------------------------------ */
 

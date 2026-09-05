@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.37
+
+### Identify and Find cover no longer hang, and a correct identification now finds the cover
+
+- **A press no longer queues behind the cover sweep.** MusicBrainz is asked at
+  most once a second, and that queue was strictly first-come — so pressing
+  Identify while two hundred albums were being swept put your press behind two
+  hundred turns. The screen looked hung because it was. Work nobody is waiting
+  on now joins the back of the queue and a button you just pressed goes to the
+  front. The rate itself is unchanged.
+- **A shortened folder name reaches the record it is short for.** Fiona Apple's
+  second album is filed under its full ninety-word title; a folder called
+  *When The Pawn* did not compare equal to it, so the search found the right
+  record and threw it away — which is why an album that had just been
+  identified **correctly** still came back "nothing found for that name". One
+  name containing the other is now enough, as long as it is more than a single
+  word, so *Live* still does not reach *Live at Leeds*.
+- **A confirmed release with no art of its own falls back to the record.** A
+  release id names one *pressing*, and the archive very often holds the cover
+  against the album rather than against the Mexican CD of it. It now asks which
+  record the pressing belongs to and uses that — still exact, still no search.
+- **Asking whether a cover exists no longer downloads one.** Those endpoints
+  redirect to the image on archive.org, which is regularly slow, and following
+  the redirect just to learn yes or no is what timed out and printed
+  `This operation was aborted` into the dialog.
+- **Saving a sleeve falls back to a smaller size** rather than losing the whole
+  save because the 1200px scan would not come down. Around eight seconds now
+  where it used to be twenty and then a failure.
+- **A timeout says what happened**, in words, naming what to do. A rate-limit
+  backoff tells you to come back in a minute instead of spinning silently for
+  one, and "nothing found" is no longer printed when the truth is that a source
+  was unreachable — that message sent people off correcting a name that was
+  never the problem.
+- **A slow answer that finally fails can no longer land on top of a newer one**
+  that worked, which is how an error message came to sit above a perfectly good
+  list of results.
+- Among equally good matches, **the original pressing is offered first** rather
+  than a recent vinyl repress. An undated release sorts last.
+
 ## 0.4.36
 
 ### Tell it which record this is
