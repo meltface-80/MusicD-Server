@@ -395,6 +395,13 @@ part of the fix.
   never the other way round. Nothing in `showView()` or `openRow()` may reset
   it, and the repaint is document-wide because Home's carousels, the search
   results and an artist's albums are all cards outside `#album-grid`.
+- **A TINT SAYS WHAT IS CHOSEN; A BOX SAYS WHAT COULD BE.** The queue's picked
+  rows were tinted, and on a hundred-row queue that read as noise — two shades
+  of row, with nothing on an unpicked one to say it was a target. Every row
+  carries a `.q-check` from the start and `is-picking` on the LIST swaps the
+  duration for it, so turning the mode on is one class rather than a rebuild.
+  Where a list already tints a row for something else — `is-now` here — a
+  second tint has nothing left to mean.
 - **A QUEUE POSITION IS NOT AN ALBUM ID, so it gets its own selection.**
   `state.select` holds album ids and deliberately follows you between screens;
   `state.qsel` holds POSITIONS, which mean nothing on another screen and

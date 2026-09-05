@@ -1350,9 +1350,26 @@ main {
    exactly as it does for that one — see syncMini(). Overriding this to sit
    inside the queue pane put it UNDER the mini bar, where it could be seen and
    not pressed. */
-.queue-list li.is-picked {
-  background: var(--accent-soft);
-  border-radius: 10px;
+/*
+ * WHICH TRACKS ARE PICKED: a box where the duration is.
+ *
+ * The row used to be tinted instead, and on a queue of a hundred that read as
+ * noise — two shades of row, with nothing on an unpicked one to say it could
+ * be picked at all. An empty box on every row says the mode is on and gives a
+ * target; a ticked box says which. The duration is what it replaces, because
+ * that is the one thing on the row nobody needs while choosing.
+ */
+.q-check {
+  display: none; place-items: center; flex: 0 0 auto;
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 2px solid var(--border); color: transparent;
+  transition: background .12s ease, border-color .12s ease;
+}
+.q-check svg { width: 14px; height: 14px; }
+.queue-list.is-picking .q-len   { display: none; }
+.queue-list.is-picking .q-check { display: grid; }
+.queue-list li.is-picked .q-check {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
 .queue-summary { font-size: 14px; color: var(--text); margin: 0 2px 2px; }
 .queue-earlier { font-size: 13px; color: var(--text-faint); margin: 0 2px; }

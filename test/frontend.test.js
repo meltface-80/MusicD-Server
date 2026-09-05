@@ -1333,6 +1333,30 @@ test("the queue can be worked on, not only read", () => {
   assert.match(js, /holdToPick\(li, \(\) => \{/);
 });
 
+test("what is picked is said with a box, not by tinting the row", () => {
+  /*
+   * The row used to be tinted, and on a queue of a hundred that read as noise:
+   * two shades of row, with nothing on an unpicked one to say it could be
+   * picked at all. An empty box on every row says the mode is on and gives a
+   * target; a ticked box says which. It stands where the DURATION is, that
+   * being the one thing on the row nobody needs while choosing.
+   */
+  assert.ok(!/\.queue-list li\.is-picked \{\s*background/.test(css),
+    "the tint is gone");
+  assert.match(css, /^\.q-check \{/m);
+  assert.match(css, /\.queue-list\.is-picking \.q-len\s*\{ display: none; \}/);
+  assert.match(css, /\.queue-list\.is-picking \.q-check \{ display: grid; \}/);
+  assert.match(css, /\.queue-list li\.is-picked \.q-check \{/);
+
+  /* Every row carries one from the start, so turning the mode on is a class on
+     the LIST rather than a rebuild of every row. */
+  const row = js.slice(js.indexOf("function queueRow("));
+  assert.match(row.slice(0, row.indexOf("\n}")), /el\("span", "q-check"\)/);
+  const paint = js.slice(js.indexOf("function paintQueuePicks("));
+  assert.match(paint.slice(0, paint.indexOf("\n}")),
+    /\$\("queue-list"\)\.classList\.toggle\("is-picking", on\)/);
+});
+
 test("Look now moved onto the wall it acts on", () => {
   /*
    * It was a row in the drawer view that has gone. It belongs on the screen
