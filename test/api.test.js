@@ -176,6 +176,39 @@ test("the row order is readable, and names every row", async () => {
   assert.deepStrictEqual(Object.keys(body.titles).sort(), [...body.order].sort());
 });
 
+test("identifying an album forgets what was decided by its NAME", async () => {
+  /*
+   * Both the cover miss and the write-up miss were recorded against the
+   * question "what is this album called". Confirming a release changes the
+   * question to "which record is this", so both are answers to something
+   * nobody is asking any more — and a write-up miss lasts a WEEK, which would
+   * mean identifying an album correctly and still seeing nothing about it.
+   */
+  const hex = server.db.prepare("SELECT id FROM albums WHERE title = 'Hex'").get();
+  assert.ok(hex);
+  server.db.prepare(
+    `INSERT INTO cover_lookups (album_id, tried_at, ok, source, note, gen)
+     VALUES (?, ?, 0, '', 'no release matched', 1)
+     ON CONFLICT(album_id) DO UPDATE SET ok = 0`).run(hex.id, Date.now());
+  server.db.prepare(
+    `INSERT INTO info (kind, key, note, fetched_at)
+     VALUES ('album', ?, 'no confident match', ?)
+     ON CONFLICT(kind, key) DO UPDATE SET note = excluded.note`).run(hex.id, Date.now());
+
+  /* Clearing an identification is the same event in reverse and takes the same
+     path, so it is what this drives — no network, no offer list to hold. */
+  const res = await json("/api/album/" + encodeId(hex.id) + "/identify",
+    { method: "POST", body: { clear: true } });
+  assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+  assert.strictEqual(
+    server.db.prepare("SELECT COUNT(*) n FROM cover_lookups WHERE album_id = ? AND ok = 0")
+      .get(hex.id).n, 0, "the cover miss is gone");
+  assert.strictEqual(
+    server.db.prepare("SELECT COUNT(*) n FROM info WHERE kind = 'album' AND key = ?")
+      .get(hex.id).n, 0, "and so is the write-up miss");
+});
+
 test("Missing covers is a grid screen, and not one of the home rows", async () => {
   /*
    * It used to be a list inside the side menu, which meant tapping an album

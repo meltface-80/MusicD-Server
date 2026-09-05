@@ -162,7 +162,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.37` | that exact version, for pinning |
+| `:0.4.38` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -322,6 +322,10 @@ it. What changes is that covers stop being *searched for*: the Cover Art
 Archive is asked about that exact release, so there is no scoring, no near miss
 and no way to get another record's sleeve.
 
+It also gets the album its **write-up**: an article found by the release id is
+the record's own, so there is nothing to verify and nothing to guess — and the
+albums whose tags are worst are exactly the ones a search could never confirm.
+
 Nothing here runs by itself. There is no sweep and no timer: a wrong
 identification is worse than none, because nobody ever reports one — it just
 quietly attaches the wrong record — so a person looks at the candidates and
@@ -443,6 +447,12 @@ Psychosis album, Earth made a record of the same name, and *Souvlaki* is a Greek
 dish before it is a Slowdive album. An album with no confident match shows
 nothing at all. If a match is wrong, correcting the album's name with **Edit**
 throws the write-up away and asks again with the name you typed.
+
+**An album you have [identified](#telling-it-which-record-this-is) skips all of
+that.** There is nothing to check because nothing was guessed: MusicBrainz says
+which record the pressing belongs to and the record names its own article.
+Identifying an album also throws away whatever its old name decided, so the
+write-up is asked for again straight away rather than a week later.
 
 Both sources give their prose away on condition it is credited and linked, so
 every write-up carries its source, the article's own title and its licence, and

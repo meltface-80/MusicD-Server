@@ -254,6 +254,28 @@ the covers rules plus the ones that only apply to prose:
   album that gains an article next year is not unknown for ever. A NETWORK
   FAILURE is not a miss — recording one would mean waiting a week because a
   router rebooted.
+- **AN ID SKIPS THE VERIFICATION BECAUSE IT SKIPS THE GUESS.** `wikiByRelease()`
+  takes a confirmed release, asks MusicBrainz which release GROUP it belongs to,
+  reads that group's `url-rels` for a `wikipedia` link or a `wikidata` Q-number,
+  and fetches THAT article. No `pickAlbum`, no artist check — those exist to
+  catch a bad guess, and this path does not guess. It is the same argument
+  covers uses for the tagged id, and it rescues the same albums: one whose tags
+  are wrong has no facts worth verifying a search against, so it got no write-up
+  at all.
+- **`intro()` EXISTS BECAUSE THE ID PATH ALREADY HAS THE ARTICLE.** The search
+  path gets an intro-only extract with its candidates and pays a second request
+  for the full text; the id path fetches the article once and cuts both the
+  opening and the reception out of it here.
+- **MusicBrainz moved these links to WIKIDATA.** Older release groups carry a
+  `wikipedia` relation and newer ones a `wikidata` one, so both are read — the
+  direct link first because it costs one request fewer, then the Q-number
+  resolved through `wbgetentities` with `sitefilter=enwiki`.
+- **A MISS RECORDED AGAINST A NAME MUST GO WHEN THE NAME STOPS BEING THE
+  QUESTION.** `/api/album/name` already called `info.forget()`; identifying did
+  not, so an album could be identified CORRECTLY and still show nothing for the
+  week its miss had left to run. Anything that changes what an album IS has to
+  clear both the cover miss and the write-up miss — the same rule `LOOKUP_GEN`
+  states for sources, applied to names.
 - **Nothing is fetched by the scan.** One request when somebody opens a screen,
   never four thousand on a rescan.
 

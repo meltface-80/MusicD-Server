@@ -160,6 +160,10 @@ const lastfm = createLastfm({
 const info = createInfo({
   db,
   version: require("./package.json").version,
+  /* For the ONE rate gate this application has: a write-up found by the
+     release id asks MusicBrainz which record a pressing belongs to, and that
+     queues behind the cover sweep like everything else. */
+  covers,
   /* Read-only, and only as the fallback. The key is the one already read for
      scrobbling — nothing new is asked of anybody. */
   lastfm,
@@ -168,7 +172,8 @@ const info = createInfo({
      own address. It exists so an end-to-end check can point the WHOLE path —
      this route, the module, the gate, the User-Agent and the cache — at a
      stand-in over real HTTP, rather than testing a renderer fed by hand. */
-  apiRoot: process.env.MUSICD_WIKI_API || undefined
+  apiRoot: process.env.MUSICD_WIKI_API || undefined,
+  wikidataRoot: process.env.MUSICD_WIKIDATA_API || undefined
 });
 
 /*
@@ -665,9 +670,17 @@ app.post("/api/album/:id/identify", api((req, res) => {
   if (!id) return res.status(400).json({ error: "Which album?" });
   const body = req.body || {};
   const out = body.clear ? identify.clearFor(id) : identify.chooseFor(id, body.index);
-  /* An album that has just become identifiable is one the cover sweep can now
-     answer exactly, so the miss recorded against its NAME is stale. */
+  /*
+   * Everything that was decided by SEARCHING FOR A NAME is now stale, because
+   * the question has changed from "what is this called" to "which record is
+   * this". Both of those answers were written down, and both of them were
+   * recorded against a question nobody is asking any more.
+   */
   db.prepare("DELETE FROM cover_lookups WHERE album_id = ? AND ok = 0").run(id);
+  /* The write-up especially: an album whose tags are bad is exactly the one a
+     search could not verify, so it holds a MISS — and a miss lasts a week,
+     which would mean identifying it correctly and still seeing nothing. */
+  info.forget("album", dbLib.headAlbum(db, id));
   res.json({ current: out });
 }));
 
