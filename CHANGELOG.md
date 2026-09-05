@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.42
+
+### Multi-select is out of the queue again
+- **The queue is back to what it was**: tap a track to jump to it, and that is
+  all. The hold gesture does nothing on a queue row, the selection bar and its
+  Play Now / Remove / Cancel are gone, and so is Clear all. Built in 0.4.39 by
+  request, taken out after living with it.
+- **The server no longer offers a way to take tracks out of a queue.** The
+  endpoint that did it has gone with the screen that used it.
+
+### What stayed, because none of it is that gesture
+- **The batched enqueue** from 0.4.39 — the thing that stops a big selection
+  trickling in a few tracks at a time.
+- **The paged queue read and its retry** from 0.4.41, which is the fix for
+  "Browse to … failed: This operation was aborted".
+- **A refresh that fails leaving the tracks on screen**, and the seek and the
+  queue read no longer reaching the speaker at the same moment.
+
 ## 0.4.41
 
 ### A long queue no longer empties itself with "This operation was aborted"

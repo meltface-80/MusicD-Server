@@ -830,25 +830,6 @@ app.get("/api/queue", api(async (req, res) => {
   res.json(await playback.queue(zone));
 }));
 
-/*
- * Taking things OUT of the queue.
- *
- * Positions rather than track ids, because a queue can hold the same track
- * twice and a position is the only thing that names one of them. They are the
- * positions the client was just shown; the speaker renumbers what is left as
- * soon as anything goes, which is why lib/playback.js applies them backwards.
- */
-app.post("/api/queue", api(async (req, res) => {
-  const { zone, action, indexes } = req.body || {};
-  if (!zone) return res.status(400).json({ error: "Choose a room first." });
-  if (action === "clear") return res.json(await playback.clearQueue(zone));
-  if (action !== "remove") return res.status(400).json({ error: "Unknown action: " + action });
-  if (!Array.isArray(indexes) || !indexes.length) {
-    return res.status(400).json({ error: "Nothing to remove." });
-  }
-  res.json(await playback.removeFromQueue(zone, indexes));
-}));
-
 app.post("/api/play", api(async (req, res) => {
   const { zone, albumId, albumIds, trackIds, startIndex = 0, mode = "play" } = req.body || {};
   if (!zone) return res.status(400).json({ error: "Choose a room first." });

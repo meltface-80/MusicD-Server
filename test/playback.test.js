@@ -240,55 +240,6 @@ test("a player that refuses the batch still gets its queue", async () => {
   } finally { await r.cleanup(); }
 });
 
-test("removing picked positions removes exactly those, and nothing shifts under it", async () => {
-  /*
-   * THE ORDER OF THE CALLS IS THE WHOLE OF THE CORRECTNESS. Sonos numbers the
-   * queue from 1 and renumbers what is left the instant anything goes, so a
-   * caller working forwards deletes the wrong tracks from the second range on.
-   * Contiguous positions are collapsed into one range and the ranges applied
-   * from the END backwards.
-   */
-  const r = await rig();
-  try {
-    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
-    const before = r.fake.state.queue.map(q => q.uri);
-    assert.strictEqual(before.length, 6);
-
-    /* 2 and 3 are a run; 5 is on its own. */
-    const out = await r.playback.removeFromQueue(r.kitchen(), [3, 2, 5, 2]);
-    assert.strictEqual(out.removed, 3, "duplicates counted once");
-
-    const after = r.fake.state.queue.map(q => q.uri);
-    assert.deepStrictEqual(after, [before[0], before[3], before[5]],
-      "1, 4 and 6 are what is left");
-    /* Two runs, so two calls — not three, and not six. */
-    assert.strictEqual(
-      r.fake.actions().filter(a => a === "RemoveTrackRangeFromQueue").length, 2);
-  } finally { await r.cleanup(); }
-});
-
-test("clearing the queue is one call, whatever is in it", async () => {
-  const r = await rig();
-  try {
-    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
-    await r.playback.clearQueue(r.kitchen());
-    assert.deepStrictEqual(r.fake.state.queue, []);
-    assert.strictEqual(
-      r.fake.actions().filter(a => a === "RemoveAllTracksFromQueue").length, 2,
-      "once for the Play that replaced, once for the clear");
-  } finally { await r.cleanup(); }
-});
-
-test("a position that is not one is refused rather than guessed at", async () => {
-  const r = await rig();
-  try {
-    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
-    const out = await r.playback.removeFromQueue(r.kitchen(), [0, -1, "x", null]);
-    assert.strictEqual(out.removed, 0);
-    assert.strictEqual(r.fake.state.queue.length, 6, "and nothing was touched");
-  } finally { await r.cleanup(); }
-});
-
 test("the queue is loaded in track order, and each URI is a real track", async () => {
   const r = await rig();
   try {

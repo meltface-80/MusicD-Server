@@ -403,11 +403,6 @@ part of the fix.
   home. The old path stays as the FALLBACK — this cannot be tried against every
   player that exists, and a refusal must end in a full queue rather than an
   error.
-- **SONOS RENUMBERS THE QUEUE THE INSTANT ANYTHING LEAVES IT.** So the order of
-  the removals is the whole of the correctness: `removeFromQueue()` collapses
-  neighbouring positions into runs and applies them from the END backwards,
-  because a caller working forwards deletes the wrong tracks from the second
-  range on. Positions, never track ids — a queue can hold the same track twice.
 - **Several albums are ONE enqueue, not a loop.** `enqueue()` clears the room's
   queue when `replace` is set, so playing a selection an album at a time would
   have each one wipe the one before it and leave only the last playing.
@@ -419,24 +414,22 @@ part of the fix.
   never the other way round. Nothing in `showView()` or `openRow()` may reset
   it, and the repaint is document-wide because Home's carousels, the search
   results and an artist's albums are all cards outside `#album-grid`.
-- **A TINT SAYS WHAT IS CHOSEN; A BOX SAYS WHAT COULD BE.** The queue's picked
-  rows were tinted, and on a hundred-row queue that read as noise — two shades
-  of row, with nothing on an unpicked one to say it was a target. Every row
-  carries a `.q-check` from the start and `is-picking` on the LIST swaps the
-  duration for it, so turning the mode on is one class rather than a rebuild.
-  Where a list already tints a row for something else — `is-now` here — a
-  second tint has nothing left to mean.
-- **A QUEUE POSITION IS NOT AN ALBUM ID, so it gets its own selection.**
-  `state.select` holds album ids and deliberately follows you between screens;
-  `state.qsel` holds POSITIONS, which mean nothing on another screen and
-  nothing on this one once the queue has changed — so `loadQueue()` clears it
-  on every read. Rows are still painted FROM it, never the other way round.
-- **A SECOND BAR IN THE SAME PLACE NEEDS THE SAME EXEMPTION.** The queue's
-  selection bar is a `.select-bar`, so `syncMini()` has to hide the mini
-  transport for it exactly as it does for the album wall's — and
-  `paintQueuePicks()` has to CALL `syncMini()`, because knowing the rule is not
-  applying it. Positioning it inside the queue pane instead put it under the
-  mini bar: visible, and unpressable. Only a real browser caught that.
+- **THE QUEUE IS A LIST YOU TAP, and multi-select was taken back out of it in
+  0.4.42.** It was built at the user's request in 0.4.39 and rejected after
+  living with it: "I'm happy with its basic function as it was before." A hold
+  does nothing on a queue row, there is no Clear all, and the server has no
+  endpoint that takes tracks out — you open the queue to go to a track, not to
+  administer it. `test/frontend.test.js` fails the build if any of it comes
+  back. What stayed is the plumbing UNDERNEATH the gesture, which the user
+  asked for separately and never complained about: the batched enqueue, the
+  read that does not blank the screen, and the paged Browse.
+- **A REJECTED FEATURE IS NOT THE SAME AS THE FIXES SHIPPED BESIDE IT.** The
+  release that carried multi-select also carried the batched enqueue the user
+  had asked for in the same breath, and the release after it fixed a Browse
+  timeout the user had reported themselves. Reverting the merge would have
+  thrown both away. Take out the gesture that was rejected and keep what was
+  asked for — and say plainly which is which, because that is the user's call
+  to reverse, not a decision to make silently.
 - **A hold on a card must lose to a scroll.** The carousels are flicked
   sideways from the same cards the hold starts on, so movement past
   `PICK_SLOP` cancels it — and the click that arrives behind the finger is the

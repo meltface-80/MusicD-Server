@@ -407,7 +407,7 @@ test("the keyboard is measured against the viewport that does not move", () => {
 test("the mini transport is absent while the soft keyboard is up", () => {
   /* Decided in syncMini with the other conditions, so there is one place that
      knows whether the bar is on screen. */
-  assert.match(js, /classList\.toggle\("hidden",\s*\n?\s*onNpFace \|\| state\.typing \|\| selecting\(\) \|\| qSelecting\(\)\)/);
+  assert.match(js, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
   /* From the FOCUS, which is the actual cause of a soft keyboard, rather than
      from a measurement that only correlates with one. */
   assert.match(js, /el\.matches\("input, textarea"\)/);
@@ -1294,43 +1294,41 @@ test("identifying an album is by hand, from the edit dialog, and stores an id", 
   assert.match(js, /el\("span", "edit-match-fit"/);
 });
 
-test("the queue can be worked on, not only read", () => {
+test("the queue is a list you tap, and nothing else", () => {
   /*
-   * Clear all is at the TOP and always there: emptying the room's queue is
-   * what somebody wants when they have stopped wanting any of it, and hiding
-   * it behind a selection is the opposite of that.
+   * MULTI-SELECT WAS TRIED HERE AND TAKEN BACK OUT, at the user's word: "I'm
+   * happy with its basic function as it was before". A row is a jump target
+   * and a hold does nothing, which is what a queue on a phone is for — you
+   * open it to go to a track, not to administer it.
+   *
+   * The two robustness fixes underneath it stayed, because neither is part of
+   * that gesture: the read that does not blank the screen when it fails, and
+   * the paged Browse. This test is what stops the rest coming back by
+   * accident, the same way the front end is guarded against Discogs.
    */
-  const pane = html.slice(html.indexOf('id="queue-pane"'));
-  const body = pane.slice(0, pane.indexOf('id="queue-list"'));
-  assert.match(body, /id="queue-clear-all"/, "before the list, not after it");
-  assert.match(html, /id="qsel-bar"[\s\S]{0,400}id="qsel-play"/);
-  assert.match(html, /id="qsel-remove"/);
-  assert.match(html, /id="qsel-cancel"/);
+  for (const gone of ["qsel", "qSelecting", "qPicked", "paintQueuePicks",
+                      "qClearSelection", "qPlayNow", "qClearAll", "q-check"]) {
+    assert.ok(!js.includes(gone), gone + " is still in the client");
+  }
+  assert.ok(!html.includes("qsel-bar"), "and the bar is out of the markup");
+  assert.ok(!html.includes("queue-clear-all"), "and so is Clear all");
+  assert.ok(!/\.queue-list\.is-picking/.test(css), "and the picking styles are gone");
 
-  /* Its own selection, and deliberately NOT state.select: that one holds album
-     ids and follows you between screens, and a queue POSITION means nothing
-     anywhere else — nor here once the queue has changed. */
-  assert.match(js, /qsel: null,/);
-  const load = js.slice(js.indexOf("async function loadQueue("));
-  assert.match(load.slice(0, load.indexOf("\n}")), /qClearSelection\(\)/,
-    "a re-read of the queue drops a selection that no longer describes anything");
+  /* The hold belongs to the album wall alone again, so it takes an ALBUM ID
+     rather than a callback — one caller, no indirection to explain. */
+  assert.match(js, /function holdToPick\(card, albumId\)/);
 
-  /* The bar stands where the mini transport does, so the mini transport goes.
-     Without this it is drawn OVER the buttons: visible, and unpressable. */
-  const mini = js.slice(js.indexOf("function syncMini("));
-  assert.match(mini.slice(0, mini.indexOf("\n}")), /qSelecting\(\)/);
-  /* And something has to ASK it when the selection changes — knowing the rule
-     is not the same as applying it, and the bar was drawn over its own buttons
-     until this call existed. */
-  const paint = js.slice(js.indexOf("function paintQueuePicks("));
-  assert.match(paint.slice(0, paint.indexOf("\n}")), /syncMini\(\);/);
-  assert.ok(!/\.qsel-bar \{ position:/.test(css),
-    "and it keeps .select-bar's own position rather than fighting it");
+  /* A row is a jump target and nothing more: no hold on it, and the click
+     handler is only attached when the row is not the one already playing. */
+  const row = js.slice(js.indexOf("function queueRow("));
+  const body = row.slice(0, row.indexOf("\n}"));
+  assert.ok(!body.includes("holdToPick"), "a queue row is not held");
+  assert.match(body, /if \(!isNow\) li\.addEventListener\("click", \(\) => jumpTo\(item\)\)/);
 
-  /* One hold gesture, two kinds of thing — the slop handling is not written
-     twice. */
-  assert.match(js, /function holdToPick\(card, onHold\)/);
-  assert.match(js, /holdToPick\(li, \(\) => \{/);
+  /* And the server offers no way to take tracks out — a client is not the only
+     thing that could ask. */
+  const server = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.ok(!server.includes('app.post("/api/queue"'), "no queue-editing endpoint");
 });
 
 test("a queue that cannot be refreshed keeps the tracks it has", () => {
@@ -1359,30 +1357,6 @@ test("a queue that cannot be refreshed keeps the tracks it has", () => {
   const jump = js.slice(js.indexOf("async function jumpTo("));
   assert.match(jump.slice(0, jump.indexOf("\n}")),
     /setTimeout\(pollNow, \d+\);\s*\n\s*setTimeout\(loadQueue, \d+\);/);
-});
-
-test("what is picked is said with a box, not by tinting the row", () => {
-  /*
-   * The row used to be tinted, and on a queue of a hundred that read as noise:
-   * two shades of row, with nothing on an unpicked one to say it could be
-   * picked at all. An empty box on every row says the mode is on and gives a
-   * target; a ticked box says which. It stands where the DURATION is, that
-   * being the one thing on the row nobody needs while choosing.
-   */
-  assert.ok(!/\.queue-list li\.is-picked \{\s*background/.test(css),
-    "the tint is gone");
-  assert.match(css, /^\.q-check \{/m);
-  assert.match(css, /\.queue-list\.is-picking \.q-len\s*\{ display: none; \}/);
-  assert.match(css, /\.queue-list\.is-picking \.q-check \{ display: grid; \}/);
-  assert.match(css, /\.queue-list li\.is-picked \.q-check \{/);
-
-  /* Every row carries one from the start, so turning the mode on is a class on
-     the LIST rather than a rebuild of every row. */
-  const row = js.slice(js.indexOf("function queueRow("));
-  assert.match(row.slice(0, row.indexOf("\n}")), /el\("span", "q-check"\)/);
-  const paint = js.slice(js.indexOf("function paintQueuePicks("));
-  assert.match(paint.slice(0, paint.indexOf("\n}")),
-    /\$\("queue-list"\)\.classList\.toggle\("is-picking", on\)/);
 });
 
 test("Look now moved onto the wall it acts on", () => {
@@ -1707,7 +1681,7 @@ test("the mini bar is always on screen, because it is the only room picker", () 
      full transport already; a soft keyboard, which the bar is meant to be
      behind; and choosing albums, where the selection bar stands in its place.
      None of them is about whether anything is playing. */
-  assert.match(body, /classList\.toggle\("hidden",\s*\n?\s*onNpFace \|\| state\.typing \|\| selecting\(\) \|\| qSelecting\(\)\)/);
+  assert.match(body, /classList\.toggle\("hidden", onNpFace \|\| state\.typing \|\| selecting\(\)\)/);
   assert.ok(!/!playing/.test(body), "playing state no longer decides whether the bar exists");
   /* And it says something useful when idle. */
   assert.match(js, /"Nothing playing" : "Choose a room"/);

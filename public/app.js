@@ -153,15 +153,6 @@ const state = {
   homeRows: [],
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
-  /*
-   * The queue's own selection: POSITIONS, not album ids.
-   *
-   * Deliberately not state.select, which holds album ids and follows you from
-   * one carousel to another. A queue position means nothing on any other
-   * screen — and nothing on this one either once the queue has changed — so it
-   * is cleared whenever the queue is re-read.
-   */
-  qsel: null,            // { at: [1, 4, 5] } while picking, else null
   covers: null,          // what the server last said about looking for covers
   identify: null,        // ditto, for saying which release an album is
   lastfm: null,          // what the server last said about the Last.fm account
@@ -319,14 +310,7 @@ const picked = (id) => !!state.select && state.select.ids.includes(id);
  * a row of albums starts on a card, and without the slop check every scroll
  * would end in select mode.
  */
-/*
- * THE HOLD, once, for anything that can be picked.
- *
- * The album wall and the queue want the same gesture with different meanings,
- * and two copies of the slop handling would drift the first time either was
- * touched. `onHold` is what the caller does with it.
- */
-function holdToPick(card, onHold) {
+function holdToPick(card, albumId) {
   let timer = null;
   const drop = () => { if (timer) { clearTimeout(timer); timer = null; } };
 
@@ -338,7 +322,8 @@ function holdToPick(card, onHold) {
       timer = null;
       state.pickHeld = true;
       if (navigator.vibrate) navigator.vibrate(8);
-      onHold();
+      if (selecting()) togglePick(albumId);
+      else enterSelect(albumId);
     }, PICK_HOLD_MS);
 
     const move = (ev) => {
@@ -541,10 +526,7 @@ function albumCard(album, { showReason = false } = {}) {
     if (selecting()) return togglePick(album.id);
     openAlbum(album.id);
   });
-  holdToPick(card, () => {
-    if (selecting()) togglePick(album.id);
-    else enterSelect(album.id);
-  });
+  holdToPick(card, album.id);
   return card;
 }
 
@@ -1502,7 +1484,6 @@ async function loadQueue() {
   if (!had) summary.textContent = "Loading queue…";
   if (!state.zone) {
     list.textContent = "";
-    $("queue-clear-all").disabled = true;
     return;
   }
 
@@ -1512,17 +1493,10 @@ async function loadQueue() {
        same rule the edit dialog's searches follow. */
     if (mine !== queueReq) return;
 
-    /* NOW it is safe to replace what is on screen. A selection describes
-       POSITIONS in the queue that is about to be replaced, so it goes with
-       it — but only now that the replacement has actually arrived. */
-    qClearSelection();
+    /* NOW it is safe to replace what is on screen. */
     list.textContent = "";
     earlier.textContent = "";
     empty.classList.add("hidden");
-    /* Kept so Play now can turn positions back into track ids without asking
-       the speaker again for a list it was just given. */
-    state.queueItems = q.items || [];
-    $("queue-clear-all").disabled = !q.items.length;
     const current = Math.max(1, q.index || 1);
     const upcoming = q.items.filter(i => i.index >= current);
     const played = q.items.filter(i => i.index < current);
@@ -1562,8 +1536,6 @@ async function loadQueue() {
       return;
     }
     summary.textContent = "";
-    state.queueItems = [];
-    $("queue-clear-all").disabled = true;
     empty.textContent = e.message;
     empty.classList.remove("hidden");
   }
@@ -1581,138 +1553,10 @@ function queueRow(item, isNow) {
   text.append(el("div", "q-title", item.title),
               el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" · ")));
 
-  /*
-   * THE BOX STANDS WHERE THE DURATION DOES, and only while picking.
-   *
-   * Tinting the whole row was the first attempt and it read as noise on a long
-   * queue: a hundred rows in two shades, with nothing on an unpicked one to
-   * say it COULD be picked. An empty box on every row says the mode is on and
-   * offers a target; a ticked one says which. Both live in the row from the
-   * start so that turning the mode on and off is a class on the list rather
-   * than a rebuild — see paintQueuePicks().
-   */
-  const check = el("span", "q-check");
-  check.setAttribute("aria-hidden", "true");
-  check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-    'stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
-    '<polyline points="20 6 9 17 4 12"/></svg>';
-
-  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""), check);
-  li.dataset.at = String(item.index);
-  if (qPicked(item.index)) li.classList.add("is-picked");
-  if (qSelecting()) li.setAttribute("aria-pressed", qPicked(item.index) ? "true" : "false");
-
-  /* Held: start picking, or add to what is already picked. The track already
-     playing can be picked like any other — removing it is a thing somebody
-     means, and Sonos moves on when it goes. */
-  holdToPick(li, () => {
-    if (qSelecting()) qToggle(item.index);
-    else qEnter(item.index);
-  });
-
-  li.addEventListener("click", () => {
-    /* The hold already acted, and the click arriving behind the finger is the
-       same gesture — the rule the album wall follows, for the same reason. */
-    if (state.pickHeld) { state.pickHeld = false; return; }
-    if (qSelecting()) return qToggle(item.index);
-    /* The track already playing is not a jump target. */
-    if (!isNow) jumpTo(item);
-  });
+  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
+  /* The track already playing is not a jump target. */
+  if (!isNow) li.addEventListener("click", () => jumpTo(item));
   return li;
-}
-
-/* ---- Picking tracks out of the queue ------------------------------ */
-
-function qSelecting() { return !!state.qsel; }
-function qPicked(at) { return !!state.qsel && state.qsel.at.includes(at); }
-
-function qEnter(at) {
-  state.qsel = { at: [at] };
-  paintQueuePicks();
-}
-
-function qToggle(at) {
-  if (!state.qsel) return;
-  const list = state.qsel.at;
-  const found = list.indexOf(at);
-  if (found >= 0) list.splice(found, 1); else list.push(at);
-  /* Nothing picked is not a mode worth being in — the bar would say "0" and
-     every tap would be a jump nobody could make. */
-  if (!list.length) state.qsel = null;
-  paintQueuePicks();
-}
-
-function qClearSelection() {
-  state.qsel = null;
-  paintQueuePicks();
-}
-
-/*
- * The rows are painted FROM the selection, never the other way round — the
- * same rule the album wall follows, and what makes a re-read of the queue
- * simply drop a selection that no longer describes anything.
- */
-function paintQueuePicks() {
-  const on = qSelecting();
-  $("qsel-bar").classList.toggle("hidden", !on);
-  /* The bar stands where the mini transport does, so the mini transport goes.
-     Without this it is drawn OVER the buttons: visible, and unpressable. */
-  syncMini();
-  /* One class on the LIST swaps every row's duration for its box, rather than
-     each row being asked separately — the mode is a property of the screen. */
-  $("queue-list").classList.toggle("is-picking", on);
-  for (const li of $("queue-list").children) {
-    const at = Number(li.dataset.at);
-    if (!at) continue;                       // the "Now playing" divider
-    const picked = on && qPicked(at);
-    li.classList.toggle("is-picked", picked);
-    if (on) li.setAttribute("aria-pressed", picked ? "true" : "false");
-    else li.removeAttribute("aria-pressed");
-  }
-  if (!on) return;
-  /* Shorter than the album wall's wording on purpose: three buttons and a
-     count is a tight bar on a phone, and "tracks" is not in doubt on a screen
-     that is nothing but tracks. */
-  const n = state.qsel.at.length;
-  $("qsel-count").textContent = `${n} selected`;
-}
-
-/* What the picked positions are, in queue order rather than tap order — both
-   removing and playing them want the record's own sequence. */
-function qChosen() {
-  return state.qsel ? [...state.qsel.at].sort((a, b) => a - b) : [];
-}
-
-async function qPlayNow() {
-  const items = qChosen()
-    .map(at => (state.queueItems || []).find(i => i.index === at))
-    .filter(i => i && i.trackId);
-  if (!items.length) return toast("Those tracks are not from this library.", true);
-  try {
-    await post("/api/play", {
-      zone: state.zone.uuid, trackIds: items.map(i => i.trackId), mode: "play"
-    });
-    qClearSelection();
-    setTimeout(() => { pollNow(); loadQueue(); }, 700);
-  } catch (e) { toast(e.message, true); }
-}
-
-async function qRemove() {
-  const at = qChosen();
-  if (!at.length) return;
-  try {
-    await post("/api/queue", { zone: state.zone.uuid, action: "remove", indexes: at });
-    qClearSelection();
-    setTimeout(() => { pollNow(); loadQueue(); }, 500);
-  } catch (e) { toast(e.message, true); }
-}
-
-async function qClearAll() {
-  try {
-    await post("/api/queue", { zone: state.zone.uuid, action: "clear" });
-    qClearSelection();
-    setTimeout(() => { pollNow(); loadQueue(); }, 500);
-  } catch (e) { toast(e.message, true); }
 }
 
 async function jumpTo(item) {
@@ -1832,10 +1676,7 @@ function syncMini() {
      bar was always meant to be behind the keys, and being absent is the only
      version of that which no viewport can paint wrong), and not while albums
      are being chosen, because the selection bar is standing in its place. */
-  /* …and while tracks are being picked out of the QUEUE, for the same reason:
-     that selection has a bar of its own standing in the same place. */
-  $("mini").classList.toggle("hidden",
-    onNpFace || state.typing || selecting() || qSelecting());
+  $("mini").classList.toggle("hidden", onNpFace || state.typing || selecting());
 }
 
 function openModal() {
@@ -3994,11 +3835,6 @@ function wire() {
   $("select-play").addEventListener("click", () => playPicked("play"));
   $("select-queue").addEventListener("click", () => playPicked("queue"));
   $("select-cancel").addEventListener("click", exitSelect);
-
-  $("qsel-play").addEventListener("click", qPlayNow);
-  $("qsel-remove").addEventListener("click", qRemove);
-  $("qsel-cancel").addEventListener("click", qClearSelection);
-  $("queue-clear-all").addEventListener("click", qClearAll);
 
   $("edit-find").addEventListener("click", findCovers);
   $("edit-identify").addEventListener("click", findMatches);
