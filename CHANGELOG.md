@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.45
+
+### Fixes Sonos discovery, broken in 0.4.43
+- **Every Sonos room disappeared** on any install that finds its speakers by
+  searching for them — which is every install without `SONOS_HOSTS` set. The
+  side menu said "No Sonos players answered" and the room count was zero.
+- **The cause** was in 0.4.43's tidy-up: the SSDP search moved to a shared
+  module and gained a search target, and the Sonos side kept calling it the old
+  way — a search for nothing, whose answers were the wrong shape as well. It
+  looked correct and JavaScript reported neither problem.
+- **Nothing caught it** because every test seeds a speaker address, so the
+  search was never reached. It is now driven by a test of its own, and calling
+  the shared search bare fails the build.
+
 ## 0.4.44
 
 ### Random Album Radio is set per room

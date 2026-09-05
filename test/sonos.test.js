@@ -2,6 +2,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
+const fs = require("fs");
+const path = require("path");
 
 const sonos = require("../lib/sonos");
 const didl = require("../lib/didl");
@@ -155,4 +157,63 @@ test("a household with nothing to talk to says so instead of throwing", async ()
   await house.refresh({ force: true });
   assert.deepStrictEqual(house.rooms(), []);
   assert.ok(house.lastError, "the reason is kept for the UI to show");
+});
+
+/* ---------------------------------------------------------------- */
+/*  Discovery, when there is nothing seeded to fall back on           */
+/* ---------------------------------------------------------------- */
+
+test("a household with no seeded address finds its rooms by searching", async () => {
+  /*
+   * THE PATH NO TEST COVERED, AND THE ONE EVERY REAL INSTALL USES.
+   *
+   * Every other test here seeds hosts: ["127.0.0.1"], so _topologyFromAny()
+   * answers on the first try and the multicast branch is never reached. That
+   * is how 0.4.43 shipped calling the GENERIC ssdpSearch() — which wants a
+   * search target and answers with {ip, location} pairs — where
+   * findZonePlayers() and plain addresses were meant. In JavaScript that is
+   * not a type error: it is a search for "ST: undefined" that nothing answers,
+   * and every Sonos room silently gone. 544 tests stayed green.
+   *
+   * So the search is injected and the rest is the real thing: a real Household,
+   * a real topology fetch off the fake speaker, real zones out the far end.
+   */
+  const fake = createFakeSonos({ port: 11404 });
+  await fake.listen();
+  try {
+    const asked = [];
+    const house = new sonos.Household({
+      port: 11404,
+      /* No hosts. Discovery is the only way it can find anything. */
+      discover: async () => { asked.push(true); return ["127.0.0.1"]; }
+    });
+
+    const zones = await house.refresh({ force: true });
+    assert.strictEqual(asked.length, 1, "it searched, because it had nothing else");
+    assert.ok(zones.length, "and it found rooms: " + (house.lastError || "no error given"));
+    assert.strictEqual(house.lastError, "");
+    assert.ok(house.rooms().every(z => z.ip && typeof z.ip === "string"),
+      "what the search returns has to be usable AS AN ADDRESS");
+  } finally {
+    await fake.close();
+  }
+});
+
+test("the search a household runs asks for ZonePlayers, not for anything", async () => {
+  /*
+   * findZonePlayers() is the wrapper that supplies the search target and
+   * unwraps the addresses. A caller reaching past it to the shared
+   * ssdpSearch() is the 0.4.43 bug exactly, so the default is asserted to BE
+   * that function rather than merely to be callable.
+   */
+  const house = new sonos.Household();
+  assert.strictEqual(house.discover, sonos.findZonePlayers,
+    "the default search is the Sonos one, not the generic one");
+
+  /* And nothing in this file calls the generic search bare. Source-read on
+     purpose: the failure it guards against is a call that LOOKS right. */
+  const src = fs.readFileSync(path.join(__dirname, "..", "lib", "sonos.js"), "utf8")
+                .replace(/\/\*[\s\S]*?\*\//g, "");
+  const bare = src.match(/(?<!function )\bssdpSearch\(\s*\)/g) || [];
+  assert.deepStrictEqual(bare, [], "ssdpSearch() called with no search target");
 });
