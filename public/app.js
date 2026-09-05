@@ -153,7 +153,6 @@ const state = {
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
   covers: null,          // what the server last said about looking for covers
-  coverHeld: false,      // the covers row was HELD, so ignore the click after it
   lastfm: null,          // what the server last said about the Last.fm account
   lastfmHeld: false,     // ditto, for the Last.fm row
   afterModal: null,      // a screen to open once the panel has closed itself
@@ -2676,7 +2675,11 @@ function banner(text, isError = false) {
  */
 function paintToggle(rowId, on) {
   const row = $(rowId);
-  const knob = row.querySelector(".toggle");
+  /* The element may BE the switch — the covers one is a button in its own
+     right — or contain it, where the row is the button and the switch is
+     decoration inside it. querySelector alone finds only the second, and the
+     first then had its aria set and its appearance left saying the opposite. */
+  const knob = row.classList.contains("toggle") ? row : row.querySelector(".toggle");
   if (knob) knob.classList.toggle("is-on", !!on);
   /* The ROW carries the state for a screen reader — the switch inside it is
      decoration, and announcing both would say everything twice. */
@@ -2696,34 +2699,88 @@ function showRadio(radio) {
   state.radio = radio;
   const row = $("menu-radio");
   row.classList.toggle("is-off", !radio.enabled);
+  /* No words: the switch says which way it is set, and a line repeating that
+     is a line to read on every visit. */
   paintToggle("menu-radio", radio.enabled);
-  $("radio-sub").textContent = radio.enabled
-    ? "On — keeps the queue full with random albums"
-    : "Off — the queue ends where you left it";
 
   const genre = $("menu-radio-genre");
   genre.classList.toggle("hidden", !radio.enabled);
   genre.classList.toggle("is-off", !radio.matchGenre);
   paintToggle("menu-radio-genre", radio.matchGenre);
-  $("radio-genre-sub").textContent = radio.matchGenre
-    ? "On — picks from the genre that is playing"
-    : "Off — anything in the library";
 }
 
 function showCovers(covers) {
   state.covers = covers;
-  const row = $("menu-covers");
-  row.classList.toggle("hidden", !covers.available);
+  $("menu-covers-row").classList.toggle("hidden", !covers.available);
   if (!covers.available) return;
 
+  const row = $("menu-covers");
   row.classList.toggle("is-off", !covers.enabled);
-  paintToggle("menu-covers", covers.enabled);
+  paintToggle("menu-covers-auto", covers.enabled);
+  /*
+   * It SAYS it is automatic now. The sweep has always run by itself — after
+   * every scan, and scans run every six hours — but nothing on this row
+   * mentioned it, so the switch read as decoration and the count read as the
+   * only thing happening.
+   */
+  const count = covers.missing
+    ? `${covers.missing} still without one`
+    : "every album has a cover";
   $("covers-sub").textContent =
-    !covers.enabled ? "Off — album art comes from your files only"
-    : covers.running ? `Looking — ${covers.done} of ${covers.total}`
-    : covers.missing ? `${covers.missing} album${covers.missing === 1 ? "" : "s"} still without one · tap to look now`
-    : covers.fetched ? `${covers.fetched} found · every album has a cover`
-    : "On — every album has a cover";
+    covers.running ? `Looking — ${covers.done} of ${covers.total}`
+    : covers.enabled ? `Looking automatically · ${count}`
+    : `Not looking · ${count}`;
+  paintCoversNow();
+}
+
+/* What the Look now row says about itself, which is the same sentence whether
+   it is reached from a sweep finishing or from opening the screen. */
+function paintCoversNow() {
+  const c = state.covers || {};
+  $("covers-now-sub").textContent =
+    c.running ? `Looking — ${c.done} of ${c.total}`
+    : c.enabled ? "It also runs by itself, after every scan"
+    : "The automatic look is switched off";
+}
+
+/*
+ * The albums that still have no cover.
+ *
+ * Read when the screen is opened rather than kept up to date: it is a list of
+ * what is missing, and the only things that change it are a sweep finishing
+ * and a cover chosen by hand — neither of which happens while somebody is
+ * looking at this.
+ */
+async function loadMissingCovers() {
+  const host = $("covers-list");
+  host.textContent = "";
+  host.appendChild(el("p", "menu-note", "Reading…"));
+  try {
+    const out = await api("/api/covers/missing");
+    if (out.status) showCovers(out.status);
+    host.textContent = "";
+    const albums = out.albums || [];
+    if (!albums.length) {
+      host.appendChild(el("p", "menu-note", "Every album has a cover."));
+      return;
+    }
+    for (const album of albums) {
+      const item = el("button", "covers-item");
+      item.type = "button";
+      item.appendChild(el("span", "covers-item-name",
+        (album.artist || "Unknown artist") + " — " + album.title));
+      /* What the last look made of it. "no artist to search on" is something
+         somebody can act on; a name on its own is not. */
+      if (album.note) item.appendChild(el("span", "covers-item-why", album.note));
+      /* Straight to the album, where Find cover is — the whole reason for
+         wanting to see this list. */
+      item.addEventListener("click", () => { closeMenu(); openAlbum(album.id); });
+      host.appendChild(item);
+    }
+  } catch (e) {
+    host.textContent = "";
+    host.appendChild(el("p", "menu-note", e.message));
+  }
 }
 
 /*
@@ -3224,12 +3281,8 @@ const NP_LEFT_KEY = "musicd.npLeft";
 
 function applyNpLeft(mode) {
   state.npLeft = mode === "back" ? "back" : "home";
+  /* The pair names the choice; Home and Back need no explaining. */
   paintPair("npleft-pair", state.npLeft);
-  /* The pair names the choice, so the line under it only has to say what the
-     choice DOES rather than repeat which one it is. */
-  $("npleft-sub").textContent = state.npLeft === "back"
-    ? "to the screen you came from"
-    : "to the home screen";
   try { localStorage.setItem(NP_LEFT_KEY, state.npLeft); } catch { /* storage off */ }
   /* Repainted rather than left until the next face change: the panel can be
      open behind the menu, and a setting that only takes effect next time reads
@@ -3376,6 +3429,7 @@ function showMenuView(view) {
   $("menu-main").classList.toggle("hidden", view !== "main");
   $("menu-settings").classList.toggle("hidden", view !== "settings");
   $("menu-home").classList.toggle("hidden", view !== "home");
+  $("menu-covers-view").classList.toggle("hidden", view !== "covers");
   $("menu-settings-open").setAttribute("aria-expanded", view === "settings" ? "true" : "false");
   $("menu-home-open").setAttribute("aria-expanded", view === "home" ? "true" : "false");
   /* Back at the top of whichever list is now showing. Leaving Settings
@@ -3448,29 +3502,6 @@ function wire() {
     copyText("MusicD Server " + text, "Version copied.");
   });
 
-  /*
-   * Tapping the row looks NOW; holding it turns the feature off and on.
-   *
-   * The tap is the thing anybody wants from it — "go and find the ones that
-   * are missing" — and burying that behind a switch would mean waiting for the
-   * next scan every time. The switch is the rarer intention, so it takes the
-   * more deliberate gesture, the same hold the row pads use.
-   */
-  let coverHold = null;
-  const holdCovers = () => {
-    coverHold = setTimeout(async () => {
-      coverHold = null;
-      /* The click that follows the finger coming back up must not then run the
-         tap action as well — it is one gesture, and it already did its job. */
-      state.coverHeld = true;
-      const on = !(state.covers && state.covers.enabled);
-      try {
-        showCovers(await post("/api/covers", { enabled: on }));
-        toast(on ? "Looking for missing covers." : "Missing covers will not be looked for.");
-      } catch (e) { toast(e.message, true); }
-    }, 500);
-  };
-  const dropCovers = () => { if (coverHold) { clearTimeout(coverHold); coverHold = null; } };
   for (const [id, field] of [["menu-radio", "enabled"], ["menu-radio-genre", "matchGenre"]]) {
     $(id).addEventListener("click", async () => {
       const now = state.radio || { enabled: false, matchGenre: true };
@@ -3483,22 +3514,39 @@ function wire() {
     });
   }
 
-  $("menu-covers").addEventListener("pointerdown", holdCovers);
-  for (const event of ["pointerup", "pointercancel", "pointerleave"]) {
-    $("menu-covers").addEventListener(event, dropCovers);
-  }
-  $("menu-covers").addEventListener("click", async () => {
-    /* The hold already did something; the click that follows it must not undo
-       the message it just showed. */
-    if (!coverHold && state.coverHeld) { state.coverHeld = false; return; }
-    dropCovers();
-    if (!state.covers || !state.covers.enabled) {
-      toast("Hold this row to turn cover lookup on.");
-      return;
-    }
+  /*
+   * THE HOLD IS GONE. Turning the sweep off and on used to be a 500ms hold on
+   * this row, which is a switch you have to be told about — and the row's tap
+   * looked now, so nothing on screen ever said the sweep also runs by itself.
+   * The switch is a switch, and the name opens the list of what is still
+   * missing, where looking now belongs.
+   */
+  $("menu-covers-auto").addEventListener("click", async () => {
+    const on = !(state.covers && state.covers.enabled);
     try {
+      /* sweep:false — switching it on should not also start one before the
+         screen that shows what it is doing has been opened. */
+      showCovers(await post("/api/covers", { enabled: on, sweep: false }));
+      toast(on ? "Covers will be looked for automatically."
+               : "Covers will not be looked for.");
+    } catch (e) { toast(e.message, true); }
+  });
+
+  $("menu-covers").addEventListener("click", () => {
+    showMenuView("covers");
+    loadMissingCovers();
+  });
+  $("menu-covers-back").addEventListener("click", () => showMenuView("settings"));
+
+  $("menu-covers-now").addEventListener("click", async () => {
+    if (!state.covers || !state.covers.available) return;
+    try {
+      /* The same sweep the scan runs. It answers immediately and works in the
+         background, so the list is re-read a moment later rather than awaited. */
       showCovers(await post("/api/covers", {}));
-      toast(state.covers.missing ? "Looking for missing covers…" : "Every album already has a cover.");
+      toast(state.covers.enabled ? "Looking for missing covers…"
+                                 : "Switch it on to look automatically as well.");
+      setTimeout(loadMissingCovers, 1500);
     } catch (e) { toast(e.message, true); }
   });
 

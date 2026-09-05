@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.32` | that exact version, for pinning |
+| `:0.4.33` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -284,6 +284,13 @@ Covers are looked for in this order, and the first that answers wins:
 
 Nothing is ever written next to your music, and nothing but a picture is
 stored: no title, no artist, no year.
+
+### Seeing what is still missing
+
+**Settings › Find missing covers** — tap the name for the list of albums that
+still have none, each saying what the last look made of it. Tapping one opens
+its album, where **Find cover** is. The switch beside the name is whether the
+sweep runs by itself: it does, after every scan, and scans run every six hours.
 
 ### Which of your albums carry a MusicBrainz id
 

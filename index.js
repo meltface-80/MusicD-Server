@@ -669,6 +669,18 @@ app.post("/api/covers", api((req, res) => {
 }));
 
 /*
+ * The albums that still have no cover, for the screen that lists them.
+ *
+ * Separate from the status the settings row shows, which is a count: this is
+ * the names, and what the last look made of each one — "no artist to search
+ * on" is an answer somebody can act on, and a bare number is not.
+ */
+app.get("/api/covers/missing", api((req, res) => {
+  res.json({ albums: covers.missing(bounded(req.query.limit, 500, 2000)),
+             status: covers.status() });
+}));
+
+/*
  * Random Album Radio's two switches.
  *
  * Matching the genre is meaningless with the radio off, so the client hides it

@@ -372,6 +372,13 @@ part of the fix.
 - **Switching a carousel off is what stops its work, because nothing is on a
   timer.** Smart Picks is rebuilt once a local day the first time something
   asks; `/api/home` not asking IS the off switch. There is nothing to cancel.
+- **A row that does two things needs two controls.** The covers row hid its
+  switch behind a 500ms HOLD while its tap looked now — so nothing on screen
+  ever said the sweep also runs by itself, and the switch read as decoration.
+  The name opens the missing list and the switch is a switch. `paintToggle()`
+  handles both shapes: the element may BE the switch or contain one, and
+  `querySelector` alone finds only the second — which left the covers switch
+  announced on and painted off.
 - **A control that shows a state does not have to take the tap.** Every
   two-state settings row was already a button that toggled, so the switch and
   the named pair added in 0.4.32 are DECORATION — `aria-hidden`, no nested

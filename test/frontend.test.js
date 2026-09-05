@@ -797,7 +797,7 @@ test("what the Now playing corner does is a preference, not a rule", () => {
    * answer is wrong in general, so it is a choice.
    */
   assert.ok(htmlIds.has("menu-npleft"), "a row in Settings");
-  assert.ok(htmlIds.has("npleft-sub"), "that says which way it is set");
+  assert.ok(htmlIds.has("npleft-pair"), "that says which way it is set");
   assert.match(js, /function applyNpLeft\(mode\)/);
   assert.match(js, /\$\("menu-npleft"\)\.addEventListener\("click"/);
 
@@ -1144,11 +1144,15 @@ test("Home does not name itself in the bar", () => {
 test("a two-state setting shows its state, not only says it", () => {
   /* Five rows, and the control suits what each one IS: on/off where that is
      the question, and the two names where "on" would not answer it. */
-  for (const id of ["menu-radio", "menu-radio-genre", "menu-covers"]) {
+  for (const id of ["menu-radio", "menu-radio-genre"]) {
     const row = html.slice(html.indexOf(`id="${id}"`));
     assert.match(row.slice(0, row.indexOf("</button>")), /<span class="toggle"/,
       id + " is on or off, so it gets a switch");
   }
+  /* Covers is the exception, and deliberately: its row does TWO things, so it
+     has two controls — the name opens the list of what is missing, and the
+     switch is whether the sweep runs by itself. See below. */
+  assert.match(html, /<button class="toggle" type="button" role="switch"[^>]*id="menu-covers-auto"/s);
   for (const [id, a, b] of [["theme-pair", "dark", "light"], ["npleft-pair", "home", "back"]]) {
     const pair = html.slice(html.indexOf(`id="${id}"`));
     const body = pair.slice(0, pair.indexOf("</span>\n            </span>") + 40);
@@ -1164,7 +1168,7 @@ test("the row is still the button; the control is decoration", () => {
    * invites. Every one of these rows was already a button that toggled — this
    * changes what is on screen and nothing about how any of it is operated.
    */
-  for (const id of ["menu-theme", "menu-npleft", "menu-radio", "menu-radio-genre", "menu-covers"]) {
+  for (const id of ["menu-theme", "menu-npleft", "menu-radio", "menu-radio-genre"]) {
     const row = html.slice(html.indexOf(`id="${id}"`), html.indexOf(`id="${id}"`) + 700);
     const inner = row.slice(0, row.indexOf("</button>"));
     assert.ok(!/<button/.test(inner), id + " has no nested button");
@@ -1177,8 +1181,46 @@ test("the row is still the button; the control is decoration", () => {
     assert.match(row, /role="switch"/, id + " says what it is");
   }
   const body = js.slice(js.indexOf("function paintToggle("));
-  assert.match(body.slice(0, body.indexOf("\n}")), /role"?\)? === "switch"/,
+  const paint = body.slice(0, body.indexOf("\n}"));
+  assert.match(paint, /role"?\)? === "switch"/,
     "and only those rows have their aria-checked written");
+  /* The element may BE the switch or contain it. querySelector alone finds
+     only the second, and the covers switch then had its aria set and its
+     appearance left saying the opposite — announced on, painted off. */
+  assert.match(paint, /row\.classList\.contains\("toggle"\) \? row : row\.querySelector\("\.toggle"\)/);
+});
+
+test("the covers row does two things, so it has two controls", () => {
+  /*
+   * Turning the sweep off and on used to be a 500ms HOLD on this row — a
+   * switch you had to be told about — while the tap looked now, so nothing on
+   * screen ever said the sweep also runs by itself. Now the switch is a
+   * switch and the name opens the list of what is still missing, where looking
+   * now belongs.
+   */
+  const row = html.slice(html.indexOf('id="menu-covers-row"'));
+  const body = row.slice(0, row.indexOf("</div>"));
+  assert.match(body, /id="menu-covers"/, "the name is its own button");
+  assert.match(body, /id="menu-covers-auto"[^>]*/, "and the switch is another");
+  assert.ok(!/state\.coverHeld/.test(js), "the hold, and the flag guarding it, are gone");
+  assert.ok(!/Hold this row to turn cover lookup on/.test(js), "and so is the hint for it");
+
+  /* The row SAYS the sweep is automatic. It always was — after every scan, and
+     scans run every six hours — but the row never mentioned it, so the switch
+     read as decoration and the count as the only thing happening. */
+  assert.match(js, /Looking automatically ·/);
+});
+
+test("the missing list says why, not just which", () => {
+  const server = require(path.join(__dirname, "..", "lib", "covers"));
+  assert.ok(typeof server.createCovers === "function");
+  /* NOT pending(), which answers "what is due a look" and leaves out
+     everything inside its week-long cooldown — a miss recorded yesterday is
+     exactly the album somebody wants to see here. */
+  const src = fs.readFileSync(path.join(__dirname, "..", "lib", "covers.js"), "utf8");
+  const fn = src.slice(src.indexOf("function missing("));
+  assert.match(fn.slice(0, fn.indexOf("\n  }")), /LEFT JOIN cover_lookups c ON c\.album_id = a\.id AND c\.ok = 0/);
+  assert.match(js, /openAlbum\(album\.id\)/, "and each one opens its album, where Find cover is");
 });
 
 test("the sub-line keeps its own line beside a control", () => {
