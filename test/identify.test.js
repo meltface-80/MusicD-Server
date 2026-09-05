@@ -169,6 +169,27 @@ test("the pressing with your track count is offered first", async () => {
   } finally { db.close(); ws.cleanup(); }
 });
 
+test("the original pressing leads among equals", async () => {
+  /*
+   * A record reissued three times has pressings that score identically — same
+   * artist, same title, same track count — and a 2023 vinyl repress above the
+   * 1999 CD puts the least likely answer at the top. An undated release sorts
+   * LAST: unknown is not zero.
+   */
+  const { ws, db, id } = await scanned();
+  try {
+    const { identify } = identifierFor(db, ws, [
+      release({ id: "aaaaaaaa-0000-0000-0000-000000000001", date: "2023", country: "US" }),
+      release({ id: "aaaaaaaa-0000-0000-0000-000000000002", date: "", country: "XW" }),
+      release({ id: "aaaaaaaa-0000-0000-0000-000000000003", date: "1999", country: "GB" }),
+      release({ id: "aaaaaaaa-0000-0000-0000-000000000004", date: "2020", country: "MX" })
+    ], []);
+    const out = await identify.candidatesFor(id, "Accelerate", "REM");
+    assert.deepStrictEqual(out.map(o => o.why.match(/\b(19|20)\d{2}\b|$/)[0] || "undated"),
+      ["1999", "2020", "2023", "undated"], JSON.stringify(out.map(o => o.why)));
+  } finally { db.close(); ws.cleanup(); }
+});
+
 test("an id that was never offered cannot be stored", async () => {
   /* The server holds the list. A client answers with a POSITION, because a
      server that stores an identifier a phone hands it has checked nothing. */

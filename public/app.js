@@ -2060,8 +2060,12 @@ function paintIdentity(current) {
     : "Not identified. Covers are searched for by name, which is how the wrong sleeve arrives.";
 }
 
+let coverReq = 0;
+
 async function findCovers() {
   if (!editing) return;
+  /* Newest answer wins — see findMatches() above. */
+  const mine = ++coverReq;
   const button = $("edit-find");
   const grid = $("edit-grid"), why = $("edit-why");
   button.disabled = true;
@@ -2073,6 +2077,7 @@ async function findCovers() {
     const query = "?title=" + encodeURIComponent($("edit-title").value.trim()) +
                   "&artist=" + encodeURIComponent($("edit-artist").value.trim());
     const out = await api("/api/album/" + b64url(playing(editing)) + "/covers" + query);
+    if (mine !== coverReq) return;
     const found = (out && out.candidates) || [];
     if (!found.length) {
       /* The reason the sweep recorded, where there is one — otherwise a plain
@@ -2111,11 +2116,14 @@ async function findCovers() {
     }
     grid.classList.remove("hidden");
   } catch (e) {
+    if (mine !== coverReq) return;
     why.textContent = e.message;
     why.classList.remove("hidden");
   } finally {
-    button.disabled = false;
-    button.textContent = "Find cover";
+    if (mine === coverReq) {
+      button.disabled = false;
+      button.textContent = "Find cover";
+    }
   }
 }
 
@@ -2127,8 +2135,17 @@ async function findCovers() {
  * identifying are the ones whose stored names are wrong, and correcting the
  * name in the box is how somebody says so.
  */
+let matchReq = 0;
+
 async function findMatches() {
   if (!editing) return;
+  /*
+   * WHOSE ANSWER IS THIS. A slow request that finally fails lands after a
+   * newer one has already painted — which is how "This operation was aborted"
+   * came to sit above a list of results that had arrived perfectly well. The
+   * same discipline loadGridPage() uses: anything but the newest is dropped.
+   */
+  const mine = ++matchReq;
   const button = $("edit-identify");
   const host = $("edit-matches");
   button.disabled = true;
@@ -2139,6 +2156,7 @@ async function findMatches() {
     const query = "?title=" + encodeURIComponent($("edit-title").value.trim()) +
                   "&artist=" + encodeURIComponent($("edit-artist").value.trim());
     const out = await api("/api/album/" + b64url(playing(editing)) + "/identify" + query);
+    if (mine !== matchReq) return;
     paintIdentity(out.current);
     const found = (out && out.candidates) || [];
     if (!found.length) {
@@ -2162,10 +2180,12 @@ async function findMatches() {
     }
     host.classList.remove("hidden");
   } catch (e) {
-    $("edit-ident-now").textContent = e.message;
+    if (mine === matchReq) $("edit-ident-now").textContent = e.message;
   } finally {
-    button.disabled = false;
-    button.textContent = "Identify";
+    if (mine === matchReq) {
+      button.disabled = false;
+      button.textContent = "Identify";
+    }
   }
 }
 
