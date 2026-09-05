@@ -124,6 +124,24 @@
           </button>
         </div>
 
+        <!-- What is still without a cover. Reached by the name of the covers
+             row, which is where somebody looking at "20 albums still without
+             one" wants to go next. -->
+        <div id="menu-covers-view" class="hidden">
+          <button class="menu-item menu-back" type="button" id="menu-covers-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Missing covers
+          </button>
+          <button class="menu-item" type="button" id="menu-covers-now">
+            Look now
+            <span class="menu-sub" id="covers-now-sub"></span>
+          </button>
+          <div id="covers-list" class="covers-list"></div>
+        </div>
+
         <!-- Arranging the home screen: the third view in the drawer, behind
              Settings. Hold a pad to drag a carousel, or switch it off — which
              takes it off the home screen AND out of the list above, since a
@@ -154,7 +172,6 @@
           <button class="menu-item" type="button" id="menu-home-open"
                   aria-expanded="false" aria-controls="menu-home">
             Home screen
-            <span class="menu-sub">Which carousels show, and in what order</span>
           </button>
           <button class="menu-item" type="button" id="menu-rescan">
             Rescan library
@@ -174,9 +191,7 @@
           <!-- Which control sits in the corner of Now playing, and so where
                leaving it takes you. See paintModalLeft() in app.js. -->
           <button class="menu-item has-toggle" type="button" id="menu-npleft">
-            <span class="menu-text">Now playing button
-              <span class="menu-sub" id="npleft-sub"></span>
-            </span>
+            <span class="menu-text">Now playing button</span>
             <span class="pair" id="npleft-pair" aria-hidden="true">
               <span class="pair-opt" data-opt="home">Home</span>
               <span class="pair-opt" data-opt="back">Back</span>
@@ -187,33 +202,34 @@
                see showRadio() in app.js. -->
           <button class="menu-item has-toggle" type="button" role="switch"
                   aria-checked="false" id="menu-radio">
-            <span class="menu-text">Random Album Radio
-              <span class="menu-sub" id="radio-sub"></span>
-            </span>
+            <span class="menu-text">Random Album Radio</span>
             <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
           </button>
           <button class="menu-item has-toggle hidden" type="button" role="switch"
                   aria-checked="false" id="menu-radio-genre">
-            <span class="menu-text">Match the current genre
-              <span class="menu-sub" id="radio-genre-sub"></span>
-            </span>
+            <span class="menu-text">Match the current genre</span>
             <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
           </button>
           <!-- The one thing this server asks the internet about, so it is the
                one thing with a switch. Hidden entirely when the container was
                started with COVER_LOOKUP=false — a switch that cannot do
                anything is worse than no switch. -->
-          <!-- The switch SHOWS the state; it does not take the tap. The tap is
-               still "go and look now" and the hold is still the switch, which
-               is the split this row has always had — burying "look now" behind
-               a switch would mean waiting for the next sweep every time. What
-               changes is that the state is no longer invisible. -->
-          <button class="menu-item has-toggle hidden" type="button" id="menu-covers">
-            <span class="menu-text">Find missing covers
-              <span class="menu-sub" id="covers-sub"></span>
-            </span>
-            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
-          </button>
+          <!-- TWO controls, because there are two things here. The name opens
+               the screen that lists what is still missing and can look now;
+               the switch is whether the sweep runs by itself. The hold gesture
+               this row used to hide is gone — a switch you can see beats one
+               you have to know about. -->
+          <div class="menu-row hidden" id="menu-covers-row">
+            <button class="menu-item menu-row-open" type="button" id="menu-covers">
+              <span class="menu-text">Find missing covers
+                <span class="menu-sub" id="covers-sub"></span>
+              </span>
+            </button>
+            <button class="toggle" type="button" role="switch" aria-checked="false"
+                    id="menu-covers-auto" aria-label="Look for missing covers automatically">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
           <!-- Hidden unless this container was given a Last.fm key. Last.fm has
                no anonymous mode, so without one there is nothing this row could
                do. -->
@@ -224,7 +240,6 @@
 
           <button class="menu-item" type="button" id="menu-update">
             Check for updates
-            <span class="menu-sub">Asks GitHub whether a newer release exists</span>
           </button>
           <button class="menu-item" type="button" id="menu-version">
             Version

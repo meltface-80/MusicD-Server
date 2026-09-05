@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.33
+
+### The covers row says what it is doing, and shows what is left
+- **A screen listing the albums that still have no cover**, behind the row's
+  name, each saying what the last look made of it — "no artist to search on" is
+  something you can act on, a bare count is not. Tapping one opens its album,
+  where **Find cover** is.
+- **The switch is a switch.** Turning the automatic sweep off and on used to be
+  a 500ms hold on the row, which is a control you have to be told about. The
+  row now has two: the name opens the list, the switch is the sweep.
+- **And the row says the sweep is automatic**, which it always was — after
+  every scan, and scans run every six hours — but nothing on screen had ever
+  mentioned it, so the switch looked like it did nothing.
+
+### Fewer words in Settings
+- The lines that only **described** what an option does are gone, now that
+  every one of them shows its state: Home screen, Now playing button, Random
+  Album Radio, Match the current genre and Check for updates. The lines that
+  report something — how many albums, when the last scan was, which Last.fm
+  account, how many covers are still missing — stay, because a control cannot
+  show those.
+
 ## 0.4.32
 
 ### Settings show what they are set to
