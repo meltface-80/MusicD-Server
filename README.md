@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.27` | that exact version, for pinning |
+| `:0.4.28` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -268,6 +268,20 @@ Covers are looked for in this order, and the first that answers wins:
 
 Nothing is ever written next to your music, and nothing but a picture is
 stored: no title, no artist, no year.
+
+### Which of your albums carry a MusicBrainz id
+
+The first source above only works for files that have one. To see which do:
+
+```bash
+docker exec -it musicd-server node tools/mbids.js        # albums with no cover
+docker exec -it musicd-server node tools/mbids.js --all  # the whole library
+```
+
+It reads the tags directly and changes nothing. An album listed `id` is fetched
+exactly; one listed `--` has to be searched for. If most of your library shows
+`--`, [MusicBrainz Picard](https://picard.musicbrainz.org/) is what writes these
+ids, and re-tagging with it makes covers exact rather than guessed at.
 
 ## Choosing several albums
 

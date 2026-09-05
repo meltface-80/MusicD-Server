@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.28
+
+### Seeing which albums carry a MusicBrainz id
+- **`tools/mbids.js`** lists which albums' files name their release and which do
+  not, so "are my covers fetched exactly or guessed at?" has an answer. It reads
+  the tags directly — before any rescan, changing nothing — and by default looks
+  only at the albums still missing a cover, which is the question worth asking.
+- The scan's tag-reading is now proved against a **real FLAC with a real Vorbis
+  comment**, built with the ffmpeg that already ships for the waveform. The
+  other tests set the column directly, which proves what the cover search does
+  with an id and nothing about whether the scan ever finds one — the half that
+  silently does nothing if the field is misnamed.
+
 ## 0.4.27
 
 ### Covers that could not be found before

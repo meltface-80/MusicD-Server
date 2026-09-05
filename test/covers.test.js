@@ -402,6 +402,49 @@ function tagWith(db, albumTitle, mbid) {
        (SELECT id FROM albums WHERE title = ?)`).run(mbid, albumTitle).changes;
 }
 
+test("the scan really does read the id out of a real file", async (t) => {
+  /*
+   * The rest of these set the column directly, because the WAV fixtures have
+   * no frame that can carry a MusicBrainz id. That proves what covers.js does
+   * with the id and NOTHING about whether the scan ever finds one — which is
+   * the half that silently does nothing if the field is misnamed.
+   *
+   * So this one builds a real FLAC with a real Vorbis comment, using the
+   * ffmpeg that ships with the app for the waveform, and scans it.
+   */
+  const { spawnSync } = require("child_process");
+  const { ffmpegPath } = require("../lib/waveform-decode");
+  const ws = workspace();
+  try {
+    const dir = path.join(ws.music, "Tagged Artist", "Tagged Record");
+    fs.mkdirSync(dir, { recursive: true });
+    const src = path.join(ws.root, "src.wav");
+    fs.writeFileSync(src, wav({ seconds: 1, title: "One" }));
+    const out = path.join(dir, "01 One.flac");
+    const run = spawnSync(ffmpegPath(), ["-v", "error", "-y", "-i", src,
+      "-metadata", "MUSICBRAINZ_ALBUMID=" + MBID,
+      "-metadata", "ALBUM=Tagged Record", "-metadata", "ARTIST=Tagged Artist",
+      "-metadata", "TITLE=One", out]);
+    if (run.error || !fs.existsSync(out)) return t.skip("no ffmpeg to build the fixture");
+
+    const db = dbLib.open(ws.data);
+    try {
+      await scanner.scan(db, [ws.music], { artDir: ws.art });
+      const row = db.prepare("SELECT mbid FROM tracks WHERE title = 'One'").get();
+      assert.strictEqual(row.mbid, MBID,
+        "music-metadata normalises MUSICBRAINZ_ALBUMID into common.musicbrainz_albumid");
+
+      /* And that the sweep's own query finds it, which is a different question
+         from whether the column has a value in it. */
+      const net = fakeInternet({ [`coverartarchive\\.org/release/${MBID}`]: image() });
+      const covers = coversFor(db, ws, net);
+      assert.strictEqual(covers.pending()[0].mbid, MBID);
+      await covers.sweep();
+      assert.strictEqual(covers.status().fetched, 1);
+    } finally { db.close(); }
+  } finally { ws.cleanup(); }
+});
+
 test("an album whose files name the release is fetched by id, not guessed at", async () => {
   const { ws, db } = await scanned((w) =>
     putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));

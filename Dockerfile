@@ -26,6 +26,7 @@ RUN npm install --omit=dev --no-audit --no-fund --loglevel=error
 
 COPY index.js ./
 COPY lib ./lib
+COPY tools ./tools
 COPY public ./public
 
 RUN mkdir -p /app/data/cache/art
