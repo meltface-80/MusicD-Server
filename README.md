@@ -46,6 +46,7 @@ the Sonos side follows the
 | --- | --- |
 | **Your library, as it is** | An album is a folder. Title, artist and cover come from the tags and the folder name. |
 | **Plays to Sonos** | Rooms and groups read from the speakers. Gapless through the Sonos queue, nothing transcoded. |
+| **[Finds other players](#other-players)** | UPnP renderers — a WiiM, a MusicCast amp — appear in Settings › Zones, switched off until you want them. Transport and volume; queueing is not ready yet. |
 | **Now playing** | Seek, volume, [the live queue](#the-queue) — and the [track's own waveform](#the-shape-of-the-track) drawn in the seek bar. |
 | **Remembers what you play** | Date added, last played and play counts, [counted by watching the speaker](#what-the-database-keeps). |
 | **[Home screen you arrange](#arranging-the-home-screen)** | Seven rows. Switch any off and reorder them in Settings › Home screen. |
@@ -191,7 +192,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.45` | that exact version, for pinning |
+| `:0.4.46` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -404,6 +405,29 @@ speaker that is starting a track has to build a document per page and a big
 one times out. A refresh that fails leaves the tracks on screen and says so,
 rather than replacing them with an error.
 
+## Other players
+
+Alongside Sonos, MusicD looks for **UPnP media renderers** — a WiiM, a
+MusicCast amp, a Bluesound node, a Pi running gmrender. They appear in
+**Settings › Zones**, each with what it is underneath its name.
+
+**A found device is switched off.** A search for renderers answers for
+everything on the network, televisions included, so nothing joins your rooms
+until you tap **Available to play to**. Sonos rooms have no such switch — they
+were rooms already.
+
+Switched on, a renderer is a room like any other for **transport and volume**,
+and it appears in the room picker. **Queueing music to one is not ready yet**:
+Sonos holds its own queue and a stock renderer has none, so the server has to
+keep one for it. Asking to play to such a room says so plainly rather than
+failing at the device.
+
+Discovery needs the container on **host networking**, the same as Sonos —
+renderers are found by multicast, which a bridged container never sees. Set
+`UPNP_DEVICES` to one or more description URLs
+(`http://192.168.0.236:49152/description.xml`, comma separated) where multicast
+does not survive the switch, or `UPNP_DISCOVERY=false` to stop looking at all.
+
 ## The shape of the track
 
 The Now playing seek bar draws the waveform of whatever is playing: where the
@@ -542,6 +566,8 @@ Everything is optional except your music path.
 | `SONOS_HOSTS` | — | Player IPs, for when multicast discovery is unreliable. One is enough. |
 | `INCLUDE_ZONES` | — | Show only these rooms, e.g. `Kitchen,Study`. |
 | `EXCLUDE_ZONES` | — | Show everything except these rooms. |
+| `UPNP_DISCOVERY` | `true` | Look for [UPnP renderers](#other-players) as well as Sonos. `false` stops the search entirely. |
+| `UPNP_DEVICES` | — | Description URLs, comma separated, for renderers multicast does not reach. |
 | `SCAN_ON_START` | `true` | Scan when the container starts. |
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
 | `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |

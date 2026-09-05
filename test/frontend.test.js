@@ -2198,8 +2198,8 @@ test("the genre option is absent while the radio is off, not dimmed", () => {
   assert.ok(htmlIds.has("zone-radio-genre"), "and the option under it");
   const show = js.slice(js.indexOf("function showZone()"));
   const body = show.slice(0, show.indexOf("\n}"));
-  assert.match(body, /genre\.classList\.toggle\("hidden", !radio\.enabled\)/,
-    "hidden by the radio being off");
+  assert.match(body, /genre\.classList\.toggle\("hidden", !isRoom \|\| !radio\.enabled\)/,
+    "hidden by the radio being off — and by the device not being a room at all");
   assert.match(body, /genre\.classList\.toggle\("is-off", !radio\.matchGenre\)/,
     "and dimmed only by its own setting");
 });
