@@ -149,6 +149,78 @@ test("a big selection goes in batches, not one call per track", async () => {
   } finally { await r.cleanup(); }
 });
 
+test("a long queue is read in pages, not in one enormous Browse", async () => {
+  /*
+   * THE REPORT THIS EXISTS FOR: "Browse to 192.168.0.93 failed: This operation
+   * was aborted", on a queue of two hundred, right after jumping to a
+   * different track. A Browse is not a control call — the player has to build
+   * a DIDL document with an item per track, and it does that while it is also
+   * starting the track and answering the poll. The big request is the one that
+   * fails.
+   */
+  const r = await rig();
+  try {
+    /* More than one page of 50. */
+    const albums = r.db.prepare(
+      "SELECT id FROM albums WHERE present = 1 AND version_of = ''").all().map(a => a.id);
+    for (let i = 0; i < 4; i++) await r.playback.playAlbums(r.kitchen(), albums, { replace: i === 0 });
+    const size = r.fake.state.queue.length;
+    assert.ok(size > 50, "the queue is longer than one page: " + size);
+
+    const asked = [];
+    r.fake.state.calls.length = 0;
+    const out = await r.playback.queue(r.kitchen(), 500);
+    for (const c of r.fake.state.calls) {
+      if (c.action !== "Browse") continue;
+      asked.push(Number(/<RequestedCount>(\d+)<\/RequestedCount>/.exec(c.body)[1]));
+    }
+
+    assert.strictEqual(out.items.length, size, "the whole queue still comes back");
+    assert.strictEqual(out.total, size);
+    assert.ok(asked.length > 1, "in more than one request: " + asked.join(", "));
+    assert.ok(asked.every(n => n <= 50), "none of them large: " + asked.join(", "));
+
+    /* And in ORDER, with nothing lost or repeated across a page boundary,
+       which is exactly where a concatenation goes wrong. */
+    assert.deepStrictEqual(out.items.map(i => i.index),
+      Array.from({ length: size }, (_, i) => i + 1));
+    assert.ok(out.items.every(i => i.trackId), "every one still resolved to a track");
+  } finally { await r.cleanup(); }
+});
+
+test("a Browse that times out once is asked again", async () => {
+  /* Reading a queue is idempotent and the thing that failed was a player being
+     busy for a moment, so one retry costs nothing and saves the screen. A
+     REFUSAL is not retried: that is an answer, and asking again just gets it
+     twice. */
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+
+    /* The player goes silent once — a dropped connection, which is what a busy
+       one looks like from here. */
+    r.fake.state.dropOnce.add("Browse");
+    r.fake.state.calls.length = 0;
+    const out = await r.playback.queue(r.kitchen());
+    assert.strictEqual(out.items.length, 6, "the second ask answered");
+    assert.strictEqual(r.fake.state.calls.filter(c => c.action === "Browse").length, 2,
+      "asked twice, not once and not three times");
+  } finally { await r.cleanup(); }
+});
+
+test("a Browse the player REFUSES is not asked again", async () => {
+  /* A refusal is an answer. Repeating it just gets the same answer twice, and
+     a caller that cannot tell the two apart retries everything for ever. */
+  const r = await rig();
+  try {
+    await r.playback.playAlbum(r.kitchen(), r.albumId("Spirit of Eden"));
+    r.fake.state.faults.set("Browse", "701");
+    r.fake.state.calls.length = 0;
+    await assert.rejects(() => r.playback.queue(r.kitchen()), /refused/);
+    assert.strictEqual(r.fake.state.calls.filter(c => c.action === "Browse").length, 1);
+  } finally { await r.cleanup(); }
+});
+
 test("a player that refuses the batch still gets its queue", async () => {
   /*
    * This cannot be tried against every speaker that exists, so the old path

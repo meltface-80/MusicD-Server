@@ -56,7 +56,11 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
     playMode: "NORMAL",
     volume: 25,
     muted: false,
-    faults: new Map()          // action -> UPnP error code to return instead
+    faults: new Map(),         // action -> UPnP error code to return instead
+    /* Actions to answer with SILENCE, once each. A dropped connection is what
+       a busy player looks like from here — and unlike a fault it is not an
+       answer, so a caller may reasonably ask again. */
+    dropOnce: new Set()
   };
 
   function zoneGroupState() {
@@ -103,6 +107,12 @@ function createFakeSonos({ port = 1400, host = "127.0.0.1", zones } = {}) {
          driven rather than described. */
       const injected = state.faults.get(action);
       if (injected) return fault(injected);
+
+      /* Or no answer at all, once. */
+      if (state.dropOnce.has(action)) {
+        state.dropOnce.delete(action);
+        return req.destroy();
+      }
 
       const reply = (fields) => {
         res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8" });
