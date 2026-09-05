@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.30
+
+- **The update notice no longer scrolls out of sight.** It sat in the page
+  flow, so anyone halfway down a wall never knew a version was waiting — which
+  is the whole purpose of it. It now floats just under the top bar, over the
+  content, and stays there however far you scroll. The top bar's own menu and
+  search are never covered, and it steps aside for the album panel rather than
+  floating over Now playing's header.
+- **Release notes is no longer the browser's link blue** — the one colour on
+  that screen belonging to no palette and following no theme. It is bold and
+  near-white on the dark themes, near-black on the light ones, and still
+  underlined so it reads as a link. A followed link stays that colour too.
+
 ## 0.4.29
 
 - **Find cover no longer crowds Save.** The dialog's action row has no top

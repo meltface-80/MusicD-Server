@@ -345,15 +345,44 @@ main {
 
 /* Quiet, and dismissible. An update notice that cannot be got rid of is a
    nag; one that never appears is the reason somebody runs a build from three
-   weeks ago without knowing it. */
+   weeks ago without knowing it.
+ *
+ * IT FLOATS, rather than sitting at the top of the page. In flow it scrolled
+ * away with everything else, so anyone who was halfway down a wall never knew
+ * a version was waiting — the whole point of the thing is that it is seen.
+ * Fixed under the top bar, over the content and out of the way of the bar's
+ * own menu and search.
+ *
+ * Above the page and below the full-screen faces (the album panel is 70): a
+ * notice floating over Now playing would overlap that screen's own header, and
+ * a modal is a task somebody is in the middle of. It is waiting when they come
+ * back out.
+ */
 .update-banner {
+  position: fixed; z-index: 60;
+  top: calc(var(--topbar-h) + 8px);
+  left: 10px; right: 10px;
+  max-width: 720px; margin: 0 auto;
   display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  padding: 10px 14px; margin-bottom: 14px;
-  background: var(--accent-soft); border: 1px solid var(--accent);
+  padding: 10px 14px;
+  /* OPAQUE, now that there is content moving underneath it. --accent-soft is a
+     translucent tint and was painted straight onto the page; over a wall of
+     sleeves it would show them through. The tint is layered over a solid
+     ground instead, so it looks exactly as it did and reads as a card. */
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-elev-2);
+  border: 1px solid var(--accent);
   border-radius: 10px; font-size: 13px; color: var(--text);
+  box-shadow: var(--shadow-card);
 }
 .update-text { flex: 1 1 auto; min-width: 0; }
-.update-link { flex: 0 0 auto; font-weight: 600; }
+/* Not the browser's link blue, which is the one colour on this screen that
+   belongs to no palette and follows no theme. --text is near-white on the dark
+   themes and near-black on the light ones; the underline is what still says
+   it is a link. */
+.update-link, .update-link:visited {
+  flex: 0 0 auto; font-weight: 700;
+  color: var(--text); text-decoration: underline;
+}
 /* The one thing on the banner that does something, so it is the one thing on
    the banner that looks like a button rather than a link. */
 .update-now {
@@ -370,7 +399,10 @@ main {
 .update-banner.is-busy .update-now,
 .update-banner.is-busy .update-link,
 .update-banner.is-busy .update-dismiss { display: none; }
-.update-banner.is-error { background: var(--danger-soft); border-color: var(--danger); }
+.update-banner.is-error {
+  background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--bg-elev-2);
+  border-color: var(--danger);
+}
 .update-dismiss {
   flex: 0 0 auto; min-height: var(--ctl-h-sm); padding: 0 12px;
   background: transparent; color: var(--text-dim);
