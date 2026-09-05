@@ -373,6 +373,21 @@ part of the fix.
   first, because the player may be on a radio stream and Play would resume
   THAT. A server-side queue will implement both identically — that it CAN is a
   fact about that protocol, not a licence to merge them.
+- **MOVING A FUNCTION IS ONLY HALF THE JOB; CHANGING ITS SIGNATURE WHILE YOU
+  MOVE IT IS THE OTHER HALF.** 0.4.43 lifted `ssdpSearch()` into `lib/upnp.js`
+  and gave it a search target and `{ip, location}` answers. `_doRefresh()` kept
+  calling the imported name with no arguments — a search for `ST: undefined`
+  that nothing replies to, and objects handed to code expecting addresses.
+  JavaScript reports neither. **Every Sonos room silently disappeared and 544
+  tests stayed green**, because every one of them seeds `hosts` and so the
+  multicast branch was never reached. The wrapper is `findZonePlayers()`; the
+  bare generic call is now a test failure.
+- **A FALLBACK PATH THAT NO TEST REACHES IS AN UNTESTED PATH, however well
+  covered the file looks.** Discovery is what a real install with no
+  `SONOS_HOSTS` uses for every room it has, and it was the one path nothing
+  drove. `Household` takes an injectable `discover` for that reason alone —
+  not for configuration. Whenever a code path exists only for the case the
+  fixtures skip, ask what would notice if it broke.
 - **A SEAM IS ASSERTED BY WHAT THE SPEAKER IS ASKED, NOT BY WHAT THE SOURCE
   SAYS.** The first version of that test looked for `setAvTransportUri` in the
   TEXT of `jumpTo()`, and passed happily when `jumpTo` was changed to call
