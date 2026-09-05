@@ -10,13 +10,20 @@ MusicD Server shows a local music library and plays it to Sonos. The brief that
 created it was explicit about what it does **not** do, and every one of these is
 a decision, not a gap:
 
-- **No metadata fetching and no album identification.** The library shows albums
-  as they are on disk. An album is a folder; its title and artist come from the
-  tags in it, and the folder name is the fallback. **One exception, added in
-  0.4.9 at the user's explicit request: a MISSING COVER.** An album with no
-  picture anywhere gets one found for it and nothing else — no title, no
-  artist, no year, no genre, no review, and never a tag rewritten. See the
-  cover rules below.
+- **No metadata fetching. The library shows albums as they are on disk.** An
+  album is a folder; its title and artist come from the tags in it, and the
+  folder name is the fallback. **One exception, added in 0.4.9 at the user's
+  explicit request: a MISSING COVER.** An album with no picture anywhere gets
+  one found for it and nothing else — no title, no artist, no year, no genre,
+  no review, and never a tag rewritten. See the cover rules below.
+- **IDENTIFICATION EXISTS AS OF 0.4.36, at the user's explicit request, and it
+  stores ONE FIELD.** The user lifted this deliberately — "adding a feature is
+  allowed and my choice" — after wrong covers were traced to names that no
+  source could match. `lib/identify.js` lets a person confirm, by hand, which
+  MusicBrainz release a folder is, and writes `albums.mbid_chosen` and NOTHING
+  ELSE: no title, no artist, no year, no genre, no grouping, no tag. It is what
+  makes a cover exact instead of searched for. See the identify rules below.
+  This is still not "metadata fetching": nothing displayed changes.
 - **A name the USER types is not identification.** 0.4.15 lets an album's title
   and artist be corrected by hand, because a record tagged with no artist shows
   as "Unknown artist" and the person who owns it knows who made it. Nothing is
@@ -121,6 +128,51 @@ set:
   that can find a cover for a Various Artists record. `TAG_SCHEMA` was bumped
   to 3 to read it, because a file whose size and mtime have not changed is
   otherwise never opened again.
+
+## Identification: `lib/identify.js`
+
+Added in 0.4.36 at the user's explicit request, after covers came back as an
+anime sleeve and as an artist's whole catalogue. The whole design is a set of
+refusals:
+
+- **IT WRITES ONE COLUMN.** `albums.mbid_chosen`, and nothing else, ever. A
+  test asserts the complete set of `UPDATE albums SET …` statements in the file
+  so a second one cannot be added quietly. Above all it must never write a
+  grouping: `lib/duplicates.js` decides what is one record by looking at the
+  disk, and a regroup MOVES play counts, so a website must not be able to cause
+  one — the same rule `lib/info.js` lives under.
+- **`mbid_chosen` IS ITS OWN COLUMN, beside the tag on the tracks**, for exactly
+  the reason `art_fetched` sits beside `art`: the scan rewrites what the files
+  say on every pass, so an answer a person gave has to live where the scan does
+  not reach. `albumMbid()` in `lib/db.js` is the ONE place that decides between
+  them — a confirmation beats a tag — because covers, the album screen and this
+  module all ask the same question.
+- **BY HAND, WITH NO SWEEP AND NOTHING ON A TIMER.** A search always answers,
+  and a wrong identification is worse than none because nobody reports it; it
+  just quietly attaches the wrong record. So a person reads the candidates and
+  taps one. The track count is what makes that judgement possible without
+  knowing anything about MusicBrainz, which is why every candidate carries it
+  and why "same number of tracks as your folder" is called out.
+- **THE ARTIST AND THE TITLE ARE GATES, NOT POINTS.** A release by somebody else
+  is not a weaker candidate, it is a wrong one — and offering it at the bottom
+  of a list is how somebody taps it at half past eleven. What survives both
+  gates is ORDERED, and the track count is the strongest signal by far: a name
+  is shared by a dozen releases, a name plus an exact track count almost never.
+- **BY POSITION, NEVER BY ID.** The server holds the list it offered, the same
+  rule the cover picker follows. A server that stores an identifier a phone
+  hands it has checked nothing at all — and a malformed id must never become a
+  URL or an identity, which is why the UUID shape is checked on the way in.
+- **ONE RATE GATE PER APPLICATION.** MusicBrainz asks for a request a second per
+  APPLICATION, not per module, so this queues on `lib/covers.js`'s chain via
+  `searchMusicBrainz()`. Two modules each politely waiting a second of their own
+  is two requests a second from one app — the rate limit broken by the code
+  written to honour it. A test asserts this module owns no timer and does not
+  know MusicBrainz's address.
+- **AN ALBUM WHOSE RELEASE IS KNOWN IS NOT SEARCHED FOR.** The picker used to
+  offer the exact id AND run a name search underneath, which put another
+  record's sleeve at position two on an album that was already right. The
+  archive is ASKED whether it holds a picture for that release — it knows plenty
+  it has no cover for — and only a 404 falls through to the searches.
 
 ## Write-ups: `lib/info.js`
 

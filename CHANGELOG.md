@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.36
+
+### Tell it which record this is
+Some albums cannot be found by name, because the name is wrong — and a search
+that guesses is exactly how the wrong sleeve arrives.
+
+- **Identify**, in the edit dialog beside Find cover. Correct the album and
+  artist in the fields, press it, and MusicBrainz answers with the releases
+  that agree with what is on your disk: track count, year, format and country
+  on every one, and a line saying which has **the same number of tracks as your
+  folder**. Tap the right one.
+- **It stores the release id and nothing else.** No title, no artist, no year,
+  no genre, and no tag anywhere — the album still shows the name your tags and
+  your own corrections give it. What changes is that its cover stops being
+  searched for: the Cover Art Archive is asked about that exact release, so
+  there is no scoring, no near miss and no way to get another record's sleeve.
+- **An album whose release is known is no longer searched for at all.** It used
+  to ask the archive about the id *and* run a name search underneath, which put
+  somebody else's sleeve at position two on a record that was already right.
+- **Nothing runs by itself.** No sweep and no timer: a wrong identification is
+  worse than none because nobody reports one, so a person looks and taps, or
+  does not. Identify again to change it; the id your files already carry is
+  never overwritten, so clearing yours falls back to theirs.
+- Off for a container with `IDENTIFY=false`, and then the block is absent
+  rather than disabled.
+- It queues on the same one-request-a-second gate the cover sweep uses, because
+  MusicBrainz asks for that per application rather than per feature.
+
 ## 0.4.35
 
 ### Wrong covers were being offered, and the reason was the artist's name

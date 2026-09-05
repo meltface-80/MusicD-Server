@@ -24,6 +24,7 @@ const { createCovers } = require("./lib/covers");
 const { createLastfm } = require("./lib/lastfm");
 const { createInfo } = require("./lib/info");
 const { createRadio } = require("./lib/radio");
+const { createIdentify } = require("./lib/identify");
 const { createWaveforms } = require("./lib/waveforms");
 const { Household, localAddress } = require("./lib/sonos");
 const { Playback } = require("./lib/playback");
@@ -76,6 +77,16 @@ const INFO_LOOKUP = process.env.INFO_LOOKUP !== "false";
    off on a very small box: a decode is a CPU core for a fraction of a second,
    and it is the only thing this server does that costs one. */
 const WAVEFORM = process.env.WAVEFORM !== "false";
+
+/*
+ * Saying which MusicBrainz release an album IS, by hand, from the edit dialog.
+ *
+ * Its own switch, like the two above, because it is its own promise: covers
+ * fetches a picture, write-ups fetch prose, and this stores an identity. It is
+ * never automatic — there is no sweep — so a container that leaves it on makes
+ * no requests at all until somebody presses the button.
+ */
+const IDENTIFY = process.env.IDENTIFY !== "false";
 
 const db = dbLib.open(DATA_DIR);
 const settings = settingsLib.open(db);
@@ -178,6 +189,14 @@ const waveforms = createWaveforms({ db, available: WAVEFORM });
  * is the wrong place for it to live.
  */
 const radio = createRadio({ db, settings });
+
+/*
+ * Identification shares lib/covers.js's RATE GATE rather than keeping one of
+ * its own: MusicBrainz asks for a request a second per APPLICATION, and two
+ * modules each politely waiting a second is two requests a second from this
+ * one app. The switch is separate; the queue is not.
+ */
+const identify = createIdentify({ db, covers, available: IDENTIFY });
 
 const playback = new Playback({
   db, household, baseUrl,
@@ -297,6 +316,7 @@ app.get("/api/status", api((req, res) => {
       last: scanState.last, error: scanState.error
     },
     covers: covers.status(),
+    identify: identify.status(),
     info: info.status(),
     radio: radio.status(),
     lastfm: lastfm.status(),
@@ -614,6 +634,41 @@ app.post("/api/album/:id/cover", api(async (req, res) => {
      can show, and nothing else caches an album row. */
   picks.invalidate();
   res.json({ art: library.album(db, id).art, file });
+}));
+
+/*
+ * WHICH RECORD IS THIS? — from the edit dialog, and from nowhere else.
+ *
+ * One MusicBrainz search, answered with releases the library's own facts agree
+ * with: the artist and the title are gates, the track count is what orders
+ * what is left. Nothing is stored by asking.
+ */
+app.get("/api/album/:id/identify", api(async (req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  res.json({
+    candidates: await identify.candidatesFor(id, req.query.title, req.query.artist),
+    current: identify.current(id)
+  });
+}));
+
+/*
+ * Confirming one, or taking the confirmation back.
+ *
+ * BY POSITION in the list just offered, never by id — the same rule the cover
+ * picker follows, because a server that stores an identifier a phone hands it
+ * has checked nothing at all. What is written is the release id and NOTHING
+ * else: no title, no artist, no year, and no tag anywhere.
+ */
+app.post("/api/album/:id/identify", api((req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  const body = req.body || {};
+  const out = body.clear ? identify.clearFor(id) : identify.chooseFor(id, body.index);
+  /* An album that has just become identifiable is one the cover sweep can now
+     answer exactly, so the miss recorded against its NAME is stale. */
+  db.prepare("DELETE FROM cover_lookups WHERE album_id = ? AND ok = 0").run(id);
+  res.json({ current: out });
 }));
 
 app.get("/api/album/:id/info", api(async (req, res) => {

@@ -647,24 +647,71 @@ test("a folder that repeats the artist and the year still reaches the record", a
   } finally { db.close(); ws.cleanup(); }
 });
 
-test("the exact identity is offered first, whatever answered first", async () => {
-  /* Without an order the leading sleeve is whichever source replied soonest,
-     which is not a recommendation. The id in the files outranks everything. */
+test("an album whose release is known is not searched for at all", async () => {
+  /*
+   * Searching anyway is how a record that was already right gets offered
+   * somebody else's sleeve at position two. The archive is asked about THAT
+   * release and the list stops there.
+   */
   const { ws, db } = await scanned((w) =>
     putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
   try {
-    db.prepare("UPDATE tracks SET mbid = ?")
-      .run("11111111-2222-3333-4444-555555555555");
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
+    const net = fakeInternet({ "coverartarchive\\.org": image() });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].why, "the release you confirmed");
+    assert.ok(!net.calls.some(c => /\?query=|itunes/.test(c.url)),
+      net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("an id the archive holds no picture for falls through to the searches", async () => {
+  /* ASKED rather than assumed. The archive knows plenty of releases it has no
+     cover for, and an id that answers 404 must not leave the dialog empty. */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
     const net = fakeInternet({
       "itunes\\.apple\\.com": itunes([
         { collectionName: "Souvlaki", artistName: "Slowdive",
           artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/s/100x100bb.jpg" }
       ])
+      /* coverartarchive answers 404 by default in this fake. */
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].source, "iTunes");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("the named release outranks the store's guess", async () => {
+  /*
+   * Without an order the leading sleeve is whichever source replied soonest,
+   * which is not a recommendation. The Cover Art Archive's picture is of the
+   * release the library actually holds; Apple's is of whatever edition it
+   * sells, so it goes under.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Slowdive",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/s/100x100bb.jpg" }
+      ]),
+      "release-group/\\?query": releaseGroups([
+        { id: "rg-1", score: 100, title: "Souvlaki", "artist-credit": [{ name: "Slowdive" }] }
+      ])
     });
     const covers = coversFor(db, ws, net);
     const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
     assert.ok(out.length >= 2, JSON.stringify(out));
-    assert.strictEqual(out[0].why, "the id in the files");
+    assert.strictEqual(out[0].source, "Cover Art Archive", JSON.stringify(out));
+    assert.strictEqual(out[out.length - 1].source, "iTunes", JSON.stringify(out));
   } finally { db.close(); ws.cleanup(); }
 });
 

@@ -1257,6 +1257,43 @@ test("the missing covers are a wall of albums, not a list in the drawer", () => 
   assert.ok(!/function missing\(/.test(covers), "covers.js no longer has its own list");
 });
 
+test("identifying an album is by hand, from the edit dialog, and stores an id", () => {
+  /*
+   * The one place the app says which RECORD an album is. It lives beside Find
+   * cover for the same reason Find cover lives there: the albums worth
+   * identifying are the ones whose names are wrong, and the dialog is where a
+   * name is corrected. There is no sweep — a wrong identification is worse
+   * than none, because nobody reports it.
+   */
+  const block = html.slice(html.indexOf('id="edit-ident"'));
+  const body = block.slice(0, block.indexOf("</div>\n      </div>") + 6);
+  assert.match(body, /id="edit-identify"/, "a button of its own");
+  assert.match(body, /id="edit-ident-now"/, "and a line saying what it is believed to be");
+  assert.match(body, /id="edit-matches"/);
+  /* Absent unless the server was started with it on — the same shape as the
+     covers row, which is hidden rather than disabled. */
+  assert.match(html, /<div class="edit-cover hidden" id="edit-ident">/);
+  assert.match(js, /state\.identify && state\.identify\.available/);
+
+  /* BY POSITION, never by id. A server that stores an identifier a phone hands
+     it has checked nothing at all. */
+  const choose = js.slice(js.indexOf("async function chooseMatch("));
+  const fn = choose.slice(0, choose.indexOf("\n}"));
+  assert.match(fn, /post\("\/api\/album\/" \+ b64url\(playing\(editing\)\) \+ "\/identify", \{ index \}\)/);
+  assert.ok(!/mbid|match\.id/.test(fn), "the client never sends an id");
+
+  /* Searched with what is IN THE FIELDS, so a name corrected in the box is the
+     name looked up — the same rule Find cover follows. */
+  const find = js.slice(js.indexOf("async function findMatches("));
+  assert.match(find.slice(0, find.indexOf("\n}\n")),
+    /edit-title"\)\.value[\s\S]*edit-artist"\)\.value/);
+
+  /* The rows are WORDS, because what tells two pressings apart is the track
+     count and the year. A grid of identical sleeves would say none of it. */
+  assert.match(css, /^\.edit-match \{/m);
+  assert.match(js, /el\("span", "edit-match-fit"/);
+});
+
 test("Look now moved onto the wall it acts on", () => {
   /*
    * It was a row in the drawer view that has gone. It belongs on the screen
