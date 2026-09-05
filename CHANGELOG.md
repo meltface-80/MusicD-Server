@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.40
+
+### Picking tracks out of the queue shows a tick box
+- **Every row gets a box where its duration is** the moment you start picking:
+  empty on the ones you have not chosen, ticked on the ones you have.
+- **The rows are no longer tinted.** On a long queue that read as noise — two
+  shades of row, and nothing on an unpicked one to say it could be picked at
+  all. A box says both: that the mode is on, and where to tap.
+- The now playing row keeps its own highlight, which is a different thing and
+  unchanged.
+
 ## 0.4.39
 
 ### The queue arrives all at once

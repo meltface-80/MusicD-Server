@@ -191,7 +191,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.39` | that exact version, for pinning |
+| `:0.4.40` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -396,7 +396,9 @@ the difference between a queue that appears and one that trickles in.
 ## Working on the queue
 
 The queue screen is not read-only. **Tap** a track to jump to it, or **hold**
-one to start picking and tap the rest to add them.
+one to start picking and tap the rest to add them. While you are picking, every
+row shows a box where its duration was — empty on the tracks you have not
+chosen, ticked on the ones you have.
 
 A bar takes the mini transport's place with **Play Now** — which plays just the
 tracks you picked — **Remove**, which takes them out of the queue, and

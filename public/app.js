@@ -1551,7 +1551,23 @@ function queueRow(item, isNow) {
   text.append(el("div", "q-title", item.title),
               el("div", "q-sub", [item.artist, item.album].filter(Boolean).join(" · ")));
 
-  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""));
+  /*
+   * THE BOX STANDS WHERE THE DURATION DOES, and only while picking.
+   *
+   * Tinting the whole row was the first attempt and it read as noise on a long
+   * queue: a hundred rows in two shades, with nothing on an unpicked one to
+   * say it COULD be picked. An empty box on every row says the mode is on and
+   * offers a target; a ticked one says which. Both live in the row from the
+   * start so that turning the mode on and off is a class on the list rather
+   * than a rebuild — see paintQueuePicks().
+   */
+  const check = el("span", "q-check");
+  check.setAttribute("aria-hidden", "true");
+  check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+    '<polyline points="20 6 9 17 4 12"/></svg>';
+
+  li.append(img, text, el("span", "q-len", item.duration ? mmss(item.duration) : ""), check);
   li.dataset.at = String(item.index);
   if (qPicked(item.index)) li.classList.add("is-picked");
   if (qSelecting()) li.setAttribute("aria-pressed", qPicked(item.index) ? "true" : "false");
@@ -1612,6 +1628,9 @@ function paintQueuePicks() {
   /* The bar stands where the mini transport does, so the mini transport goes.
      Without this it is drawn OVER the buttons: visible, and unpressable. */
   syncMini();
+  /* One class on the LIST swaps every row's duration for its box, rather than
+     each row being asked separately — the mode is a property of the screen. */
+  $("queue-list").classList.toggle("is-picking", on);
   for (const li of $("queue-list").children) {
     const at = Number(li.dataset.at);
     if (!at) continue;                       // the "Now playing" divider
