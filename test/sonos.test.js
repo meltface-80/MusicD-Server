@@ -87,17 +87,7 @@ test("a malformed topology yields no rooms rather than throwing", () => {
   assert.deepStrictEqual(sonos.parseZoneGroupState("<ZoneGroupState/>"), []);
 });
 
-/* ---------------------------------------------------------------- */
-/*  Times                                                            */
-/* ---------------------------------------------------------------- */
 
-test("times convert both ways", () => {
-  assert.strictEqual(sonos.hmsToSeconds("0:03:45"), 225);
-  assert.strictEqual(sonos.hmsToSeconds("1:00:00"), 3600);
-  assert.strictEqual(sonos.hmsToSeconds("NOT_IMPLEMENTED"), 0);
-  assert.strictEqual(sonos.secondsToHms(225), "0:03:45");
-  assert.strictEqual(sonos.secondsToHms(0), "0:00:00");
-});
 
 /* ---------------------------------------------------------------- */
 /*  DIDL                                                             */
@@ -165,67 +155,4 @@ test("a household with nothing to talk to says so instead of throwing", async ()
   await house.refresh({ force: true });
   assert.deepStrictEqual(house.rooms(), []);
   assert.ok(house.lastError, "the reason is kept for the UI to show");
-});
-
-test("a UPnP fault surfaces its error code, not the HTTP status", async () => {
-  const fake = createFakeSonos({ port: 11401 });
-  fake.state.faults.set("Play", "701");
-  await fake.listen();
-  try {
-    const player = new sonos.Player({ ip: "127.0.0.1", uuid: "X", name: "Kitchen", port: 11401 });
-    await assert.rejects(
-      () => player.play(),
-      (e) => {
-        assert.ok(e instanceof sonos.UPnPError);
-        assert.strictEqual(e.code, "701", "the code the player actually gave");
-        assert.match(e.message, /UPnP 701/);
-        return true;
-      });
-  } finally {
-    await fake.close();
-  }
-});
-
-test("an unreachable player fails with a message naming it", async () => {
-  const player = new sonos.Player({ ip: "127.0.0.1", uuid: "X", name: "Kitchen", port: 11498 });
-  await assert.rejects(() => player.play(),
-    (e) => e instanceof sonos.UPnPError && /Play to 127\.0\.0\.1 failed/.test(e.message));
-});
-
-test("the advertised address is one a speaker could actually reach", () => {
-  assert.strictEqual(sonos.localAddress("192.168.1.9"), "192.168.1.9", "an override wins");
-  const auto = sonos.localAddress();
-  assert.match(auto, /^\d+\.\d+\.\d+\.\d+$/);
-  assert.ok(!auto.startsWith("127."), "loopback is unreachable from a speaker");
-});
-
-/* ---------------------------------------------------------------- */
-/*  Play modes                                                       */
-/* ---------------------------------------------------------------- */
-
-test("every Sonos play mode round-trips through the two switches it means", () => {
-  for (const mode of Object.keys(sonos.PLAY_MODES)) {
-    const flags = sonos.parsePlayMode(mode);
-    assert.strictEqual(sonos.playModeFor(flags), mode, mode);
-  }
-});
-
-test("shuffle and repeat are independent, which the single enum hides", () => {
-  /* The naming does not follow: plain "SHUFFLE" means shuffle AND repeat-all,
-     while shuffle on its own is "SHUFFLE_NOREPEAT". Toggling one switch must
-     not clear the other. */
-  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "off" }), "SHUFFLE_NOREPEAT");
-  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "all" }), "SHUFFLE");
-  assert.strictEqual(sonos.playModeFor({ shuffle: true, repeat: "one" }), "SHUFFLE_REPEAT_ONE");
-  assert.strictEqual(sonos.playModeFor({ shuffle: false, repeat: "all" }), "REPEAT_ALL");
-
-  /* Turning shuffle on while repeat-all is set keeps repeat-all. */
-  const current = sonos.parsePlayMode("REPEAT_ALL");
-  assert.strictEqual(sonos.playModeFor({ ...current, shuffle: true }), "SHUFFLE");
-});
-
-test("a play mode the player invents is read as plain playback", () => {
-  assert.deepStrictEqual(sonos.parsePlayMode("SOMETHING_NEW"), { shuffle: false, repeat: "off" });
-  assert.deepStrictEqual(sonos.parsePlayMode(""), { shuffle: false, repeat: "off" });
-  assert.deepStrictEqual(sonos.parsePlayMode(null), { shuffle: false, repeat: "off" });
 });

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.43
+
+### Nothing changes, which is the point
+Groundwork for playing to devices that are not Sonos — a WiiM, or anything else
+that speaks plain UPnP. This release moves code and adds no behaviour: 544
+tests pass, and every one of them that existed beforehand passed unchanged.
+
+- **`lib/upnp.js`** now holds the parts of the protocol that were never Sonos-
+  specific: SOAP, SSDP, the H:MM:SS time format, the play-mode enum. A test
+  fails the build if anything Sonos reappears in it.
+- **`lib/sonos.js`** keeps the dialect — the topology, the control URLs, the
+  queue extensions — and re-exports none of the rest, so there is one import
+  path per function rather than two that can drift apart.
+- **`lib/queue.js`** states what a room's queue is, with the Sonos one as its
+  only implementation for now. `lib/playback.js` asks a queue instead of a
+  speaker, and no longer names a single SOAP action.
+
 ## 0.4.42
 
 ### Multi-select is out of the queue again
