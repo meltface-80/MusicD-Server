@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.33` | that exact version, for pinning |
+| `:0.4.34` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -287,10 +287,14 @@ stored: no title, no artist, no year.
 
 ### Seeing what is still missing
 
-**Settings › Find missing covers** — tap the name for the list of albums that
-still have none, each saying what the last look made of it. Tapping one opens
-its album, where **Find cover** is. The switch beside the name is whether the
-sweep runs by itself: it does, after every scan, and scans run every six hours.
+**Settings › Find missing covers** — tap the name and you get a screen of the
+albums that still have none, each saying what the last look made of it.
+Tapping one opens its album, where **Find cover** is; closing it puts you back
+on the same screen, with the album you have just fixed gone from it. **Look
+now** at the top of that screen runs the sweep by hand.
+
+The switch beside the row's name is whether the sweep runs by itself: it does,
+after every scan, and scans run every six hours.
 
 ### Which of your albums carry a MusicBrainz id
 
@@ -477,8 +481,9 @@ A miss is remembered for a week, so a library full of bootlegs and field
 recordings costs a handful of requests rather than hundreds every scan.
 
 Turn it off for a container with `COVER_LOOKUP=false`; it then does not appear
-in the app at all. Otherwise the side menu has a **Find missing covers** row —
-tap it to look now, hold it to switch it off.
+in the app at all. Otherwise **Settings › Find missing covers** has both: the
+name opens the albums that are still without one, and the switch beside it is
+whether the sweep runs by itself.
 
 [MusicBrainz]: https://musicbrainz.org/
 [Cover Art Archive]: https://coverartarchive.org/

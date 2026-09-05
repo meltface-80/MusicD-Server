@@ -176,6 +176,62 @@ test("the row order is readable, and names every row", async () => {
   assert.deepStrictEqual(Object.keys(body.titles).sort(), [...body.order].sort());
 });
 
+test("Missing covers is a grid screen, and not one of the home rows", async () => {
+  /*
+   * It used to be a list inside the side menu, which meant tapping an album
+   * opened its panel over whatever was behind the drawer — so Back landed on
+   * Home rather than on the albums you were working through. It is a wall of
+   * albums now, so it is a row /api/albums can open, and Back lands on it.
+   *
+   * NOT a home row: it is a maintenance screen. lib/settings.js's DEFAULT_ROWS
+   * is what the home screen is made of, and this is deliberately absent from
+   * it, so neither Home nor Settings > Home screen offers it.
+   */
+  const rows = await json("/api/rows");
+  assert.ok(!rows.body.order.includes("nocover"), "not on the home screen");
+  assert.ok(!("nocover" in rows.body.titles), "and not offered as a carousel");
+  /* Still a name for every row that IS listed — the menu reads these. */
+  assert.deepStrictEqual(Object.keys(rows.body.titles).sort(), [...rows.body.order].sort());
+
+  const grid = await json("/api/albums?row=nocover&limit=200");
+  assert.strictEqual(grid.status, 200);
+  const names = grid.body.albums.map(a => a.title);
+  /* Hex has no cover.png in the fixture library; Spirit of Eden has one. */
+  assert.ok(names.includes("Hex"), names.join(", "));
+  assert.ok(!names.includes("Spirit of Eden"), names.join(", "));
+  /* And they are albums, not a bare list of names: the wall paints the same
+     card every other grid does. */
+  for (const album of grid.body.albums) {
+    assert.strictEqual(album.art, "", album.title + " is on this wall for a reason");
+    assert.ok("trackCount" in album && "duration" in album, "the full album shape");
+  }
+});
+
+test("the missing wall says why, not just which", async () => {
+  /*
+   * "no artist to search on" is an answer somebody can act on and a bare name
+   * is not — it is the whole reason this screen beats a count. It rides in on
+   * `reason`, the same field Smart Picks uses.
+   */
+  const hex = server.db.prepare(
+    "SELECT id FROM albums WHERE title = 'Hex'").get();
+  assert.ok(hex, "the fixture library has Hex");
+  server.db.prepare(
+    `INSERT INTO cover_lookups (album_id, tried_at, ok, source, note, gen)
+     VALUES (?, ?, 0, '', ?, 1)
+     ON CONFLICT(album_id) DO UPDATE SET note = excluded.note, ok = 0`)
+    .run(hex.id, Date.now(), "nothing on the Cover Art Archive");
+
+  const { body } = await json("/api/albums?row=nocover&limit=200");
+  const row = body.albums.find(a => a.id === hex.id);
+  assert.ok(row, "still on the wall — a miss is not a cover");
+  assert.strictEqual(row.reason, "nothing on the Cover Art Archive");
+
+  /* A hit is a different row in the same table, and must not become a reason:
+     the album leaves the wall instead. */
+  server.db.prepare("DELETE FROM cover_lookups WHERE album_id = ?").run(hex.id);
+});
+
 test("rearranging the rows rearranges the home screen", async () => {
   const wanted = ["picks", "unplayed", "played", "added", "random", "library", "favourites"];
   const { body: saved } = await json("/api/rows", { method: "POST", body: { order: wanted } });

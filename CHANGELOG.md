@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.34
+
+### The missing covers are a wall of albums
+- **The list moved out of the side menu and onto its own grid screen.** They
+  are albums, so they are tiles you tap — each one still saying what the last
+  automatic look made of it ("no artist to search on"), and each one opening
+  its album screen, where **Find cover** is.
+- **Back from an album now lands on that wall, not on Home.** It used to be a
+  list inside the drawer, so tapping an album opened its panel over whatever
+  was behind the drawer — and closing it left you at the top of the home
+  screen instead of in the middle of the records you were working through.
+- **And the album you just found a cover for leaves the wall.** So does one the
+  automatic sweep finds while you are looking at it.
+- **Look now** moved onto the screen it acts on, beside a line saying whether
+  the sweep also runs by itself. While one is running that line counts up every
+  two seconds rather than every thirty.
+
+### The seek dot no longer leads the waveform
+- The dot sat up to **6 pixels ahead** of the coloured part of the waveform at
+  the start of a track and the same distance behind it at the end, which read
+  as the shape failing to keep up. A slider's thumb cannot hang off either end,
+  so its centre travels half a thumb short of each edge — the waveform was
+  colouring the full width. It is drawn against the thumb's own travel now, and
+  the two agree everywhere to within the width of one bar.
+
 ## 0.4.33
 
 ### The covers row says what it is doing, and shows what is left

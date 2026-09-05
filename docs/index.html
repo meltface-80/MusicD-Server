@@ -289,7 +289,7 @@
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
      album identification, no streaming accounts.</p>
   <div class="badges">
-    <span class="badge" id="ver-badge">v0.4.33</span>
+    <span class="badge" id="ver-badge">v0.4.34</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT licence</span>
     <span class="badge plain">Your files, your speakers</span>
@@ -601,8 +601,9 @@
         <li><b>Not played in 6 months</b> stays empty until albums have genuinely gone that long.
             Nothing is wrong.</li>
         <li><b>Missing covers</b> are looked for in the background after the first scan, one album
-            a second. The side menu says how many are still without one — tap that row to look now,
-            hold it to switch it off.</li>
+            a second. <b>Settings &rsaquo; Find missing covers</b> says how many are still without
+            one; tapping the name opens them as a screen of albums, where you can name one and find
+            its cover by hand. The switch beside it is whether the sweep runs by itself.</li>
         <li><b>Last.fm</b>, if you supplied a key above: open the side menu, tap <b>Last.fm</b>,
             approve MusicD on the page that opens, then tap the row again to finish. Hold it to
             disconnect.</li>
@@ -651,7 +652,7 @@
   var IMAGE = "musicd-server";
   var REPO  = "meltface-80/MusicD-Server";
   var VOLUME = "musicd-server-data";
-  var FALLBACK_VERSION = "0.4.33";
+  var FALLBACK_VERSION = "0.4.34";
 
   var els = {
     modes:     document.getElementById("modes"),

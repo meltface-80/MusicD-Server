@@ -254,6 +254,19 @@ part of the fix.
   `margin: 2px` on `input[type=range]` — the canvas is positioned against the
   CONTAINER, so `--seek-inset` has to allow for it or the shape sits two pixels
   above the thumb.
+- **A CONTROL'S GEOMETRY IS A FACT TWO DRAWINGS SHARE, so it is a token.** A
+  range input cannot let its thumb hang off either end: the centre travels
+  `thumbW/2` to `width - thumbW/2`, not `0` to `width`. The waveform coloured
+  its bars across the full width, so the dot sat 6px AHEAD of the shape at the
+  start and 6px behind it at the end and agreed only in the middle — which is
+  why it survived being looked at. `--seek-thumb` is now declared once on
+  `.np-progress`, read by both thumb pseudo-elements and by `drawWave()`.
+  Whenever a canvas has to line up with a native control, the number that
+  positions both belongs in one place.
+- **A custom property inherits DOWNWARD, so read it from the element that
+  declares it or below.** `--seek-thumb` lives on `.np-progress`; asking
+  `document.documentElement` for it returns an empty string with no error, and
+  the fallback silently becomes the value.
 - **AN INLINE CUSTOM PROPERTY BEATS ANY STYLESHEET RULE, however specific.**
   `.np-progress.has-wave .np-seek { --fill: transparent }` does nothing on its
   own, because `fillRange()` writes `--fill` inline four times a second — so the
@@ -394,6 +407,25 @@ part of the fix.
   album panel (70) — over Now playing it would overlap that screen's own
   header. A tint token like `--accent-soft` is translucent, so a floating
   banner has to layer it over a solid ground or the sleeves show through it.
+- **A LIST OF ALBUMS IS A GRID SCREEN, not a view inside the drawer.** The
+  missing covers were a fourth panel in the side menu, which put the album you
+  tapped over whatever was behind the drawer — so Back from a record you had
+  just found a cover for landed on Home instead of on the ones you were still
+  working through. Anything that is a wall of albums goes through `openRow()`
+  and gets `ROW_TITLES`, `ROW_EMPTY`, `PAGED_ROWS` and the navigation stack for
+  free. A grid screen is not necessarily a home row: `ROW_DEFS` in `index.js`
+  is what `/api/albums` can open, `DEFAULT_ROWS` in `lib/settings.js` is what
+  Home is made of, and `nocover` is deliberately only in the first — which is
+  also why `/api/rows` names the rows it LISTS rather than everything `ROW_DEFS`
+  knows about.
+- **A screen whose MEMBERSHIP an edit changes has to be re-read on the way
+  back.** Finding a cover takes that album off the missing wall; a wall still
+  showing it says the search did not work. `reloadCoversGrid()` runs from
+  `hideModal()` and from the sweep's finish — on the TRANSITION only, because
+  re-reading on every status poll would throw somebody's scroll away twice a
+  minute. It is safe to call from inside the popstate that closed the panel
+  because `navOpen()` REPLACES a layer that is already on top rather than
+  stacking one.
 - **A stale installed PWA looks exactly like a regression. Rule it out first.**
   Ask for a delete-and-re-add of the shortcut before diagnosing a
   "you broke X in version N" report.
