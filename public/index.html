@@ -106,14 +106,13 @@
       <div class="menu-scroll">
         <div id="menu-main">
           <button class="menu-item" type="button" data-go="home">Home</button>
-          <button class="menu-item" type="button" data-go="artists">Artists</button>
 
-          <!-- The home screen's rows, in the order the home screen shows them.
-               Built by app.js from /api/rows rather than written out here,
-               because the order is the user's and lives in the database — a
-               list nailed into the markup could only ever be one of the two,
-               and the two have to agree. Each one carries a pad you hold and
-               drag to move it. -->
+          <!-- A FIXED order, and no longer the place the home screen is
+               arranged — that moved to Settings › Home screen, because a menu
+               whose entries move about is a menu you have to read rather than
+               reach for. Built by app.js all the same: which of these appear
+               depends on which carousels are switched on, and Library and
+               Artists are always among them. -->
           <div id="menu-rows" class="menu-rows"></div>
 
           <div class="menu-sep"></div>
@@ -121,8 +120,26 @@
           <button class="menu-item" type="button" id="menu-settings-open"
                   aria-expanded="false" aria-controls="menu-settings">
             Settings
-            <span class="menu-sub" id="settings-sub">Scanning, theme, covers and updates</span>
+            <span class="menu-sub" id="settings-sub">Scanning, the home screen, theme, covers and updates</span>
           </button>
+        </div>
+
+        <!-- Arranging the home screen: the third view in the drawer, behind
+             Settings. Hold a pad to drag a carousel, or switch it off — which
+             takes it off the home screen AND out of the list above, since a
+             row somebody has turned off is not a place they want offered. -->
+        <div id="menu-home" class="hidden">
+          <button class="menu-item menu-back" type="button" id="menu-home-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Home screen
+          </button>
+          <p class="menu-note">Hold a pad to move a carousel. Switch one off and
+            it leaves the home screen and the menu; Smart Picks stops being
+            worked out as well.</p>
+          <div id="home-rows" class="home-rows"></div>
         </div>
 
         <div id="menu-settings" class="hidden">
@@ -134,6 +151,11 @@
             Settings
           </button>
 
+          <button class="menu-item" type="button" id="menu-home-open"
+                  aria-expanded="false" aria-controls="menu-home">
+            Home screen
+            <span class="menu-sub">Which carousels show, and in what order</span>
+          </button>
           <button class="menu-item" type="button" id="menu-rescan">
             Rescan library
             <span class="menu-sub" id="rescan-sub"></span>

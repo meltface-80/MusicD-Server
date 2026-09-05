@@ -144,7 +144,12 @@ const state = {
   updateTimer: null,     // the poll watching an update through its restart
   positionAt: 0,
   build: null,
-  rowOrder: [],          // the home screen's rows, as the user arranged them
+  /* The home screen's carousels: the order they were arranged in, and which
+     are switched on. One list rather than two, because the order and the
+     on/off state are two halves of one answer — see lib/settings.js.
+     NOT `rows`, which is the home screen's built payload — {key, title,
+     albums} — and a different thing entirely. */
+  homeRows: [],
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
   covers: null,          // what the server last said about looking for covers
@@ -547,47 +552,100 @@ const DRAG_SLOP = 8;                     // movement that still counts as holdin
 /* Rebuild the menu's row list from the order the server holds. */
 async function loadMenuRows() {
   try {
-    const { order, titles } = await api("/api/rows");
-    state.rowOrder = order;
+    const { rows, titles } = await api("/api/rows");
+    state.homeRows = rows || [];
     state.rowTitles = titles;
     renderMenuRows();
+    renderHomeRows();
   } catch (e) {
-    /* The menu still has Home and Artists, and every row is reachable from the
-       home screen itself, so this is a smaller loss than an empty menu. */
-    console.warn("[rows] could not read the row order: " + e.message);
+    /* The menu still has Home, Library and Artists, and every row is reachable
+       from the home screen itself, so this is a smaller loss than an empty
+       menu. */
+    console.warn("[rows] could not read the rows: " + e.message);
   }
 }
+
+/*
+ * THE SIDE MENU'S ORDER IS FIXED, and it is not the home screen's.
+ *
+ * A menu whose entries move about is a menu you have to read rather than
+ * reach for — the muscle memory of "Favourites is fourth" is worth more than
+ * matching a home screen that is arranged for a different reason. Arranging
+ * moved to Settings › Home screen; this list only ever answers WHICH of them
+ * are on.
+ *
+ * Library and Artists are always here. Artists has no carousel to switch off,
+ * and Library is the way into the whole collection — switching its carousel
+ * off is a statement about the home screen, not about wanting to lose the
+ * shelf.
+ */
+const MENU_ORDER = ["library", "artists", "favourites", "added", "picks",
+                    "random", "unplayed", "played"];
+const MENU_ALWAYS = new Set(["library", "artists"]);
 
 function renderMenuRows() {
   const host = $("menu-rows");
   host.textContent = "";
-  for (const key of state.rowOrder) {
-    const row = el("div", "menu-row");
-    row.dataset.row = key;
+  const on = new Set(state.homeRows.filter(r => r.on !== false).map(r => r.id));
+  for (const key of MENU_ORDER) {
+    /* A carousel somebody has switched off is not a place they want offered.
+       The two staples stay whatever the home screen is doing. */
+    if (!MENU_ALWAYS.has(key) && !on.has(key)) continue;
+    const item = el("button", "menu-item",
+                    key === "artists" ? "Artists" : (state.rowTitles[key] || key));
+    item.type = "button";
+    item.dataset.row = key;
+    item.addEventListener("click", () => {
+      closeMenu();
+      if (key === "artists") openArtists();
+      else openRow(key);
+    });
+    host.appendChild(item);
+  }
+}
 
-    /* The pad is its own control, and the only thing a drag starts from. The
-       rest of the entry stays a plain tap that opens the row, so arranging the
-       menu never gets in the way of using it. */
+/*
+ * Settings › Home screen: which carousels show, and in what order.
+ *
+ * The same list the home screen loops, so a row cannot appear in one and not
+ * the other. Each carries the pad that was on the menu entries until this
+ * release, and a switch.
+ */
+function renderHomeRows() {
+  const host = $("home-rows");
+  if (!host) return;
+  host.textContent = "";
+  for (const row of state.homeRows) {
+    const item = el("div", "home-row");
+    item.dataset.row = row.id;
+
     const pad = el("button", "menu-grip");
     pad.type = "button";
-    pad.setAttribute("aria-label", `Move ${state.rowTitles[key] || key}`);
+    pad.setAttribute("aria-label", `Move ${state.rowTitles[row.id] || row.id}`);
     pad.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
       '<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>' +
       '<circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>' +
       '<circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
-    pad.addEventListener("pointerdown", (e) => beginRowDrag(e, row));
+    pad.addEventListener("pointerdown", (e) => beginRowDrag(e, item));
 
-    const open = el("button", "menu-item menu-row-open", state.rowTitles[key] || key);
-    open.type = "button";
-    open.addEventListener("click", () => {
-      closeMenu();
-      openRow(key);
+    const name = el("span", "home-row-name", state.rowTitles[row.id] || row.id);
+
+    const toggle = el("button", "home-row-switch");
+    toggle.type = "button";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-checked", row.on !== false ? "true" : "false");
+    toggle.setAttribute("aria-label", (state.rowTitles[row.id] || row.id) + " carousel");
+    toggle.classList.toggle("is-on", row.on !== false);
+    toggle.appendChild(el("span", "home-row-knob"));
+    toggle.addEventListener("click", () => {
+      /* Painted from the answer the server gives, not from the tap — the same
+         rule the covers and radio switches follow. */
+      saveHomeRows(state.homeRows.map(r =>
+        r.id === row.id ? { id: r.id, on: r.on === false } : { id: r.id, on: r.on !== false }));
     });
 
-    /* The pad sits at the trailing edge, so every label in the menu — rows and
-       the plain entries above them — starts on the same line. */
-    row.append(open, pad);
-    host.appendChild(row);
+    item.append(pad, name, toggle);
+    host.appendChild(item);
   }
 }
 
@@ -601,7 +659,7 @@ function renderMenuRows() {
  */
 function beginRowDrag(event, row) {
   if (event.button != null && event.button > 0) return;   // right-click is not a drag
-  const host = $("menu-rows");
+  const host = $("home-rows");
   const pad = event.currentTarget;
   const startY = event.clientY;
   let dragging = false;
@@ -621,7 +679,7 @@ function beginRowDrag(event, row) {
       return;
     }
     e.preventDefault();
-    const over = [...host.querySelectorAll(".menu-row")].find((other) => {
+    const over = [...host.querySelectorAll(".home-row")].find((other) => {
       if (other === row) return false;
       const box = other.getBoundingClientRect();
       return e.clientY >= box.top && e.clientY <= box.bottom;
@@ -636,9 +694,12 @@ function beginRowDrag(event, row) {
     const moved = dragging;
     cleanUp();
     if (!moved) return;
-    const order = [...host.querySelectorAll(".menu-row")].map((n) => n.dataset.row);
-    if (order.join() === state.rowOrder.join()) return;    // put back where it was
-    saveRowOrder(order);
+    const order = [...host.querySelectorAll(".home-row")].map((n) => n.dataset.row);
+    if (order.join() === state.homeRows.map(r => r.id).join()) return;   // put back where it was
+    /* Dropped somewhere new: the order changed and nothing else did, so each
+       row keeps the switch it already had. */
+    const on = new Map(state.homeRows.map(r => [r.id, r.on !== false]));
+    saveHomeRows(order.map(id => ({ id, on: on.get(id) !== false })));
   };
 
   function cleanUp() {
@@ -672,19 +733,29 @@ function beginRowDrag(event, row) {
   event.preventDefault();
 }
 
-/* Saved where it was let go. The home screen behind the menu is now showing
-   the old order, so it is told to rebuild. */
-async function saveRowOrder(order) {
-  const previous = state.rowOrder;
-  state.rowOrder = order;
+/*
+ * Saved whole, and painted from what came BACK.
+ *
+ * Both halves go together because the server keeps them together: sending an
+ * order without the switches, or the other way round, is how the two drift
+ * apart. The home screen behind the drawer is showing the old arrangement, so
+ * it is told to rebuild — and the MENU is too, since switching a carousel off
+ * takes its entry out of the list above.
+ */
+async function saveHomeRows(rows) {
+  const previous = state.homeRows;
+  state.homeRows = rows;
+  renderHomeRows();
   try {
-    const saved = await post("/api/rows", { order });
-    state.rowOrder = saved.order;
+    const saved = await post("/api/rows", { rows });
+    state.homeRows = saved.rows || rows;
+    renderHomeRows();
     renderMenuRows();
     state.homeStale = true;
     if (state.view === "home") { state.homeStale = false; loadHome(); }
   } catch (e) {
-    state.rowOrder = previous;
+    state.homeRows = previous;
+    renderHomeRows();
     renderMenuRows();
     toast(e.message, true);
   }
@@ -2647,7 +2718,7 @@ function showCovers(covers) {
  * setting that is not there is how somebody ends up hunting for it.
  */
 function describeSettings() {
-  const bits = ["Scanning", "theme"];
+  const bits = ["Scanning", "the home screen", "theme"];
   if (state.covers && state.covers.available) bits.push("covers");
   if (state.lastfm && state.lastfm.configured) bits.push("Last.fm");
   bits.push("updates");
@@ -3268,10 +3339,14 @@ function trackTyping() {
  * through it directly.
  */
 function showMenuView(view) {
-  const settings = view === "settings";
-  $("menu-main").classList.toggle("hidden", settings);
-  $("menu-settings").classList.toggle("hidden", !settings);
-  $("menu-settings-open").setAttribute("aria-expanded", settings ? "true" : "false");
+  /* Three views now: the places, the settings, and arranging the home screen
+     behind those. Named rather than a pair of booleans so adding a fourth is
+     one more line rather than a rewrite. */
+  $("menu-main").classList.toggle("hidden", view !== "main");
+  $("menu-settings").classList.toggle("hidden", view !== "settings");
+  $("menu-home").classList.toggle("hidden", view !== "home");
+  $("menu-settings-open").setAttribute("aria-expanded", view === "settings" ? "true" : "false");
+  $("menu-home-open").setAttribute("aria-expanded", view === "home" ? "true" : "false");
   /* Back at the top of whichever list is now showing. Leaving Settings
      scrolled halfway down and returning to a main menu at the same offset is
      how a two-view panel loses people. */
@@ -3303,6 +3378,10 @@ function wire() {
   $("menu-toggle").addEventListener("click", openMenu);
   $("menu-settings-open").addEventListener("click", () => showMenuView("settings"));
   $("menu-settings-back").addEventListener("click", () => showMenuView("main"));
+  /* Back from arranging goes to Settings, which is where it was opened from —
+     not to the main list, which would be one step too far out. */
+  $("menu-home-open").addEventListener("click", () => showMenuView("home"));
+  $("menu-home-back").addEventListener("click", () => showMenuView("settings"));
   for (const node of document.querySelectorAll("[data-close-menu]")) {
     node.addEventListener("click", closeMenu);
   }

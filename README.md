@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.30` | that exact version, for pinning |
+| `:0.4.31` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -229,6 +229,22 @@ Play nothing and the row says so rather than sitting there empty.
 | Number of plays | yes | yes |
 | Marked a favourite | yes | — |
 | A corrected title or artist | yes | — |
+
+## Arranging the home screen
+
+**Settings › Home screen** lists the seven carousels. Hold the pad beside one to
+move it; the switch takes it off the home screen — and out of the side menu,
+since a carousel you have turned off is not a place worth offering. Smart Picks
+stops being worked out as well.
+
+Everything is on for a new install, and an update never changes what you have
+already arranged.
+
+The side menu itself is a **fixed** order and no longer the place the home
+screen is arranged: Home, Library, Artists, then whichever of Favourites,
+Recently added, Smart Picks, Random albums, Not played in 6 months and Recently
+played are switched on, then Settings. Library and Artists are always there —
+Artists has no carousel, and Library is the way into the whole collection.
 
 ## Sorting the library
 

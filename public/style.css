@@ -298,6 +298,45 @@ button, input { font-family: inherit; }
 /*  The menu's row list, which is also its arrangement                 */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Settings › Home screen                                             */
+/* ------------------------------------------------------------------ */
+
+.menu-note {
+  margin: 0; padding: 4px 18px 12px;
+  font-size: 13px; color: var(--text-dim); line-height: 1.5;
+}
+.home-rows { display: flex; flex-direction: column; }
+.home-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 18px 4px 0;
+}
+.home-row-name { flex: 1 1 auto; min-width: 0; font-size: 17px; color: var(--text); }
+/* A switch rather than a checkbox: the row is a thing that is on or off, and
+   the state has to read at a glance down a list of seven. */
+.home-row-switch {
+  flex: 0 0 auto; width: 46px; height: 28px; padding: 3px;
+  display: inline-flex; align-items: center;
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  border-radius: 999px; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.home-row-knob {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform .15s ease, background .15s ease;
+}
+.home-row-switch.is-on { background: var(--accent); border-color: var(--accent); }
+.home-row-switch.is-on .home-row-knob { background: var(--on-accent); transform: translateX(18px); }
+/* The row being dragged, and the ones getting out of its way — the same
+   treatment the menu entries had when the arranging lived there. */
+.home-row.is-dragging {
+  background: var(--bg-elev-2); border-radius: 10px;
+  box-shadow: var(--shadow-card); position: relative; z-index: 1;
+}
+.home-row.is-dragging .menu-grip { color: var(--accent-text); }
+.home-rows.is-arranging .home-row:not(.is-dragging) { opacity: .55; transition: transform .12s ease; }
+
 .menu-rows { display: flex; flex-direction: column; }
 .menu-row { display: flex; align-items: center; }
 .menu-row-open { flex: 1 1 auto; min-width: 0; text-align: left; }

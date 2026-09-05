@@ -419,12 +419,17 @@ const ROW_DEFS = {
    and use a feature, which is not what a home screen is for. Every other row
    describes the library and is worth a place even while empty. */
 function homeRows(n) {
-  return settingsLib.rowOrder(settings).map((key) => {
-    const def = ROW_DEFS[key];
+  return settingsLib.homeRows(settings).map(({ id, on }) => {
+    /* A row that is switched off is not built at all, which is the point of
+       switching it off. Smart Picks is rebuilt once a local day the first time
+       something asks for it, so not asking IS how its background work stops —
+       there is no timer to cancel. */
+    if (!on) return null;
+    const def = ROW_DEFS[id];
     const albums = def.albums(n, 0);
-    if (key === "favourites" && !albums.length) return null;
+    if (id === "favourites" && !albums.length) return null;
     const empty = typeof def.empty === "function" ? def.empty() : def.empty;
-    return { key, title: def.title, albums, ...(empty ? { empty } : {}) };
+    return { key: id, title: def.title, albums, ...(empty ? { empty } : {}) };
   }).filter(Boolean);
 }
 
@@ -434,22 +439,36 @@ app.get("/api/home", api((req, res) => {
 }));
 
 /*
- * The order of the home screen's rows, arranged from the side menu.
+ * The home screen's rows: which order, and which are on.
  *
- * Read and written whole rather than as moves: a phone that has been asleep
- * sends the arrangement it can see, and the last one to finish dragging wins.
- * Anything unrecognised is dropped and anything missing is put back — see
- * lib/settings.js — so a bad list cannot leave somebody with a home screen
- * missing a row.
+ * Arranged from Settings › Home screen. Read and written WHOLE rather than as
+ * moves: a phone that has been asleep sends the arrangement it can see, and
+ * the last one to finish wins. Anything unrecognised is dropped and anything
+ * missing is put back switched on — see lib/settings.js — so neither a bad
+ * list nor an older client can leave somebody with a home screen missing a
+ * row they never turned off.
+ *
+ * `order` is still sent beside `rows` because it costs nothing and a client
+ * from before this release reads it and carries on working.
  */
-app.get("/api/rows", api((req, res) => res.json({
-  order: settingsLib.rowOrder(settings),
-  titles: Object.fromEntries(Object.entries(ROW_DEFS).map(([k, d]) => [k, d.title]))
-})));
+app.get("/api/rows", api((req, res) => {
+  const rows = settingsLib.homeRows(settings);
+  res.json({
+    rows,
+    order: rows.map(r => r.id),
+    titles: Object.fromEntries(Object.entries(ROW_DEFS).map(([k, d]) => [k, d.title]))
+  });
+}));
 
 app.post("/api/rows", api((req, res) => {
-  const order = settingsLib.setRowOrder(settings, (req.body || {}).order);
-  res.json({ order });
+  const body = req.body || {};
+  /* Either shape: the list of {id, on} this version sends, or the bare order
+     an older client does — which means every row it knew about stays on. */
+  const wanted = Array.isArray(body.rows)
+    ? body.rows
+    : (Array.isArray(body.order) ? body.order.map(id => ({ id, on: true })) : []);
+  const rows = settingsLib.setHomeRows(settings, wanted);
+  res.json({ rows, order: rows.map(r => r.id) });
 }));
 
 const ROWS = Object.fromEntries(
