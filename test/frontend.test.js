@@ -1195,8 +1195,8 @@ test("the covers row does two things, so it has two controls", () => {
    * Turning the sweep off and on used to be a 500ms HOLD on this row — a
    * switch you had to be told about — while the tap looked now, so nothing on
    * screen ever said the sweep also runs by itself. Now the switch is a
-   * switch and the name opens the list of what is still missing, where looking
-   * now belongs.
+   * switch and the name opens the wall of albums that are still without one,
+   * where looking now belongs.
    */
   const row = html.slice(html.indexOf('id="menu-covers-row"'));
   const body = row.slice(0, row.indexOf("</div>"));
@@ -1211,16 +1211,99 @@ test("the covers row does two things, so it has two controls", () => {
   assert.match(js, /Looking automatically ·/);
 });
 
-test("the missing list says why, not just which", () => {
-  const server = require(path.join(__dirname, "..", "lib", "covers"));
-  assert.ok(typeof server.createCovers === "function");
-  /* NOT pending(), which answers "what is due a look" and leaves out
-     everything inside its week-long cooldown — a miss recorded yesterday is
-     exactly the album somebody wants to see here. */
-  const src = fs.readFileSync(path.join(__dirname, "..", "lib", "covers.js"), "utf8");
-  const fn = src.slice(src.indexOf("function missing("));
-  assert.match(fn.slice(0, fn.indexOf("\n  }")), /LEFT JOIN cover_lookups c ON c\.album_id = a\.id AND c\.ok = 0/);
-  assert.match(js, /openAlbum\(album\.id\)/, "and each one opens its album, where Find cover is");
+test("the missing covers are a wall of albums, not a list in the drawer", () => {
+  /*
+   * They were a fourth view inside the side menu, which put the album panel
+   * over whatever was behind the drawer — so Back from an album you had just
+   * found a cover for landed on Home instead of on the albums you were still
+   * working through. A wall is a grid screen, and Back from a grid screen is
+   * the grid screen.
+   */
+  assert.ok(!/id="menu-covers-view"/.test(html), "the drawer view is gone");
+  assert.ok(!/id="covers-list"/.test(html), "and so is the list inside it");
+  assert.ok(!/loadMissingCovers/.test(js), "and the loader that filled it");
+  assert.ok(!/\.covers-item \{/.test(css), "and its styling");
+  /* The name opens the row. closeMenu() first, so the drawer is not left over
+     the wall it just opened. */
+  const open = js.slice(js.indexOf('$("menu-covers").addEventListener'));
+  const body = open.slice(0, open.indexOf("});"));
+  assert.match(body, /closeMenu\(\)/);
+  assert.match(body, /openRow\("nocover"\)/);
+
+  /* The client names the row, pages it like every other full wall, and shows
+     what the last look made of each album. */
+  assert.match(js, /nocover: "Missing covers"/);
+  assert.match(js, /const PAGED_ROWS = new Set\(\[[^\]]*"nocover"/);
+  assert.match(js, /showReason: g\.key === "picks" \|\| g\.key === "nocover"/);
+
+  /*
+   * NOT pending(), which answers "what is due a look" and leaves out
+   * everything inside its week-long cooldown — a miss recorded yesterday is
+   * exactly the album somebody has come here to fix by hand. And deliberately
+   * no `version_of = ''`: a copy behind a version tab has its own tile, is
+   * counted by covers.status() and swept like any other album, so leaving it
+   * off this wall would make the count disagree with the screen and put the
+   * copy out of reach of the only place it can be fixed from.
+   */
+  const src = fs.readFileSync(path.join(__dirname, "..", "lib", "library.js"), "utf8");
+  const fn = src.slice(src.indexOf("function withoutCover("));
+  const q = fn.slice(0, fn.indexOf("\n}"));
+  assert.match(q, /LEFT JOIN cover_lookups c ON c\.album_id = a\.id AND c\.ok = 0/);
+  assert.match(q, /AS reason/, "what the last look said reaches the card");
+  assert.ok(!/PRIMARY/.test(q), "a version behind a tab is missing a cover too");
+  /* One place asks it. A second query for "which albums have no picture" is
+     how a count and a screen start disagreeing. */
+  const covers = fs.readFileSync(path.join(__dirname, "..", "lib", "covers.js"), "utf8");
+  assert.ok(!/function missing\(/.test(covers), "covers.js no longer has its own list");
+});
+
+test("Look now moved onto the wall it acts on", () => {
+  /*
+   * It was a row in the drawer view that has gone. It belongs on the screen
+   * that shows what it is looking for — the slot the Library's sort controls
+   * use — and beside a line saying whether the sweep runs by itself, because
+   * somebody who came here to ask "why are these still empty" is owed that
+   * answer without opening the menu again.
+   */
+  assert.ok(!/id="menu-covers-now"/.test(html), "the drawer row is gone");
+  assert.ok(!/covers-now-sub/.test(js + html), "and the line under it");
+  const bar = html.slice(html.indexOf('id="covers-bar"'));
+  const body = bar.slice(0, bar.indexOf("</div>"));
+  assert.match(body, /id="covers-bar-note"/);
+  assert.match(body, /id="covers-bar-now"/);
+
+  /* Hidden by showView() like the sort bar, and painted back by the row that
+     owns it — otherwise it would follow the user onto every other wall. */
+  const view = js.slice(js.indexOf("function showView("));
+  assert.match(view.slice(0, view.indexOf("\n}")), /\$\("covers-bar"\)\.classList\.add\("hidden"\)/);
+  const paint = js.slice(js.indexOf("function paintCoversBar("));
+  assert.match(paint.slice(0, paint.indexOf("\n}")), /state\.grid\.key === "nocover"/);
+
+  /* A bar that is a control needs the styling of one; the note takes the
+     space so a long sentence wraps rather than squeezing the button away. */
+  assert.match(css, /^\.covers-bar \{/m);
+  assert.match(css, /\.covers-bar-note \{\n  flex: 1 1 auto;/);
+});
+
+test("back from an album lands on the wall it was opened from, up to date", () => {
+  /*
+   * Finding a cover by hand takes that album OFF the missing wall. Closing the
+   * panel onto a wall still showing it says the search did not work — so the
+   * one grid whose membership an edit can change is re-read on the way back.
+   */
+  const fn = js.slice(js.indexOf("function reloadCoversGrid("));
+  const body = fn.slice(0, fn.indexOf("\n}"));
+  assert.match(body, /state\.grid\.key !== "nocover"/, "only that wall");
+  assert.match(body, /openRow\("nocover"\)/);
+
+  const hide = js.slice(js.indexOf("function hideModal("));
+  assert.match(hide.slice(0, hide.indexOf("\n}")), /state\.homeStale\) reloadCoversGrid\(\)/);
+
+  /* And when a SWEEP finishes, for the same reason — on the transition only,
+     because re-reading on every poll would throw the scroll away. */
+  const show = js.slice(js.indexOf("function showCovers("));
+  assert.match(show.slice(0, show.indexOf("\n}")),
+    /was && was\.running && !covers\.running\) reloadCoversGrid\(\)/);
 });
 
 test("the sub-line keeps its own line beside a control", () => {

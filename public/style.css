@@ -363,21 +363,6 @@ button, input { font-family: inherit; }
   margin: 0; padding: 4px 18px 12px;
   font-size: 13px; color: var(--text-dim); line-height: 1.5;
 }
-/* The albums still without a cover. Each one opens its album screen, where
-   Find cover is — which is the whole reason for wanting the list. */
-.covers-list { display: flex; flex-direction: column; }
-.covers-item {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  width: 100%; min-height: var(--tap-min);
-  padding: 10px 18px; text-align: left;
-  background: none; border: 0; color: var(--text);
-  font-size: 15px; cursor: pointer;
-}
-.covers-item:hover  { background: var(--bg-elev-2); }
-.covers-item:active { background: var(--accent-soft); }
-.covers-item-name { display: block; }
-.covers-item-why { display: block; font-size: 12px; color: var(--text-faint); }
-
 .home-rows { display: flex; flex-direction: column; }
 .home-row {
   display: flex; align-items: center; gap: 4px;
@@ -644,8 +629,9 @@ main {
   font-size: 12px; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* The reason a Smart Pick was picked. It is the whole point of the row, so it
-   is never clipped the way a title is. */
+/* Why an album is on this wall: the reason a Smart Pick was picked, and what
+   the last automatic look made of an album still missing its cover. It is the
+   whole point of either row, so it is never clipped the way a title is. */
 .album-reason {
   font-size: 12px; color: var(--text-faint); margin-top: 2px;
   white-space: normal; line-height: 1.35;
@@ -1207,6 +1193,12 @@ main {
      bar within a few pixels of every other, which is a texture rather than a
      waveform. */
   --wave-h: 34px;
+  /* The thumb's diameter, named because the WAVEFORM has to know it too. A
+     range's thumb centre travels thumbW/2 .. width - thumbW/2, so a waveform
+     whose colour boundary runs 0 .. width disagrees with it by half a thumb at
+     each end — the dot leading the shape early and trailing it late. See
+     drawWave(). */
+  --seek-thumb: 14px;
 }
 .np-wave {
   position: absolute;
@@ -1243,13 +1235,13 @@ main {
 .np-seek::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--fill); }
 .np-seek::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; border-radius: 50%;
+  width: var(--seek-thumb); height: var(--seek-thumb); border-radius: 50%;
   background: var(--text); border: 0; cursor: pointer;
   margin-top: -5px;                       /* (14px thumb - 4px track) / 2 */
 }
 .np-seek::-moz-range-track { height: 4px; border-radius: 999px; background: var(--fill); }
 .np-seek::-moz-range-thumb {
-  width: 14px; height: 14px; border-radius: 50%;
+  width: var(--seek-thumb); height: var(--seek-thumb); border-radius: 50%;
   background: var(--text); border: 0; cursor: pointer;
 }
 .np-times { display: flex; justify-content: space-between; margin-top: 8px; }
@@ -1765,6 +1757,20 @@ main {
    the sort beside it, and two controls of equal weight would leave nothing
    saying which one is the subject. */
 .sort-dir { color: var(--text-dim); font-weight: 500; }
+
+/* Missing covers' own bar, in the slot the Library's sort controls use. The
+   note takes the space and the button keeps its size, so a long sentence wraps
+   rather than squeezing Look now to nothing. */
+.covers-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 14px;
+}
+.covers-bar-note {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 13px; color: var(--text-dim); line-height: 1.4;
+}
+.covers-bar .sort-ctl { flex: 0 0 auto; }
+.covers-bar .sort-ctl[disabled] { opacity: .5; cursor: default; }
 
 /* ------------------------------------------------------------------ */
 /*  What a record is, and who made it                                  */

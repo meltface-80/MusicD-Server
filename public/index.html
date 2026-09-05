@@ -124,23 +124,10 @@
           </button>
         </div>
 
-        <!-- What is still without a cover. Reached by the name of the covers
-             row, which is where somebody looking at "20 albums still without
-             one" wants to go next. -->
-        <div id="menu-covers-view" class="hidden">
-          <button class="menu-item menu-back" type="button" id="menu-covers-back">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            Missing covers
-          </button>
-          <button class="menu-item" type="button" id="menu-covers-now">
-            Look now
-            <span class="menu-sub" id="covers-now-sub"></span>
-          </button>
-          <div id="covers-list" class="covers-list"></div>
-        </div>
+        <!-- What is still without a cover is a GRID SCREEN, not a fourth
+             view in here: they are albums, and albums are tiles you tap. The
+             covers row below opens it the way every other named row in this
+             menu opens one. -->
 
         <!-- Arranging the home screen: the third view in the drawer, behind
              Settings. Hold a pad to drag a carousel, or switch it off — which
@@ -215,10 +202,10 @@
                started with COVER_LOOKUP=false — a switch that cannot do
                anything is worse than no switch. -->
           <!-- TWO controls, because there are two things here. The name opens
-               the screen that lists what is still missing and can look now;
-               the switch is whether the sweep runs by itself. The hold gesture
-               this row used to hide is gone — a switch you can see beats one
-               you have to know about. -->
+               the wall of albums that are still without one; the switch is
+               whether the sweep runs by itself. The hold gesture this row used
+               to hide is gone — a switch you can see beats one you have to
+               know about. -->
           <div class="menu-row hidden" id="menu-covers-row">
             <button class="menu-item menu-row-open" type="button" id="menu-covers">
               <span class="menu-text">Find missing covers
@@ -284,6 +271,15 @@
         <button class="sort-ctl sort-dir" id="sort-dir" type="button">
           <span id="sort-dir-label"></span>
         </button>
+      </div>
+      <!-- The Missing covers screen's own bar, and that screen's only. What
+           the sweep is doing on the left, because somebody who came here to
+           ask "why are these still empty" is owed the answer without opening
+           the menu again; looking now on the right, where the Library's sort
+           controls sit. -->
+      <div id="covers-bar" class="covers-bar hidden">
+        <span id="covers-bar-note" class="covers-bar-note"></span>
+        <button class="sort-ctl" id="covers-bar-now" type="button">Look now</button>
       </div>
       <!-- The artist's biography. Filled only by the artist screen; every
            other grid leaves it hidden. -->

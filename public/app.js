@@ -140,6 +140,7 @@ const state = {
   volPending: null,      // { level, until, zone } — asked for, not yet echoed
   pollTimer: null,
   scanTimer: null,
+  coverTimer: null,      // the fast poll that runs only while a sweep does
   progressTimer: null,
   updateTimer: null,     // the poll watching an update through its restart
   positionAt: 0,
@@ -166,7 +167,10 @@ const ROW_TITLES = {
   added: "Recently added",
   played: "Recently played",
   unplayed: "Not played in 6 months",
-  picks: "Smart Picks"
+  picks: "Smart Picks",
+  /* Not a home row — see ROW_DEFS in index.js. It is here because this is what
+     names a grid screen, and Missing covers is one. */
+  nocover: "Missing covers"
 };
 
 /* What an empty row means. Reaching one of these screens from the side menu
@@ -175,6 +179,7 @@ const ROW_TITLES = {
 const ROW_EMPTY = {
   favourites: "No favourites yet. Tap the heart on an album to keep it here.",
   library: "No albums scanned yet. Check your music folder is mounted, then rescan.",
+  nocover: "Every album has a cover.",
   random: "No albums scanned yet.",
   added: "No albums scanned yet.",
   played: "Nothing played yet. Play an album and it will appear here.",
@@ -784,9 +789,11 @@ function showView(view, title) {
      forgot would show the last artist's biography over a row of albums. */
   $("artist-info").textContent = "";
   $("artist-info").classList.add("hidden");
-  /* Same reasoning for the sort bar, which belongs to the Library grid alone.
-     openRow() paints it back on for that one. */
+  /* Same reasoning for the sort bar, which belongs to the Library grid alone,
+     and for the covers bar, which belongs to Missing covers. openRow() paints
+     whichever the row it is opening owns. */
   $("sort-bar").classList.add("hidden");
+  $("covers-bar").classList.add("hidden");
   window.scrollTo(0, 0);
 }
 
@@ -864,7 +871,7 @@ const PAGE = 200;
 /* Random and Smart Picks are computed per request, so a second page of either
    would repeat what is already on screen rather than continue it. Both are
    deliberately short rows and arrive complete. */
-const PAGED_ROWS = new Set(["library", "added", "played", "unplayed"]);
+const PAGED_ROWS = new Set(["library", "added", "played", "unplayed", "nocover"]);
 
 async function openRow(key) {
   showView("grid", ROW_TITLES[key] || "Albums");
@@ -877,6 +884,7 @@ async function openRow(key) {
 
   state.grid = { key, offset: 0, done: false, loading: false, first: true };
   paintSortBar();
+  paintCoversBar();
   await loadGridPage();
 }
 
@@ -894,7 +902,12 @@ async function loadGridPage() {
     if (g.first) { grid.textContent = ""; g.first = false; }
 
     for (const album of data.albums) {
-      grid.appendChild(albumCard(album, { showReason: g.key === "picks" }));
+      /* Smart Picks says why it picked an album; Missing covers says what the
+         last automatic look made of one — "no artist to search on" is the
+         difference between a wall of blank tiles and a wall somebody can act
+         on. Same field, same line, two questions. */
+      grid.appendChild(albumCard(album,
+        { showReason: g.key === "picks" || g.key === "nocover" }));
     }
     g.offset += data.albums.length;
     /* A short page is the end of the row, and so is any page of a row that
@@ -915,6 +928,21 @@ async function loadGridPage() {
   } finally {
     g.loading = false;
   }
+}
+
+/*
+ * Read the Missing covers wall again, if that is what is on screen.
+ *
+ * The one grid whose MEMBERSHIP changes under it: finding a cover — by sweep
+ * or by hand — takes an album off it, and a wall still showing that album is a
+ * list that lies. openRow() rather than a patch of the one card, because the
+ * row's order is by artist and the count in the bar has moved too; and
+ * re-opening a layer that is already on top replaces it rather than stacking
+ * one, so this costs no history entry.
+ */
+function reloadCoversGrid() {
+  if (state.view !== "grid" || !state.grid || state.grid.key !== "nocover") return;
+  openRow("nocover");
 }
 
 /* Near the bottom of a grid, fetch the next page. A scroll listener rather than
@@ -1640,6 +1668,16 @@ function hideModal() {
     state.homeStale = false;
     loadHome();
   }
+  /*
+   * BACK FROM AN ALBUM LANDS ON THE WALL IT WAS OPENED FROM, and on the
+   * Missing covers wall that is only half the promise: a cover found by hand
+   * has taken that album off the list, and leaving its tile there says the
+   * search did not work. `homeStale` is already the flag for "an album changed
+   * while a wall sat behind this panel" — Home reads it above, and this is the
+   * one grid whose contents it can change. It is left SET for Home, which has
+   * not been repainted yet.
+   */
+  if (state.homeStale) reloadCoversGrid();
 }
 function closeModal() { navBack(); }
 
@@ -2360,6 +2398,22 @@ function drawWave(at) {
   const pos = Number.isFinite(at) ? at : (Number(seek.value) || 0);
   const frac = max > 0 ? Math.max(0, Math.min(1, pos / max)) : 0;
 
+  /*
+   * WHERE THE THUMB ACTUALLY IS, which is not frac * width.
+   *
+   * A range input cannot let its thumb hang off either end, so the CENTRE
+   * travels from thumbW/2 to width - thumbW/2 rather than from 0 to width.
+   * Colouring the bars at frac * width instead put the dot half a thumb AHEAD
+   * of the shape at the start and half a thumb behind it at the end — measured
+   * at +6px, +3, 0, -3, -6 across a track, which reads as the waveform failing
+   * to keep up. Zero in the middle, which is why it survived being looked at.
+   */
+  /* Read from the PROGRESS block, which is where it is declared — a custom
+     property inherits downward, and documentElement is its ancestor rather
+     than its descendant, so asking there would silently get nothing. */
+  const thumbW = parseFloat(getComputedStyle(host).getPropertyValue("--seek-thumb")) || 14;
+  const head = thumbW / 2 + frac * (w - thumbW);
+
   /* One bar per 2 CSS pixels. The stored waveform holds 1000 values and a phone
      is ~390 CSS px wide, so a wider step throws most of them away; below 2px
      the bars stop being separable and it reads as a filled shape rather than a
@@ -2377,7 +2431,9 @@ function drawWave(at) {
     /* A floor of 1px so silence is a line rather than a gap — a gap reads as
        "the waveform stopped loading", which is a different thing entirely. */
     const barH = Math.max(1, (v / 255) * (h - 2));
-    const done = (i / bars) <= frac;
+    /* A bar counts as played once its MIDDLE is behind the playhead, so the
+       boundary lands where the dot is rather than a bar's width either side. */
+    const done = (i * step + barW / 2) <= head;
     ctx.fillStyle = done ? played : ahead;
     /* The played side goes to full strength so the accent still reads as the
        position marker against a bright track ahead of it. */
@@ -2710,6 +2766,7 @@ function showRadio(radio) {
 }
 
 function showCovers(covers) {
+  const was = state.covers;
   state.covers = covers;
   $("menu-covers-row").classList.toggle("hidden", !covers.available);
   if (!covers.available) return;
@@ -2730,57 +2787,48 @@ function showCovers(covers) {
     covers.running ? `Looking — ${covers.done} of ${covers.total}`
     : covers.enabled ? `Looking automatically · ${count}`
     : `Not looking · ${count}`;
-  paintCoversNow();
-}
+  /* The grid may be open behind the menu, or the sweep may have moved on while
+     it is; either way the bar says the same thing this row does. */
+  paintCoversBar();
 
-/* What the Look now row says about itself, which is the same sentence whether
-   it is reached from a sweep finishing or from opening the screen. */
-function paintCoversNow() {
-  const c = state.covers || {};
-  $("covers-now-sub").textContent =
-    c.running ? `Looking — ${c.done} of ${c.total}`
-    : c.enabled ? "It also runs by itself, after every scan"
-    : "The automatic look is switched off";
+  /*
+   * A sweep that is running is watched at the rate a scan is watched, and only
+   * while it runs — the same shape as state.scanTimer above, and it switches
+   * itself off. Thirty seconds is right for a settings row and useless for a
+   * progress line somebody is standing in front of.
+   */
+  if (covers.running && !state.coverTimer) {
+    state.coverTimer = setInterval(refreshStatus, 2000);
+  } else if (!covers.running && state.coverTimer) {
+    clearInterval(state.coverTimer);
+    state.coverTimer = null;
+  }
+  /* On the TRANSITION only. A sweep that has just finished has taken albums off
+     the missing wall; re-reading that wall on every poll instead would throw
+     somebody's scroll away twice a minute for nothing. */
+  if (was && was.running && !covers.running) reloadCoversGrid();
 }
 
 /*
- * The albums that still have no cover.
+ * The Missing covers grid's own bar.
  *
- * Read when the screen is opened rather than kept up to date: it is a list of
- * what is missing, and the only things that change it are a sweep finishing
- * and a cover chosen by hand — neither of which happens while somebody is
- * looking at this.
+ * Painted from `state.covers`, which every /api/status poll refreshes — so the
+ * line follows a sweep that is already running without this screen asking for
+ * anything of its own. Hidden on every other grid: it is this row's bar, the
+ * way the sort controls are the Library's.
  */
-async function loadMissingCovers() {
-  const host = $("covers-list");
-  host.textContent = "";
-  host.appendChild(el("p", "menu-note", "Reading…"));
-  try {
-    const out = await api("/api/covers/missing");
-    if (out.status) showCovers(out.status);
-    host.textContent = "";
-    const albums = out.albums || [];
-    if (!albums.length) {
-      host.appendChild(el("p", "menu-note", "Every album has a cover."));
-      return;
-    }
-    for (const album of albums) {
-      const item = el("button", "covers-item");
-      item.type = "button";
-      item.appendChild(el("span", "covers-item-name",
-        (album.artist || "Unknown artist") + " — " + album.title));
-      /* What the last look made of it. "no artist to search on" is something
-         somebody can act on; a name on its own is not. */
-      if (album.note) item.appendChild(el("span", "covers-item-why", album.note));
-      /* Straight to the album, where Find cover is — the whole reason for
-         wanting to see this list. */
-      item.addEventListener("click", () => { closeMenu(); openAlbum(album.id); });
-      host.appendChild(item);
-    }
-  } catch (e) {
-    host.textContent = "";
-    host.appendChild(el("p", "menu-note", e.message));
-  }
+function paintCoversBar() {
+  const on = state.view === "grid" && state.grid && state.grid.key === "nocover";
+  $("covers-bar").classList.toggle("hidden", !on);
+  if (!on) return;
+  const c = state.covers || {};
+  $("covers-bar-note").textContent =
+    c.running ? `Looking — ${c.done} of ${c.total}`
+    : c.enabled ? "Looked for automatically, after every scan"
+    : "The automatic look is switched off";
+  /* Nothing to look for, and nothing to look WITH on a container started with
+     COVER_LOOKUP=false. */
+  $("covers-bar-now").disabled = !c.available || !!c.running;
 }
 
 /*
@@ -3423,13 +3471,13 @@ function trackTyping() {
  * through it directly.
  */
 function showMenuView(view) {
-  /* Three views now: the places, the settings, and arranging the home screen
+  /* Three views: the places, the settings, and arranging the home screen
      behind those. Named rather than a pair of booleans so adding a fourth is
-     one more line rather than a rewrite. */
+     one more line rather than a rewrite. Missing covers is deliberately NOT
+     one of them — it is a wall of albums, so it is a grid screen. */
   $("menu-main").classList.toggle("hidden", view !== "main");
   $("menu-settings").classList.toggle("hidden", view !== "settings");
   $("menu-home").classList.toggle("hidden", view !== "home");
-  $("menu-covers-view").classList.toggle("hidden", view !== "covers");
   $("menu-settings-open").setAttribute("aria-expanded", view === "settings" ? "true" : "false");
   $("menu-home-open").setAttribute("aria-expanded", view === "home" ? "true" : "false");
   /* Back at the top of whichever list is now showing. Leaving Settings
@@ -3532,21 +3580,27 @@ function wire() {
     } catch (e) { toast(e.message, true); }
   });
 
+  /* Out of the drawer and onto a wall. These are albums, and the thing
+     somebody wants to do with one of them — open it, and use Find cover — is
+     what tapping an album tile has always meant. It leaves the menu on the
+     navigation stack the same way every other named row here does, which is
+     what makes Back from the album panel land on this grid rather than on
+     Home. */
   $("menu-covers").addEventListener("click", () => {
-    showMenuView("covers");
-    loadMissingCovers();
+    closeMenu();
+    openRow("nocover");
   });
-  $("menu-covers-back").addEventListener("click", () => showMenuView("settings"));
 
-  $("menu-covers-now").addEventListener("click", async () => {
+  $("covers-bar-now").addEventListener("click", async () => {
     if (!state.covers || !state.covers.available) return;
     try {
       /* The same sweep the scan runs. It answers immediately and works in the
-         background, so the list is re-read a moment later rather than awaited. */
+         background, so the wall is re-read a moment later rather than awaited —
+         and again by the status poll, which is what moves the count. */
       showCovers(await post("/api/covers", {}));
       toast(state.covers.enabled ? "Looking for missing covers…"
                                  : "Switch it on to look automatically as well.");
-      setTimeout(loadMissingCovers, 1500);
+      setTimeout(reloadCoversGrid, 1500);
     } catch (e) { toast(e.message, true); }
   });
 

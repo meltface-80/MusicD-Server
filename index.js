@@ -411,7 +411,15 @@ const ROW_DEFS = {
                 empty: "Nothing yet — this row fills once albums have gone six months unplayed." },
   picks:      { title: "Smart Picks",
                 albums: ()     => picks.get().picks,
-                empty: () => picks.get().note }
+                empty: () => picks.get().note },
+  /* A GRID SCREEN THAT IS NOT A HOME ROW. Reached from the covers row in the
+     side menu and from nowhere else — it is a maintenance screen, not a shelf,
+     so it is deliberately absent from lib/settings.js's DEFAULT_ROWS and
+     therefore from Home and from Settings > Home screen. It lives here because
+     this is where a row that /api/albums can open is declared. */
+  nocover:    { title: "Missing covers",
+                albums: (n, o) => library.withoutCover(db, n, o),
+                empty: "Every album has a cover." }
 };
 
 /* Favourites is the one row that is ABSENT rather than empty when it has
@@ -456,7 +464,12 @@ app.get("/api/rows", api((req, res) => {
   res.json({
     rows,
     order: rows.map(r => r.id),
-    titles: Object.fromEntries(Object.entries(ROW_DEFS).map(([k, d]) => [k, d.title]))
+    /* A title for each row LISTED, not for every row ROW_DEFS knows about:
+       this endpoint is the home screen's arrangement, and Missing covers is a
+       grid screen that is not on it. Naming a row here that the arrangement
+       never mentions would offer a client a switch for a carousel that does
+       not exist. */
+    titles: Object.fromEntries(rows.map(r => [r.id, ROW_DEFS[r.id].title]))
   });
 }));
 
@@ -666,18 +679,6 @@ app.post("/api/covers", api((req, res) => {
      back on does not have to wait six hours to mean anything. */
   if (body.sweep !== false && covers.status().enabled) sweepCovers();
   res.json(covers.status());
-}));
-
-/*
- * The albums that still have no cover, for the screen that lists them.
- *
- * Separate from the status the settings row shows, which is a count: this is
- * the names, and what the last look made of each one — "no artist to search
- * on" is an answer somebody can act on, and a bare number is not.
- */
-app.get("/api/covers/missing", api((req, res) => {
-  res.json({ albums: covers.missing(bounded(req.query.limit, 500, 2000)),
-             status: covers.status() });
 }));
 
 /*
