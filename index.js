@@ -89,7 +89,13 @@ const covers = createCovers({
   /* On unless somebody said otherwise. An album with no picture is the thing
      the feature exists for, and a switch nobody knows to look for is a feature
      nobody has. */
-  enabled: settings.get(COVERS_KEY) !== "0"
+  enabled: settings.get(COVERS_KEY) !== "0",
+  /* Undefined in every real install — see lib/covers.js. */
+  roots: (process.env.MUSICD_MB_API || process.env.MUSICD_CAA_API ||
+          process.env.MUSICD_ITUNES_API)
+    ? { mb: process.env.MUSICD_MB_API, caa: process.env.MUSICD_CAA_API,
+        itunes: process.env.MUSICD_ITUNES_API }
+    : null
 });
 
 /* Once at startup as well as after every scan. A library upgraded from a
@@ -547,6 +553,37 @@ app.post("/api/album/name", api((req, res) => {
  * confident match" — an error would tell the client to retry something that
  * has already been settled and written down.
  */
+/*
+ * Looking for one album's cover by hand, from the album screen.
+ *
+ * The sweep answers what it can; this is for what it cannot — a record whose
+ * files carry no artist, or one MusicBrainz has under a name nobody would
+ * guess. The title and artist are taken from the REQUEST so a name corrected
+ * in the dialog is the name searched with.
+ */
+app.get("/api/album/:id/covers", api(async (req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  res.json({
+    candidates: await covers.candidatesFor(id, req.query.title, req.query.artist),
+    /* Why the automatic sweep gave up, in the words it recorded at the time. */
+    reason: covers.reasonFor(id)
+  });
+}));
+
+/* The client names a candidate by its position in the list it was just given —
+   never by URL. A server that fetches a URL a client hands it is an open proxy
+   onto the network it sits in. */
+app.post("/api/album/:id/cover", api(async (req, res) => {
+  const id = decodeId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Which album?" });
+  const file = await covers.chooseFor(id, (req.body || {}).index);
+  /* Same as the sweep does when it finds one: a cover changes what Smart Picks
+     can show, and nothing else caches an album row. */
+  picks.invalidate();
+  res.json({ art: library.album(db, id).art, file });
+}));
+
 app.get("/api/album/:id/info", api(async (req, res) => {
   const id = decodeId(req.params.id);
   if (!id) return res.status(400).json({ error: "Which album?" });

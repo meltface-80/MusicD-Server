@@ -1897,6 +1897,116 @@ let editing = null;
    second press — see saveEdit(). */
 let savingEdit = false;
 
+/* ------------------------------------------------------------------ */
+/*  Looking for a cover by hand                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * IN THE SAME DIALOG THE NAME IS CORRECTED IN, and that is the point.
+ *
+ * The background sweep refuses to search for an album whose files name no
+ * artist — there is no query that would not match half a catalogue — so the
+ * albums it leaves behind are very often the ones somebody would have to name
+ * by hand anyway. Type the artist, press Find, choose the sleeve.
+ *
+ * The search uses what is IN THE FIELDS rather than what is saved, so a
+ * correction can be tried before it is committed.
+ *
+ * A candidate is chosen by its POSITION in the list the server just handed
+ * over, never by its URL. A server that will fetch a URL a client gives it is
+ * an open proxy onto the network it sits in.
+ */
+
+function resetCoverSearch() {
+  const grid = $("edit-grid"), why = $("edit-why");
+  grid.textContent = "";
+  grid.classList.add("hidden");
+  why.textContent = "";
+  why.classList.add("hidden");
+  $("edit-find").disabled = false;
+  $("edit-find").textContent = "Find cover";
+}
+
+async function findCovers() {
+  if (!editing) return;
+  const button = $("edit-find");
+  const grid = $("edit-grid"), why = $("edit-why");
+  button.disabled = true;
+  button.textContent = "Looking…";
+  grid.textContent = "";
+  grid.classList.add("hidden");
+  why.classList.add("hidden");
+  try {
+    const query = "?title=" + encodeURIComponent($("edit-title").value.trim()) +
+                  "&artist=" + encodeURIComponent($("edit-artist").value.trim());
+    const out = await api("/api/album/" + b64url(playing(editing)) + "/covers" + query);
+    const found = (out && out.candidates) || [];
+    if (!found.length) {
+      /* The reason the sweep recorded, where there is one — otherwise a plain
+         "nothing", which is still an answer and better than an empty grid. */
+      why.textContent = out && out.reason
+        ? "Nothing found. The last automatic search said: " + out.reason
+        : "Nothing found for that name. Try the artist as it is spelled on the record.";
+      why.classList.remove("hidden");
+      return;
+    }
+    for (const cand of found) {
+      const cell = el("button", "edit-cand");
+      cell.type = "button";
+      cell.setAttribute("aria-label", "Use this cover from " + cand.source);
+      const img = el("img");
+      img.loading = "lazy";
+      img.alt = "";
+      img.src = cand.thumb;
+      /* A candidate whose thumbnail will not load is one whose full image
+         probably will not either, so it is removed rather than left as a hole
+         somebody can still press. */
+      img.addEventListener("error", () => cell.remove());
+      cell.appendChild(img);
+      cell.appendChild(el("span", "edit-cand-src", cand.source));
+      cell.addEventListener("click", () => chooseCover(cand.i, cell));
+      grid.appendChild(cell);
+    }
+    grid.classList.remove("hidden");
+  } catch (e) {
+    why.textContent = e.message;
+    why.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Find cover";
+  }
+}
+
+let choosingCover = false;
+
+async function chooseCover(index, cell) {
+  /* One at a time. Two taps on two sleeves would race to be the album's
+     cover and the loser would still have downloaded an image. */
+  if (choosingCover || !editing) return;
+  choosingCover = true;
+  cell.classList.add("is-busy");
+  try {
+    await post("/api/album/" + b64url(playing(editing)) + "/cover", { index });
+    toast("Cover saved.");
+    /* Re-read and repaint, the same way a corrected NAME does — the panel is
+       showing the placeholder this just replaced, and the album may be a
+       version, so the refetch asks for what is actually on screen. */
+    const next = await api("/api/album/" + b64url(playing(editing)));
+    state.album = next;
+    renderAlbum(next);
+    /* The wall behind the panel and the home rows are still showing the empty
+       tile; this is the flag that has them re-read on the way back. */
+    state.homeStale = true;
+    editing = null;
+    closeEditDialog();
+  } catch (e) {
+    toast(e.message, true);
+    cell.classList.remove("is-busy");
+  } finally {
+    choosingCover = false;
+  }
+}
+
 function openEditDialog() {
   const album = state.album;
   if (!album) return;
@@ -1918,6 +2028,9 @@ function openEditDialog() {
 
   $("edit-err").classList.add("hidden");
   $("edit-save").disabled = false;
+  /* The cover half starts closed every time. Leaving the last album's results
+     up would offer somebody another record's sleeves for this one. */
+  resetCoverSearch();
   $("edit-overlay").classList.remove("hidden");
   navOpen("edit", hideEditDialog);
   /* Focused on a pointer, never on a phone. The album's title is usually the
@@ -3343,6 +3456,8 @@ function wire() {
   $("select-play").addEventListener("click", () => playPicked("play"));
   $("select-queue").addEventListener("click", () => playPicked("queue"));
   $("select-cancel").addEventListener("click", exitSelect);
+
+  $("edit-find").addEventListener("click", findCovers);
 
   $("sort-open").addEventListener("click", openSortSheet);
   for (const node of document.querySelectorAll("[data-close-sort]")) {

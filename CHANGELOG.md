@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.27
+
+### Covers that could not be found before
+- **The MusicBrainz release id in your own files is now read and used first.**
+  Picard writes it and most tagged libraries carry it. It names one release
+  exactly, so there is no search, no scoring and no way to match the wrong
+  record — and it costs no MusicBrainz request at all. It is also the only
+  thing that can find a cover for a **Various Artists** compilation, which the
+  sweep otherwise refuses to guess at.
+- **The iTunes Search API is asked last**, when MusicBrainz has nothing. No key
+  and no account, which is the only reason it is allowed here. Its answer is
+  held to the same artist and title agreement as everything else.
+- **Albums that had already failed are retried at once.** A miss means "none of
+  the places we knew about had it", and that stopped being true the moment
+  these two sources were added — so a miss now records which set of sources
+  answered it, and adding a source re-tries every album that failed under the
+  old set instead of leaving them in a week-long cooldown. This is why a
+  library sitting on missing covers will find some on the next sweep.
+
+### Finding a cover by hand
+- **Edit an album and press Find cover.** It searches with what is in the
+  fields, so an album whose files name no artist can be named and then looked
+  for in one go — which is exactly the album the sweep cannot help with.
+- Each result says which source offered it, since a Cover Art Archive scan of
+  the release you own and a store's rendering of some edition are not the same
+  thing.
+- If nothing is found, the dialog says what the last automatic search made of
+  it, so "still missing" has an answer on screen.
+- The client picks a result **by its position in the list**, never by URL — a
+  server that fetches a URL a client hands it is an open proxy onto the network
+  it sits in.
+
 ## 0.4.26
 
 ### The Now playing controls stand out, and the menu reads at a comfortable size

@@ -156,7 +156,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.26` | that exact version, for pinning |
+| `:0.4.27` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -246,6 +246,28 @@ Albums with no year, and albums never played, are treated as *unknown* rather
 than as zero: they stay at the end of the wall whichever way the arrow points.
 Random is seeded so the wall stays consistent as it pages; the control becomes
 **Shuffle**.
+
+## When a cover cannot be found
+
+Most missing covers are found by the background sweep. The ones that are not
+are usually albums whose files do not say who made them — there is no search
+that would not match half a catalogue, so the sweep does not guess.
+
+Open the album, tap **…** on the artwork, then **Edit**. Correct the artist if
+it is wrong or missing, then press **Find cover**: it searches with what is in
+the fields, shows what each source offers, and stores the one you tap. If
+nothing comes back, the dialog says what the last automatic search made of it.
+
+Covers are looked for in this order, and the first that answers wins:
+
+| | Source | |
+| --- | --- | --- |
+| 1 | The MusicBrainz release id **in your own files** | exact — no guessing, and no request to MusicBrainz at all |
+| 2 | MusicBrainz by album name, then by track names | matched on the artist as well, so a shared title is not a match |
+| 3 | The iTunes Search API | no key, no account; asked last because it answers a looser question |
+
+Nothing is ever written next to your music, and nothing but a picture is
+stored: no title, no artist, no year.
 
 ## Choosing several albums
 
