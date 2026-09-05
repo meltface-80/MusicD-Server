@@ -153,6 +153,8 @@ const state = {
   homeRows: [],
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
+  zones: [],             // the rooms, as /api/zones last described them
+  zone_open: "",          // which room the per-room settings screen is showing
   covers: null,          // what the server last said about looking for covers
   identify: null,        // ditto, for saying which release an album is
   lastfm: null,          // what the server last said about the Last.fm account
@@ -2915,18 +2917,91 @@ function paintPair(pairId, chosen) {
   }
 }
 
-function showRadio(radio) {
-  state.radio = radio;
-  const row = $("menu-radio");
-  row.classList.toggle("is-off", !radio.enabled);
+/*
+ * THE ROOMS, AND WHAT IS SET IN ONE.
+ *
+ * Random Album Radio was a single switch in Settings until 0.4.44, painted
+ * from /api/status like every other row there. It is per room now, so there is
+ * no longer one answer for a screen about the whole house to show — the list
+ * is read from /api/zones, which carries each room's switches with it, and the
+ * room screen is painted from whichever row was tapped.
+ */
+async function loadZones() {
+  const list = $("zones-list");
+  const note = $("zones-note");
+  try {
+    const { rooms, error } = await api("/api/zones");
+    state.zones = rooms || [];
+    list.textContent = "";
+    if (!state.zones.length) {
+      note.textContent = error || "No rooms answered. Check the speakers are on the network.";
+      return;
+    }
+    note.textContent = "Every room on the network. Tap one for what is set in it.";
+    for (const room of state.zones) list.appendChild(zoneRow(room));
+  } catch (e) {
+    /* Rooms already listed are still the truth as far as anybody knows — the
+       same rule the queue read follows. Say why, keep what is there. */
+    note.textContent = e.message;
+  }
+}
+
+function zoneRow(room) {
+  const btn = el("button", "menu-item");
+  btn.type = "button";
+  const bits = [];
+  if (room.radio && room.radio.enabled) bits.push("Radio on");
+  /* Which rooms it is playing with, because that is what decides whose
+     settings are in charge — see showZone(). */
+  if (room.grouped) bits.push("with " + room.members.filter(n => n !== room.name).join(", "));
+  btn.append(el("span", "menu-text", room.name));
+  if (bits.length) btn.append(el("span", "menu-sub", bits.join(" · ")));
+  btn.addEventListener("click", () => openZone(room.uuid));
+  return btn;
+}
+
+function openZone(uuid) {
+  state.zone_open = uuid;
+  showZone();
+  showMenuView("zone");
+}
+
+function currentZone() {
+  return (state.zones || []).find(z => z.uuid === state.zone_open) || null;
+}
+
+function showZone() {
+  const room = currentZone();
+  if (!room) return showMenuView("zones");
+  $("zone-back-text").textContent = room.name;
+
+  /*
+   * A GROUPED ROOM FOLLOWS THE ONE DRIVING IT, and says so.
+   *
+   * The poll loop tops up coordinators, so a member's own switch would be a
+   * switch that did nothing — which is worse than no switch. The row stays
+   * usable, because the grouping can change and the setting outlives it; the
+   * line above says what is true right now.
+   */
+  const grouped = $("zone-grouped");
+  const driver = !room.isCoordinator &&
+    (state.zones || []).find(z => z.uuid === room.coordinator);
+  grouped.classList.toggle("hidden", !driver);
+  if (driver) {
+    grouped.textContent = `Playing with ${driver.name}, which is the room in charge — ` +
+      `its radio setting is the one in use while they are grouped.`;
+  }
+
+  const radio = room.radio || { enabled: false, matchGenre: true };
+  $("zone-radio").classList.toggle("is-off", !radio.enabled);
   /* No words: the switch says which way it is set, and a line repeating that
      is a line to read on every visit. */
-  paintToggle("menu-radio", radio.enabled);
+  paintToggle("zone-radio", radio.enabled);
 
-  const genre = $("menu-radio-genre");
+  const genre = $("zone-radio-genre");
   genre.classList.toggle("hidden", !radio.enabled);
   genre.classList.toggle("is-off", !radio.matchGenre);
-  paintToggle("menu-radio-genre", radio.matchGenre);
+  paintToggle("zone-radio-genre", radio.matchGenre);
 }
 
 function showCovers(covers) {
@@ -3014,7 +3089,7 @@ function paintCoversBar() {
  * setting that is not there is how somebody ends up hunting for it.
  */
 function describeSettings() {
-  const bits = ["Scanning", "the home screen", "theme"];
+  const bits = ["Scanning", "the home screen", "zones", "theme"];
   if (state.covers && state.covers.available) bits.push("covers");
   if (state.lastfm && state.lastfm.configured) bits.push("Last.fm");
   bits.push("updates");
@@ -3072,7 +3147,6 @@ async function refreshStatus() {
     /* A container started with IDENTIFY=false offers nothing rather than
        offering a button that cannot work — the same shape as the covers row. */
     state.identify = status.identify || null;
-    if (status.radio) showRadio(status.radio);
     if (status.lastfm) showLastfm(status.lastfm);
     describeSettings();
 
@@ -3638,15 +3712,18 @@ function trackTyping() {
  * through it directly.
  */
 function showMenuView(view) {
-  /* Three views: the places, the settings, and arranging the home screen
-     behind those. Named rather than a pair of booleans so adding a fourth is
-     one more line rather than a rewrite. Missing covers is deliberately NOT
-     one of them — it is a wall of albums, so it is a grid screen. */
+  /* Five views: the places, the settings, arranging the home screen, the rooms,
+     and one room. Named rather than booleans, which is what made adding the
+     last two a line each. Missing covers is deliberately NOT one of them — it
+     is a wall of albums, so it is a grid screen. */
   $("menu-main").classList.toggle("hidden", view !== "main");
   $("menu-settings").classList.toggle("hidden", view !== "settings");
   $("menu-home").classList.toggle("hidden", view !== "home");
+  $("menu-zones").classList.toggle("hidden", view !== "zones");
+  $("menu-zone").classList.toggle("hidden", view !== "zone");
   $("menu-settings-open").setAttribute("aria-expanded", view === "settings" ? "true" : "false");
   $("menu-home-open").setAttribute("aria-expanded", view === "home" ? "true" : "false");
+  $("menu-zones-open").setAttribute("aria-expanded", view === "zones" ? "true" : "false");
   /* Back at the top of whichever list is now showing. Leaving Settings
      scrolled halfway down and returning to a main menu at the same offset is
      how a two-view panel loses people. */
@@ -3717,14 +3794,21 @@ function wire() {
     copyText("MusicD Server " + text, "Version copied.");
   });
 
-  for (const [id, field] of [["menu-radio", "enabled"], ["menu-radio-genre", "matchGenre"]]) {
+  $("menu-zones-open").addEventListener("click", () => { showMenuView("zones"); loadZones(); });
+  $("menu-zones-back").addEventListener("click", () => showMenuView("settings"));
+  $("menu-zone-back").addEventListener("click", () => showMenuView("zones"));
+
+  for (const [id, field] of [["zone-radio", "enabled"], ["zone-radio-genre", "matchGenre"]]) {
     $(id).addEventListener("click", async () => {
-      const now = state.radio || { enabled: false, matchGenre: true };
+      const room = currentZone();
+      if (!room) return;
+      const now = room.radio || { enabled: false, matchGenre: true };
       try {
         /* Painted from what the SERVER says it did, not from what was asked
            for: this setting lives in the database and drives a loop nothing on
            this phone can see, so the server's answer is the only true one. */
-        showRadio(await post("/api/radio", { [field]: !now[field] }));
+        room.radio = await post("/api/radio", { zone: room.uuid, [field]: !now[field] });
+        showZone();
       } catch (e) { toast(e.message, true); }
     });
   }
@@ -4015,6 +4099,8 @@ function wire() {
        goes back to the menu, and the menu goes away. Everything else unwinds
        through the same Back the phone's gesture uses. */
     if (menuIsOpen()) {
+      if (!$("menu-zone").classList.contains("hidden")) return showMenuView("zones");
+      if (!$("menu-zones").classList.contains("hidden")) return showMenuView("settings");
       if (!$("menu-settings").classList.contains("hidden")) return showMenuView("main");
       return closeMenu();
     }

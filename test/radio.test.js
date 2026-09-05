@@ -59,27 +59,32 @@ const SHELF = [
 /*  The switches                                                       */
 /* ------------------------------------------------------------------ */
 
+/* Two rooms, because as of 0.4.44 there is no such thing as "the" radio
+   setting — there is one per room, and the whole point is that they differ. */
+const KITCHEN = "RINCON_AAA01400";
+const STUDY   = "RINCON_BBB01400";
+
 test("the radio is off until somebody turns it on", () => {
   const r = rig(SHELF);
   try {
     /* A queue that grows on its own is a surprise, and a feature that
        surprises somebody who never asked for it is a bug however well it
        works. */
-    assert.strictEqual(r.radio.status().enabled, false);
-    assert.strictEqual(r.radio.wanted(), false, "and the poll loop does not even ask");
+    assert.strictEqual(r.radio.status(KITCHEN).enabled, false);
+    assert.strictEqual(r.radio.wanted(KITCHEN), false, "and the poll loop does not even ask");
   } finally { r.ws.cleanup(); }
 });
 
 test("matching the genre is on once the radio is, and both are remembered", () => {
   const r = rig(SHELF);
   try {
-    assert.strictEqual(r.radio.status().matchGenre, true, "what most people mean by radio");
-    r.radio.setEnabled(true);
-    r.radio.setMatchGenre(false);
+    assert.strictEqual(r.radio.status(KITCHEN).matchGenre, true, "what most people mean by radio");
+    r.radio.setEnabled(KITCHEN, true);
+    r.radio.setMatchGenre(KITCHEN, false);
 
     /* A second server on the same database — a restart — finds them as left. */
     const again = createRadio({ db: r.db, settings: r.settings });
-    assert.deepStrictEqual(again.status(), { enabled: true, matchGenre: false });
+    assert.deepStrictEqual(again.status(KITCHEN), { enabled: true, matchGenre: false });
   } finally { r.ws.cleanup(); }
 });
 
@@ -88,11 +93,89 @@ test("the genre option survives the radio being turned off and on", () => {
      coming back finds a setting nobody changed at a value nobody chose. */
   const r = rig(SHELF);
   try {
-    r.radio.setEnabled(true);
-    r.radio.setMatchGenre(false);
-    r.radio.setEnabled(false);
-    r.radio.setEnabled(true);
-    assert.strictEqual(r.radio.status().matchGenre, false);
+    r.radio.setEnabled(KITCHEN, true);
+    r.radio.setMatchGenre(KITCHEN, false);
+    r.radio.setEnabled(KITCHEN, false);
+    r.radio.setEnabled(KITCHEN, true);
+    assert.strictEqual(r.radio.status(KITCHEN).matchGenre, false);
+  } finally { r.ws.cleanup(); }
+});
+
+test("two rooms have two radios", () => {
+  /*
+   * The point of 0.4.44. One switch for the whole house meant the poll loop
+   * applied it to every coordinator it found — turn the radio on for the room
+   * you are in and it also starts filling the queue in the kitchen.
+   */
+  const r = rig(SHELF);
+  try {
+    r.radio.setEnabled(KITCHEN, true);
+    assert.strictEqual(r.radio.wanted(KITCHEN), true);
+    assert.strictEqual(r.radio.wanted(STUDY), false, "the other room is untouched");
+
+    /* And the genre option is its own answer per room too. */
+    r.radio.setEnabled(STUDY, true);
+    r.radio.setMatchGenre(STUDY, false);
+    assert.strictEqual(r.radio.status(KITCHEN).matchGenre, true);
+    assert.strictEqual(r.radio.status(STUDY).matchGenre, false);
+  } finally { r.ws.cleanup(); }
+});
+
+test("an install that had the radio on keeps it on, in every room", () => {
+  /*
+   * THE UPGRADE, AND WHY THERE IS NO MIGRATION.
+   *
+   * Before 0.4.44 this was one key for the house, applied to every coordinator
+   * — so "on" meant on everywhere. A room with no answer of its own reads that
+   * old key, which is the same answer it was already getting. Nothing is
+   * copied, nothing is guessed, and the setting cannot be lost by a step that
+   * did not run.
+   */
+  const r = rig(SHELF);
+  try {
+    /* Exactly what 0.4.43 would have left behind. */
+    r.settings.set("radio.enabled", "1");
+    r.settings.set("radio.matchGenre", "0");
+
+    const after = createRadio({ db: r.db, settings: r.settings });
+    for (const room of [KITCHEN, STUDY]) {
+      assert.strictEqual(after.wanted(room), true, room + " kept the radio it had");
+      assert.strictEqual(after.status(room).matchGenre, false, room + " kept the option too");
+    }
+
+    /* And the first per-room write overrides it for THAT room alone. */
+    after.setEnabled(KITCHEN, false);
+    assert.strictEqual(after.wanted(KITCHEN), false);
+    assert.strictEqual(after.wanted(STUDY), true, "which is not a change to anywhere else");
+  } finally { r.ws.cleanup(); }
+});
+
+test("a room id that could collide with another setting is refused", () => {
+  /*
+   * The id becomes part of a settings key and it arrives over the wire. What a
+   * room is CALLED is not this module's business; "not a key that could tread
+   * on another setting" is.
+   */
+  const r = rig(SHELF);
+  try {
+    for (const bad of ["", "has space", "a/b", "../../etc", "x".repeat(65), null]) {
+      assert.throws(() => r.radio.setEnabled(bad, true), /Not a room id/, String(bad));
+      assert.throws(() => r.radio.status(bad), /Not a room id/, String(bad));
+    }
+    /* A real Sonos uuid is fine, and so is a UPnP one — which is what a WiiM
+       hands over, and it is nothing like the Sonos shape. */
+    for (const good of [KITCHEN, "uuid:FF98FCDE-AA72-E32B-4365-D011FF98FCDE"]) {
+      assert.doesNotThrow(() => r.radio.setEnabled(good, true));
+    }
+
+    /* A DOT IS ALLOWED, and deliberately so. It looks like it could tread on
+       another setting and cannot: every key built here is PREFIXED, so the
+       worst a dotted id makes is "radio.enabled.home.rowOrder", which is not
+       "home.rowOrder" and is not any other radio key either. Rejecting it
+       would be guarding a collision that the prefix already prevents, and a
+       device is entitled to a dot in its identifier. */
+    assert.doesNotThrow(() => r.radio.setEnabled("home.rowOrder", true));
+    assert.strictEqual(r.settings.get("home.rowOrder"), null, "and nothing else was written");
   } finally { r.ws.cleanup(); }
 });
 
