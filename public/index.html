@@ -677,6 +677,21 @@
         <div class="edit-grid hidden" id="edit-grid"></div>
       </div>
 
+      <!-- WHICH RECORD THIS IS. Absent unless the server was started with it
+           on. Storing the release id makes the cover exact rather than
+           searched for — and it stores the id and NOTHING else: no title, no
+           artist, no year, and no tag anywhere. -->
+      <div class="edit-cover hidden" id="edit-ident">
+        <div class="edit-cover-head">
+          <span class="edit-label">Release</span>
+          <button class="action-btn" type="button" id="edit-identify">Identify</button>
+        </div>
+        <!-- What it is believed to be now, and whether that came from the
+             files or from somebody tapping one of these. -->
+        <p class="edit-why" id="edit-ident-now"></p>
+        <div class="edit-matches hidden" id="edit-matches"></div>
+      </div>
+
       <div class="edit-actions">
         <button class="action-btn" type="button" id="edit-cancel" data-edit-close>Cancel</button>
         <button class="action-btn primary" type="button" id="edit-save">Save</button>

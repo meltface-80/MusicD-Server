@@ -19,13 +19,19 @@ its cover is the image sitting next to the files. What it does keep is a small
 database of your listening — when an album arrived, when you last played it, and
 how often — because that is what the home screen is built out of.
 
-Two things do leave your network, and only these two. An album with **no cover
-at all** gets one found for it (MusicBrainz and the Cover Art Archive, no key,
-covers only — see [Covers for albums that have none](#covers-for-albums-that-have-none)),
-and **scrobbles go to Last.fm** if you connect an account (see
+Two things do leave your network on their own, and only these two. An album
+with **no cover at all** gets one found for it (MusicBrainz and the Cover Art
+Archive, no key, covers only — see
+[Covers for albums that have none](#covers-for-albums-that-have-none)), and
+**scrobbles go to Last.fm** if you connect an account (see
 [Scrobbling to Last.fm](#scrobbling-to-lastfm)). Neither can change anything
 about your library, and either can be switched off — the first with
 `COVER_LOOKUP=false`, the second by simply not supplying a key.
+
+Two more happen only when you press a button: a **write-up** for the album on
+screen, and **Identify**, which stores the MusicBrainz release id for a record
+you confirm by hand so its cover can be exact rather than guessed at. Neither
+runs on a timer, and neither writes anything to your files.
 
 The UI follows [MusicD Remote](https://github.com/meltface-80/MusicD-Remote), and
 the Sonos side follows the
@@ -156,7 +162,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.34` | that exact version, for pinning |
+| `:0.4.36` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -295,6 +301,34 @@ now** at the top of that screen runs the sweep by hand.
 
 The switch beside the row's name is whether the sweep runs by itself: it does,
 after every scan, and scans run every six hours.
+
+### Telling it which record this is
+
+Some albums cannot be found by name, because the name is wrong. A folder that
+says *Peter Gabriel - Studio Discography* or nothing at all gives a search
+nothing to work with, and a search that guesses is how the wrong sleeve
+arrives.
+
+So the edit dialog has **Identify** beside Find cover. Correct the album and
+artist in the fields, press it, and MusicBrainz answers with the releases that
+agree with what is actually on your disk — each one showing its track count,
+year, format and country, and saying plainly which of them has **the same
+number of tracks as your folder**. Tap the right one.
+
+What that stores is **the MusicBrainz release id and nothing else**. No title,
+no artist, no year, no genre, and no tag anywhere — your files are not touched,
+and the album goes on showing the name your tags and your own corrections give
+it. What changes is that covers stop being *searched for*: the Cover Art
+Archive is asked about that exact release, so there is no scoring, no near miss
+and no way to get another record's sleeve.
+
+Nothing here runs by itself. There is no sweep and no timer: a wrong
+identification is worse than none, because nobody ever reports one — it just
+quietly attaches the wrong record — so a person looks at the candidates and
+taps one, or does not. Identify again to change it; the id your files carry is
+never overwritten, so clearing yours falls back to theirs.
+
+Turn it off for a container with `IDENTIFY=false` and the block does not appear.
 
 ### Which of your albums carry a MusicBrainz id
 
@@ -455,6 +489,7 @@ Everything is optional except your music path.
 | `SCAN_INTERVAL_HOURS` | `6` | Hours between automatic rescans. `0` turns them off. |
 | `COVER_LOOKUP` | `true` | Look online for covers albums do not have. `false` switches it off for good. |
 | `INFO_LOOKUP` | `true` | Set to `false` and no album write-up or artist biography is ever fetched. |
+| `IDENTIFY` | `true` | Offer **Identify** in the edit dialog. Never automatic — nothing is asked until you press it. |
 | `WAVEFORM` | `true` | Draw the track's shape in the seek bar. `false` leaves the plain bar and never runs ffmpeg. |
 | `LASTFM_API_KEY` | — | A Last.fm API key. Without one the Last.fm row does not appear. |
 | `LASTFM_API_SECRET` | — | The shared secret that came with it. Both are needed or neither works. |

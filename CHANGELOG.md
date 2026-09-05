@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.4.36
+
+### Tell it which record this is
+Some albums cannot be found by name, because the name is wrong — and a search
+that guesses is exactly how the wrong sleeve arrives.
+
+- **Identify**, in the edit dialog beside Find cover. Correct the album and
+  artist in the fields, press it, and MusicBrainz answers with the releases
+  that agree with what is on your disk: track count, year, format and country
+  on every one, and a line saying which has **the same number of tracks as your
+  folder**. Tap the right one.
+- **It stores the release id and nothing else.** No title, no artist, no year,
+  no genre, and no tag anywhere — the album still shows the name your tags and
+  your own corrections give it. What changes is that its cover stops being
+  searched for: the Cover Art Archive is asked about that exact release, so
+  there is no scoring, no near miss and no way to get another record's sleeve.
+- **An album whose release is known is no longer searched for at all.** It used
+  to ask the archive about the id *and* run a name search underneath, which put
+  somebody else's sleeve at position two on a record that was already right.
+- **Nothing runs by itself.** No sweep and no timer: a wrong identification is
+  worse than none because nobody reports one, so a person looks and taps, or
+  does not. Identify again to change it; the id your files already carry is
+  never overwritten, so clearing yours falls back to theirs.
+- Off for a container with `IDENTIFY=false`, and then the block is absent
+  rather than disabled.
+- It queues on the same one-request-a-second gate the cover sweep uses, because
+  MusicBrainz asks for that per application rather than per feature.
+
+## 0.4.35
+
+### Wrong covers were being offered, and the reason was the artist's name
+- **A name that merely contains the artist is no longer treated as the
+  artist.** The agreement rule accepted a match anywhere inside a name, and
+  `REM` folds to `rem` — which sits inside Remedy, Extreme, Cremation, and
+  inside an anime character called Rem. That is why asking for R.E.M.'s
+  *Accelerate* offered a cartoon. A featured credit is always appended, so a
+  prefix is the whole of what the rule was ever for, and a prefix now has to be
+  long enough to be a name rather than a syllable.
+- **Find cover no longer answers with the artist's whole catalogue.** It
+  demanded nothing at all of an album's title, so a bootleg no store carries —
+  *Beyond Live & Rare* — came back as eight Judas Priest sleeves with nothing
+  to say which was which. The title has to answer too, though loosely: a folder
+  called "Peter Gabriel - Scratch My Back 2010" still reaches *Scratch My Back*.
+- **The results are ordered by how strongly they are believed**, so the id in
+  your own files comes first and a store's guess comes last, instead of
+  whichever source happened to reply soonest.
+- **A grid that empties itself now says why.** A release the Cover Art Archive
+  knows by name but holds no picture for used to appear and then silently
+  vanish, which reads as the app breaking rather than as an answer.
+
+### A discography folder names an artist; it is not one
+- **`REM - Discography/Accelerate/` is an album by REM.** Untagged files fall
+  back to the folder above, and that filed every record under an "artist"
+  called *REM - Discography* or *Peter Gabriel - Studio Discography* — names
+  that match nothing at MusicBrainz, nothing at the iTunes store and nothing in
+  a Wikipedia search, so those albums lost their cover and their write-up at
+  once. A plain `Discography` folder is read through to the artist above it.
+- **A folder that repeats the artist is not an album called that.**
+  "Peter Gabriel - Scratch My Back 2010" is an album called *Scratch My Back*.
+  Only the folder fallback is trimmed — a title that came from a tag is left
+  exactly as it is.
+- Nothing is looked up for either: both read the name with a vocabulary that
+  has to match wholly, so an unknown word means "this is part of the name" and
+  the folder is left alone. **Your files are still never changed.**
+- Every recorded miss is retried after this update, because the names those
+  misses were recorded against have changed.
+
 ## 0.4.34
 
 ### The missing covers are a wall of albums

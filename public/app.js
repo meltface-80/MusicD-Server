@@ -154,6 +154,7 @@ const state = {
   rowTitles: {},
   homeStale: false,      // a favourite changed while Home sat behind the panel
   covers: null,          // what the server last said about looking for covers
+  identify: null,        // ditto, for saying which release an album is
   lastfm: null,          // what the server last said about the Last.fm account
   lastfmHeld: false,     // ditto, for the Last.fm row
   afterModal: null,      // a screen to open once the panel has closed itself
@@ -2033,6 +2034,30 @@ function resetCoverSearch() {
   why.classList.add("hidden");
   $("edit-find").disabled = false;
   $("edit-find").textContent = "Find cover";
+
+  const matches = $("edit-matches");
+  matches.textContent = "";
+  matches.classList.add("hidden");
+  $("edit-identify").disabled = false;
+  $("edit-identify").textContent = "Identify";
+}
+
+/*
+ * WHICH RECORD THIS ALBUM IS, said in one line.
+ *
+ * A confirmation and a tag are different answers and the line says which: a
+ * person about to change one wants to know whether they are overruling a file
+ * or their own earlier tap.
+ */
+function paintIdentity(current) {
+  const on = !!(state.identify && state.identify.available);
+  $("edit-ident").classList.toggle("hidden", !on);
+  if (!on) return;
+  const c = current || {};
+  $("edit-ident-now").textContent =
+    c.from === "chosen" ? "Confirmed — covers for this album are exact. Identify again to change it."
+    : c.from === "tags" ? "Your files already name a release, so covers for this album are exact."
+    : "Not identified. Covers are searched for by name, which is how the wrong sleeve arrives.";
 }
 
 async function findCovers() {
@@ -2068,8 +2093,17 @@ async function findCovers() {
       img.src = cand.thumb;
       /* A candidate whose thumbnail will not load is one whose full image
          probably will not either, so it is removed rather than left as a hole
-         somebody can still press. */
-      img.addEventListener("error", () => cell.remove());
+         somebody can still press. When the LAST one goes — a release the Cover
+         Art Archive knows by name but holds no picture for — the dialog says
+         so, because a grid that appears and then empties itself reads as the
+         app breaking rather than as an answer. */
+      img.addEventListener("error", () => {
+        cell.remove();
+        if (grid.children.length) return;
+        grid.classList.add("hidden");
+        why.textContent = "Nothing usable came back — the covers offered could not be loaded.";
+        why.classList.remove("hidden");
+      });
       cell.appendChild(img);
       cell.appendChild(el("span", "edit-cand-src", cand.source));
       cell.addEventListener("click", () => chooseCover(cand.i, cell));
@@ -2082,6 +2116,78 @@ async function findCovers() {
   } finally {
     button.disabled = false;
     button.textContent = "Find cover";
+  }
+}
+
+/*
+ * Ask MusicBrainz which releases this could be.
+ *
+ * Searched with what is IN THE FIELDS rather than what is saved — the same
+ * rule Find cover follows above, and for the same reason: the albums worth
+ * identifying are the ones whose stored names are wrong, and correcting the
+ * name in the box is how somebody says so.
+ */
+async function findMatches() {
+  if (!editing) return;
+  const button = $("edit-identify");
+  const host = $("edit-matches");
+  button.disabled = true;
+  button.textContent = "Looking…";
+  host.textContent = "";
+  host.classList.add("hidden");
+  try {
+    const query = "?title=" + encodeURIComponent($("edit-title").value.trim()) +
+                  "&artist=" + encodeURIComponent($("edit-artist").value.trim());
+    const out = await api("/api/album/" + b64url(playing(editing)) + "/identify" + query);
+    paintIdentity(out.current);
+    const found = (out && out.candidates) || [];
+    if (!found.length) {
+      $("edit-ident-now").textContent =
+        "No release matched that name and artist. Correct them above and look again.";
+      return;
+    }
+    for (const match of found) {
+      const row = el("button", "edit-match");
+      row.type = "button";
+      row.appendChild(el("span", "edit-match-name", match.title));
+      row.appendChild(el("span", "edit-match-why",
+        [match.artist, match.why].filter(Boolean).join(" · ")));
+      /* The one fact a person can check at a glance without knowing anything
+         about MusicBrainz. */
+      if (match.sameLength) {
+        row.appendChild(el("span", "edit-match-fit", "Same number of tracks as your folder"));
+      }
+      row.addEventListener("click", () => chooseMatch(match.i, row));
+      host.appendChild(row);
+    }
+    host.classList.remove("hidden");
+  } catch (e) {
+    $("edit-ident-now").textContent = e.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Identify";
+  }
+}
+
+let choosingMatch = false;
+
+/* By POSITION, never by id — the server holds the list it offered. */
+async function chooseMatch(index, row) {
+  if (choosingMatch || !editing) return;
+  choosingMatch = true;
+  row.classList.add("is-busy");
+  try {
+    const out = await post("/api/album/" + b64url(playing(editing)) + "/identify", { index });
+    const host = $("edit-matches");
+    host.textContent = "";
+    host.classList.add("hidden");
+    paintIdentity(out.current);
+    toast("Release confirmed. Find cover will be exact now.");
+  } catch (e) {
+    toast(e.message, true);
+    row.classList.remove("is-busy");
+  } finally {
+    choosingMatch = false;
   }
 }
 
@@ -2133,6 +2239,9 @@ function openEditDialog() {
      the same two words the card shows rather than an empty hint. */
   title.placeholder = tags.title || "";
   artist.placeholder = tags.artist || "Unknown artist";
+  /* What this album is believed to BE, painted from what the album screen was
+     already given rather than from a request of its own. */
+  paintIdentity(album.identity);
 
   $("edit-err").classList.add("hidden");
   $("edit-save").disabled = false;
@@ -2905,6 +3014,9 @@ async function refreshStatus() {
     }
 
     if (status.covers) showCovers(status.covers);
+    /* A container started with IDENTIFY=false offers nothing rather than
+       offering a button that cannot work — the same shape as the covers row. */
+    state.identify = status.identify || null;
     if (status.radio) showRadio(status.radio);
     if (status.lastfm) showLastfm(status.lastfm);
     describeSettings();
@@ -3670,6 +3782,7 @@ function wire() {
   $("select-cancel").addEventListener("click", exitSelect);
 
   $("edit-find").addEventListener("click", findCovers);
+  $("edit-identify").addEventListener("click", findMatches);
 
   $("sort-open").addEventListener("click", openSortSheet);
   for (const node of document.querySelectorAll("[data-close-sort]")) {

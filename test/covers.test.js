@@ -548,6 +548,174 @@ test("an iTunes result by a different artist is not this album's cover", async (
 });
 
 /* ------------------------------------------------------------------ */
+/*  The picker: what it is allowed to offer                            */
+/* ------------------------------------------------------------------ */
+
+/* The album id the picker is asked about. */
+function idOf(db, title) {
+  return db.prepare("SELECT id FROM albums WHERE title = ?").get(title).id;
+}
+
+test("a name that merely CONTAINS the artist is not the artist", async () => {
+  /*
+   * THE ANIME SLEEVE. artistKey("REM") is "rem", and the agreement rule used
+   * to accept containment anywhere — so "rem" inside an anime character named
+   * Rem, inside Remedy, inside Extreme, all passed, and a picker asked for
+   * R.E.M.'s Accelerate came back offering a cartoon. A featured credit is
+   * APPENDED, so a prefix is the whole of what containment was ever for.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "REM/Accelerate", { album: "Accelerate", artist: "REM", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Accelerate", artistName: "Rem Anime Character Songs",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/anime/100x100bb.jpg" },
+        { collectionName: "Accelerate", artistName: "Remedy",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/remedy/100x100bb.jpg" }
+      ])
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Accelerate"), "Accelerate", "REM");
+    assert.deepStrictEqual(out, [], out.map(c => c.why).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a featured credit still agrees, because it is appended", async () => {
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Slowdive feat. Someone",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/s/100x100bb.jpg" }
+      ])
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a record no store carries does not come back as the artist's catalogue", async () => {
+  /*
+   * Asked for Judas Priest's "Beyond Live & Rare" — a bootleg — the picker
+   * offered eight Judas Priest sleeves, none of them that record, because it
+   * demanded nothing at all of a title. Picking any of them would have given
+   * the bootleg somebody else's cover.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Judas Priest/Beyond Live and Rare",
+      { album: "Beyond Live and Rare", artist: "Judas Priest", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes(
+        ["Screaming for Vengeance", "British Steel", "Painkiller", "Defenders of the Faith"]
+          .map((collectionName, i) => ({
+            collectionName, artistName: "Judas Priest",
+            artworkUrl100: `https://is1-ssl.mzstatic.com/image/thumb/${i}/100x100bb.jpg`
+          })))
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(
+      idOf(db, "Beyond Live and Rare"), "Beyond Live and Rare", "Judas Priest");
+    assert.deepStrictEqual(out, [], out.map(c => c.why).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("a folder that repeats the artist and the year still reaches the record", async () => {
+  /*
+   * The other direction, and the reason the title check is loose rather than
+   * exact: the names this feature exists for are the BAD ones. A folder called
+   * "Peter Gabriel - Scratch My Back 2010" has to still find "Scratch My Back".
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Peter Gabriel/Scratch My Back 2010",
+      { album: "Peter Gabriel - Scratch My Back 2010", artist: "Peter Gabriel", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Scratch My Back", artistName: "Peter Gabriel",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/pg/100x100bb.jpg" }
+      ])
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Peter Gabriel - Scratch My Back 2010"),
+      "Peter Gabriel - Scratch My Back 2010", "Peter Gabriel");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].why, "Scratch My Back");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("an album whose release is known is not searched for at all", async () => {
+  /*
+   * Searching anyway is how a record that was already right gets offered
+   * somebody else's sleeve at position two. The archive is asked about THAT
+   * release and the list stops there.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
+    const net = fakeInternet({ "coverartarchive\\.org": image() });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].why, "the release you confirmed");
+    assert.ok(!net.calls.some(c => /\?query=|itunes/.test(c.url)),
+      net.calls.map(c => c.url).join(" | "));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("an id the archive holds no picture for falls through to the searches", async () => {
+  /* ASKED rather than assumed. The archive knows plenty of releases it has no
+     cover for, and an id that answers 404 must not leave the dialog empty. */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    db.prepare("UPDATE albums SET mbid_chosen = ?").run("11111111-2222-3333-4444-555555555555");
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Slowdive",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/s/100x100bb.jpg" }
+      ])
+      /* coverartarchive answers 404 by default in this fake. */
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.strictEqual(out.length, 1, JSON.stringify(out));
+    assert.strictEqual(out[0].source, "iTunes");
+  } finally { db.close(); ws.cleanup(); }
+});
+
+test("the named release outranks the store's guess", async () => {
+  /*
+   * Without an order the leading sleeve is whichever source replied soonest,
+   * which is not a recommendation. The Cover Art Archive's picture is of the
+   * release the library actually holds; Apple's is of whatever edition it
+   * sells, so it goes under.
+   */
+  const { ws, db } = await scanned((w) =>
+    putAlbum(w.music, "Slowdive/Souvlaki", { album: "Souvlaki", artist: "Slowdive", tracks: SOUVLAKI }));
+  try {
+    const net = fakeInternet({
+      "itunes\\.apple\\.com": itunes([
+        { collectionName: "Souvlaki", artistName: "Slowdive",
+          artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/s/100x100bb.jpg" }
+      ]),
+      "release-group/\\?query": releaseGroups([
+        { id: "rg-1", score: 100, title: "Souvlaki", "artist-credit": [{ name: "Slowdive" }] }
+      ])
+    });
+    const covers = coversFor(db, ws, net);
+    const out = await covers.candidatesFor(idOf(db, "Souvlaki"), "Souvlaki", "Slowdive");
+    assert.ok(out.length >= 2, JSON.stringify(out));
+    assert.strictEqual(out[0].source, "Cover Art Archive", JSON.stringify(out));
+    assert.strictEqual(out[out.length - 1].source, "iTunes", JSON.stringify(out));
+  } finally { db.close(); ws.cleanup(); }
+});
+
+/* ------------------------------------------------------------------ */
 /*  A miss is only as good as the sources it was recorded against      */
 /* ------------------------------------------------------------------ */
 
