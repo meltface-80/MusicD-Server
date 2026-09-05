@@ -147,6 +147,48 @@
           <div id="home-rows" class="home-rows"></div>
         </div>
 
+        <!-- The rooms, behind Settings. A list rather than a wall: these are
+             not albums, so the "a list of albums is a grid screen" rule does
+             not apply — nothing here opens a record. -->
+        <div id="menu-zones" class="hidden">
+          <button class="menu-item menu-back" type="button" id="menu-zones-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Zones
+          </button>
+          <p class="menu-note" id="zones-note">Every room on the network. Tap one
+            for what is set in it.</p>
+          <div id="zones-list"></div>
+        </div>
+
+        <!-- ONE room, whichever was tapped. Repainted rather than one panel
+             per room: which room it is showing is state, not markup. -->
+        <div id="menu-zone" class="hidden">
+          <button class="menu-item menu-back" type="button" id="menu-zone-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span id="zone-back-text">Zones</span>
+          </button>
+          <p class="menu-note hidden" id="zone-grouped"></p>
+          <!-- A queue that does not run out, in THIS room. The genre row below
+               only means anything while this is on, so it is absent while it is
+               off — see showZone() in app.js. -->
+          <button class="menu-item has-toggle" type="button" role="switch"
+                  aria-checked="false" id="zone-radio">
+            <span class="menu-text">Random Album Radio</span>
+            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
+          </button>
+          <button class="menu-item has-toggle hidden" type="button" role="switch"
+                  aria-checked="false" id="zone-radio-genre">
+            <span class="menu-text">Match the current genre</span>
+            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
+          </button>
+        </div>
+
         <div id="menu-settings" class="hidden">
           <button class="menu-item menu-back" type="button" id="menu-settings-back">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -184,18 +226,15 @@
               <span class="pair-opt" data-opt="back">Back</span>
             </span>
           </button>
-          <!-- A queue that does not run out. The genre row below only means
-               anything while this is on, so it is absent while it is off —
-               see showRadio() in app.js. -->
-          <button class="menu-item has-toggle" type="button" role="switch"
-                  aria-checked="false" id="menu-radio">
-            <span class="menu-text">Random Album Radio</span>
-            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
-          </button>
-          <button class="menu-item has-toggle hidden" type="button" role="switch"
-                  aria-checked="false" id="menu-radio-genre">
-            <span class="menu-text">Match the current genre</span>
-            <span class="toggle" aria-hidden="true"><span class="toggle-knob"></span></span>
+          <!-- Rooms, and what is set per room. Random Album Radio lived here
+               as one switch for the whole house until 0.4.44, which meant
+               turning it on in the room you were in also filled the queue in
+               the kitchen. It is a per-room setting now, so it lives on the
+               room. -->
+          <button class="menu-item" type="button" id="menu-zones-open"
+                  aria-expanded="false" aria-controls="menu-zones">
+            Zones
+            <span class="menu-sub" id="zones-sub"></span>
           </button>
           <!-- The one thing this server asks the internet about, so it is the
                one thing with a switch. Hidden entirely when the container was

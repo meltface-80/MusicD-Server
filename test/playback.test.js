@@ -814,10 +814,14 @@ test("now playing splits the play mode into the two switches the buttons drive",
 const { createRadio } = require("../lib/radio");
 const settingsLib = require("../lib/settings");
 
+/* The room these tests play in. The radio is per room as of 0.4.44, so the
+   switches have to be set for the one the fake speaker answers as. */
+const KITCHEN = "RINCON_AAA01400";
+
 function withRadio(db, { enabled = true, matchGenre = false } = {}) {
   const radio = createRadio({ db, settings: settingsLib.open(db) });
-  radio.setEnabled(enabled);
-  radio.setMatchGenre(matchGenre);
+  radio.setEnabled(KITCHEN, enabled);
+  radio.setMatchGenre(KITCHEN, matchGenre);
   return radio;
 }
 

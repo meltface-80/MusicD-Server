@@ -324,7 +324,9 @@ app.get("/api/status", api((req, res) => {
     covers: covers.status(),
     identify: identify.status(),
     info: info.status(),
-    radio: radio.status(),
+    /* NOT the radio: it is per room as of 0.4.44, and one answer here would
+       be one room's answer painted onto a screen that is about all of them.
+       Settings › Zones reads /api/zones instead. */
     lastfm: lastfm.status(),
     sonos: {
       rooms: household.rooms().length,
@@ -751,18 +753,28 @@ app.post("/api/covers", api((req, res) => {
 }));
 
 /*
- * Random Album Radio's two switches.
+ * Random Album Radio's two switches, for ONE ROOM.
  *
  * Matching the genre is meaningless with the radio off, so the client hides it
  * there — but it is still SET here when it is sent, because turning the radio
  * off and on again should find the option the way it was left rather than back
  * at its default.
+ *
+ * The room is checked against the household rather than taken on trust: the id
+ * becomes part of a settings key, and a key for a room that does not exist is
+ * a setting nothing will ever read again.
  */
-app.post("/api/radio", api((req, res) => {
+app.post("/api/radio", api(async (req, res) => {
   const body = req.body || {};
-  if (body.enabled !== undefined) radio.setEnabled(!!body.enabled);
-  if (body.matchGenre !== undefined) radio.setMatchGenre(!!body.matchGenre);
-  res.json(radio.status());
+  const zone = String(body.zone || "");
+  if (!zone) return res.status(400).json({ error: "No room given." });
+  await household.refresh();
+  if (!household.get(zone)) {
+    return res.status(404).json({ error: "That room is not on the network right now." });
+  }
+  if (body.enabled !== undefined) radio.setEnabled(zone, !!body.enabled);
+  if (body.matchGenre !== undefined) radio.setMatchGenre(zone, !!body.matchGenre);
+  res.json(radio.status(zone));
 }));
 
 app.post("/api/rescan", api(async (req, res) => {
@@ -813,7 +825,10 @@ app.get("/api/zones", api(async (req, res) => {
       coordinator: z.coordinator,
       isCoordinator: z.coordinator === z.uuid,
       grouped: members.length > 1,
-      members: members.map(m => m.name)
+      members: members.map(m => m.name),
+      /* Settings › Zones paints every room's switches from this one read,
+         rather than a request per room. */
+      radio: radio.status(z.uuid)
     };
   });
   res.json({ rooms, error: household.lastError });

@@ -54,7 +54,7 @@ the Sonos side follows the
 | **[Sort the library](#sorting-the-library)** | Artist, album, year, recently added, most played, last played or shuffle. The choice sticks. |
 | **Favourites** | Tap the heart. They get their own row, which is absent rather than empty until there is one. |
 | **[Play or queue several at once](#choosing-several-albums)** | Hold an album to start a selection, keep picking across screens, then Play now or Queue. |
-| **[Random Album Radio](#random-album-radio)** | Keeps the queue topped up with whole albums, optionally matching the genre playing. |
+| **[Random Album Radio](#random-album-radio)** | Keeps the queue topped up with whole albums, optionally matching the genre playing. Set per room. |
 | **One album, however many copies** | The album and its deluxe reissue are one card with a tab per version. [Matched locally](#your-files). |
 | **[Covers for albums that have none](#covers-for-albums-that-have-none)** | Found in the background from MusicBrainz and the Cover Art Archive. No key, no account, only the missing ones. |
 | **[Missing covers screen](#seeing-what-is-still-missing)** | The albums still without one, as a wall you can work through, each saying why. |
@@ -191,7 +191,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.43` | that exact version, for pinning |
+| `:0.4.44` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -430,11 +430,16 @@ separately from this app.
 
 ## Random Album Radio
 
-**Settings › Random Album Radio** keeps the queue from running out: another
-album is added behind whatever is playing before you reach the last one.
-**Match the current genre** appears underneath it while it is on — with that on
-the next album shares the genre tag of the one playing, and with it off the
-choice is the whole library.
+**Settings › Zones** lists every room on the network. Tap one for what is set
+in it — and **Random Album Radio** is the first of those settings, kept per
+room rather than for the whole house: another album is added behind whatever is
+playing before you reach the last one. **Match the current genre** appears
+underneath it while it is on — with that on the next album shares the genre tag
+of the one playing, and with it off the choice is the whole library.
+
+Rooms playing together follow the one in charge, and the room's screen says
+which that is. Upgrading does not lose the setting: a room that has never been
+given one of its own uses whatever the old house-wide switch was set to.
 
 It runs on the server, so the queue keeps filling while the phone that started
 the music is in a pocket or off the network entirely, and both settings live in

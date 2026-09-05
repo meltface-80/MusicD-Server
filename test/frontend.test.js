@@ -1144,7 +1144,7 @@ test("Home does not name itself in the bar", () => {
 test("a two-state setting shows its state, not only says it", () => {
   /* Five rows, and the control suits what each one IS: on/off where that is
      the question, and the two names where "on" would not answer it. */
-  for (const id of ["menu-radio", "menu-radio-genre"]) {
+  for (const id of ["zone-radio", "zone-radio-genre"]) {
     const row = html.slice(html.indexOf(`id="${id}"`));
     assert.match(row.slice(0, row.indexOf("</button>")), /<span class="toggle"/,
       id + " is on or off, so it gets a switch");
@@ -1168,7 +1168,7 @@ test("the row is still the button; the control is decoration", () => {
    * invites. Every one of these rows was already a button that toggled — this
    * changes what is on screen and nothing about how any of it is operated.
    */
-  for (const id of ["menu-theme", "menu-npleft", "menu-radio", "menu-radio-genre"]) {
+  for (const id of ["menu-theme", "menu-npleft", "zone-radio", "zone-radio-genre"]) {
     const row = html.slice(html.indexOf(`id="${id}"`), html.indexOf(`id="${id}"`) + 700);
     const inner = row.slice(0, row.indexOf("</button>"));
     assert.ok(!/<button/.test(inner), id + " has no nested button");
@@ -1176,7 +1176,7 @@ test("the row is still the button; the control is decoration", () => {
   }
   /* The ROW carries the state for a screen reader on the ones that are on or
      off; a named pair is a choice, not a switch, so it does not claim to be. */
-  for (const id of ["menu-radio", "menu-radio-genre"]) {
+  for (const id of ["zone-radio", "zone-radio-genre"]) {
     const row = html.slice(html.indexOf(`id="${id}"`) - 200, html.indexOf(`id="${id}"`) + 60);
     assert.match(row, /role="switch"/, id + " says what it is");
   }
@@ -2124,6 +2124,69 @@ test("an album's write-up is keyed on the record, not the version on show", () =
 });
 
 /* ------------------------------------------------------------------ */
+/*  Zones                                                              */
+/* ------------------------------------------------------------------ */
+
+test("a room is a screen, and Random Album Radio lives on it", () => {
+  /*
+   * It was one switch in Settings for the whole house until 0.4.44, and the
+   * poll loop applied it to every coordinator it found — so turning the radio
+   * on in the room you were sitting in also started filling the queue in the
+   * kitchen. A setting that is per room belongs on the room.
+   */
+  assert.ok(htmlIds.has("menu-zones-open"), "Settings opens the rooms");
+  assert.ok(htmlIds.has("menu-zones"), "the list");
+  assert.ok(htmlIds.has("menu-zone"), "and one room");
+  /* The old house-wide rows are gone rather than left behind switched off. */
+  assert.ok(!htmlIds.has("menu-radio"), "no house-wide radio row");
+  assert.ok(!htmlIds.has("menu-radio-genre"), "nor its option");
+
+  /* Five named views now, which is what made adding two a line each rather
+     than a rewrite — the comment on showMenuView said so before they existed. */
+  const show = js.slice(js.indexOf("function showMenuView(view)"));
+  const body = show.slice(0, show.indexOf("\n}"));
+  for (const view of ["main", "settings", "home", "zones", "zone"]) {
+    assert.match(body, new RegExp(`view !== "${view}"`), view + " is a view");
+  }
+});
+
+test("Back and Escape walk out of a room the way you came in", () => {
+  /*
+   * Three levels deep now: Settings, the rooms, one room. A back row that
+   * skipped to Settings would throw away the list you were working through —
+   * the same complaint the missing-covers wall was fixed for in 0.4.34.
+   */
+  assert.match(js, /\$\("menu-zone-back"\)\.addEventListener\("click", \(\) => showMenuView\("zones"\)\)/);
+  assert.match(js, /\$\("menu-zones-back"\)\.addEventListener\("click", \(\) => showMenuView\("settings"\)\)/);
+
+  /* And Escape steps through the same layers, innermost first — checking the
+     room before the list, or it would leave the drawer from two levels in. */
+  const esc = js.slice(js.indexOf('if (!$("menu-zone").classList.contains("hidden"))'));
+  const order = esc.slice(0, 400);
+  assert.ok(order.indexOf('"zones"') < order.indexOf('"settings"'),
+    "the room falls back to the list before the list falls back to Settings");
+});
+
+test("a grouped room says whose setting is actually in charge", () => {
+  /*
+   * The poll tops up COORDINATORS, so a grouped member's own switch would be a
+   * switch that did nothing — which is worse than no switch at all. The row
+   * stays usable, because a grouping is temporary and the setting outlives it;
+   * the line above it says what is true right now.
+   */
+  assert.ok(htmlIds.has("zone-grouped"));
+  const show = js.slice(js.indexOf("function showZone()"));
+  const body = show.slice(0, show.indexOf("\n}"));
+  assert.match(body, /!room\.isCoordinator/, "only a member that is not driving says it");
+  assert.match(body, /which is the room in charge/);
+
+  /* And the server agrees: it is the coordinator's setting that is read. */
+  const playback = fs.readFileSync(path.join(__dirname, "..", "lib", "playback.js"), "utf8");
+  assert.match(playback, /this\.radio\.wanted\(coord\.uuid\)/);
+  assert.match(playback, /this\.radio\.status\(coord\.uuid\)\.matchGenre/);
+});
+
+/* ------------------------------------------------------------------ */
 /*  Random Album Radio                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -2131,9 +2194,9 @@ test("the genre option is absent while the radio is off, not dimmed", () => {
   /* It is not a setting that is currently unavailable — it is a setting that
      describes something not happening. The same rule the covers row follows on
      a container with the lookup switched off. */
-  assert.ok(htmlIds.has("menu-radio"), "the switch");
-  assert.ok(htmlIds.has("menu-radio-genre"), "and the option under it");
-  const show = js.slice(js.indexOf("function showRadio(radio)"));
+  assert.ok(htmlIds.has("zone-radio"), "the switch");
+  assert.ok(htmlIds.has("zone-radio-genre"), "and the option under it");
+  const show = js.slice(js.indexOf("function showZone()"));
   const body = show.slice(0, show.indexOf("\n}"));
   assert.match(body, /genre\.classList\.toggle\("hidden", !radio\.enabled\)/,
     "hidden by the radio being off");
@@ -2145,9 +2208,20 @@ test("both radio rows are painted from what the server says it did", () => {
   /* This setting lives in the database and drives a loop nothing on the phone
      can see, so the server's answer is the only true one — painting from what
      was asked for would let a phone show a radio that is not running. */
-  assert.match(js, /showRadio\(await post\("\/api\/radio", \{ \[field\]: !now\[field\] \}\)\)/);
-  assert.match(js, /if \(status\.radio\) showRadio\(status\.radio\);/,
-    "and the status poll repaints them, so two phones cannot disagree for long");
+  assert.match(js, /room\.radio = await post\("\/api\/radio", \{ zone: room\.uuid, \[field\]: !now\[field\] \}\)/);
+
+  /*
+   * AND IT IS NO LONGER IN THE STATUS POLL, which is the 0.4.44 change.
+   *
+   * There is no such thing as "the" radio setting any more, so one answer in
+   * /api/status would be one room's answer painted onto a screen about the
+   * whole house. The rooms are read from /api/zones instead, which carries
+   * each room's switches with it.
+   */
+  assert.ok(!/status\.radio/.test(js), "the status poll paints no radio row");
+  const server = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.ok(!/radio: radio\.status\(\)/.test(server), "and the server sends no house-wide answer");
+  assert.match(server, /radio: radio\.status\(z\.uuid\)/, "each ROOM carries its own");
 });
 
 /* ------------------------------------------------------------------ */

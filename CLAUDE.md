@@ -398,6 +398,38 @@ part of the fix.
   the wall in BOTH directions, and so does one never played under "Last
   played" — the `(year IS NULL)` term is deliberately not reversed with the
   rest. Reversing it floats every untagged record to the top.
+- **RANDOM ALBUM RADIO IS PER ROOM as of 0.4.44, and the old key is how that
+  shipped without a migration.** It was one switch for the whole house applied
+  by the poll to every coordinator, so turning it on in the room you were in
+  also filled the queue in the kitchen. The keys are `radio.enabled.<zoneId>`
+  now, and a room with no answer of its own READS THE OLD GLOBAL ONE — which is
+  the answer that install already had everywhere. Nothing is copied, nothing is
+  guessed, and the setting cannot be lost by a step that did not run. Same
+  trick as `ROWS_OFF_KEY`: absence is a default, not a blank.
+- **THE COORDINATOR'S SETTING IS THE ONE THAT COUNTS, and the screen says so.**
+  `topUp()` reads `radio.wanted(coord.uuid)` because the poll tops up
+  coordinators — a grouped member's own switch would be a switch that did
+  nothing, which is worse than no switch. The room screen keeps the switch
+  usable, because a grouping is temporary and the setting outlives it, and puts
+  a line above it naming the room in charge.
+- **A ZONE ID BECOMES A SETTINGS KEY, so its SHAPE is checked.** It arrives over
+  the wire and `zoneKey()` refuses anything that is not one. A dot is
+  deliberately ALLOWED: every key is prefixed, so the worst a dotted id builds
+  is `radio.enabled.home.rowOrder`, which is not `home.rowOrder` and not any
+  other radio key — rejecting it would guard a collision the prefix already
+  prevents, and a device is entitled to a dot in its identifier. The endpoint
+  additionally checks the room EXISTS, because a key for a room that does not
+  is a setting nothing will ever read again.
+- **THERE IS NO SUCH THING AS "THE" RADIO SETTING, so `/api/status` carries
+  none.** One answer there would be one room's answer painted onto a screen
+  about the whole house. `/api/zones` carries each room's switches instead, so
+  the list is one read rather than a request per room.
+- **`showMenuView()` NAMES ITS VIEWS, which is what made Zones two lines.** Its
+  own comment predicted this before the views existed. Five now: the places,
+  the settings, the home screen, the rooms, one room. Escape and the back rows
+  step through them INNERMOST FIRST — a room falls back to the list, the list
+  to Settings — or Back from three levels in leaves the drawer entirely, which
+  is the complaint the missing-covers wall was fixed for.
 - **Random Album Radio rides on the poll loop, not on a phone.** `lib/radio.js`
   picks and `lib/playback.js` adds, on a TRACK CHANGE only — reading the queue
   back off the speaker is a SOAP call, and doing it every five-second poll would

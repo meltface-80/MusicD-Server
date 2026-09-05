@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.44
+
+### Random Album Radio is set per room
+- **Settings › Zones** lists every room on the network; tap one for what is set
+  in it. Random Album Radio and Match the current genre have moved there from
+  Settings.
+- **One switch for the whole house was the wrong shape.** The poll loop applied
+  it to every room it found, so turning the radio on in the room you were
+  sitting in also started filling the queue in the kitchen.
+- **Nothing is lost by upgrading.** A room that has never been given a setting
+  of its own reads the old house-wide one, which is the answer it was already
+  getting. There is no migration step to go wrong.
+- **Rooms playing together follow the one in charge**, and the room's screen
+  says which that is — the alternative was a switch that quietly did nothing.
+
 ## 0.4.43
 
 ### Nothing changes, which is the point
