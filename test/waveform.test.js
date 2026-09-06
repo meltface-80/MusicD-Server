@@ -34,12 +34,37 @@ function pcm(samples) {
   return b;
 }
 
-test("peaks take the loudest sample in each stride, not the average", () => {
-  const acc = WF.createPeaks({ stride: 4 });
-  /* One loud sample in an otherwise quiet group. An average would bury it;
-     the whole point of a waveform is that it does not. */
-  acc.push(pcm([100, 100, 30000, 100,  200, 200, 200, 200]));
-  assert.deepStrictEqual(acc.raw, [30000, 200]);
+test("a stride reads as its RMS, which is energy rather than the largest sample", () => {
+  const acc = WF.createPeaks({ stride: 100 });
+  const spike = new Array(100).fill(0); spike[0] = 30000;   // one transient, silence round it
+  const steady = new Array(100).fill(3000);                 // moderate, all the way through
+  acc.push(pcm(spike.concat(steady)));
+  /* Read as the loudest SAMPLE the first group is ten times the second. They
+     hold the same energy, and a bar is a picture of loudness — so they are the
+     same height, and the ceiling one transient touches does not decide the
+     whole bar. */
+  assert.deepStrictEqual(acc.raw, [3000, 3000]);
+});
+
+test("a limited master is not drawn as a brick", () => {
+  /*
+   * THE REGRESSION THIS RELEASE EXISTS FOR, and the fixture is the whole
+   * argument: a modern master touches the ceiling in almost every window you
+   * can name, so a quiet passage and a loud one both contain a full-scale
+   * sample. Measured as the loudest SAMPLE the two are identical and the
+   * waveform is a rectangle; measured as level they are nearly ten to one.
+   */
+  const acc = WF.createPeaks({ stride: 100 });
+  const loud = [], quiet = [];
+  for (let i = 0; i < 1000; i++) loud.push(i % 2 ? -30000 : 30000);
+  /* One limited transient per stride and a quiet floor around it. */
+  for (let i = 0; i < 1000; i++) quiet.push(i % 100 === 0 ? 30000 : (i % 2 ? -1000 : 1000));
+  acc.push(pcm(quiet));
+  acc.push(pcm(loud));
+  const out = acc.finish(2);
+  assert.strictEqual(out[1], 255, "the loud half is full height");
+  assert.ok(out[0] > 0 && out[0] < 60,
+    "and the quiet half is a fraction of it, not the same bar: " + out[0]);
 });
 
 test("a sample split across two chunks is still one sample", () => {
@@ -53,14 +78,17 @@ test("a sample split across two chunks is still one sample", () => {
   assert.deepStrictEqual(acc.raw, [1000, 32000, 500, 6000]);
 });
 
-test("full-scale negative does not scale the whole track down", () => {
-  /* -32768 has no positive twin in int16. Left uncapped it is a peak of 32768,
-     and since normalise divides by the maximum, one sample would quietly shrink
-     every other bar in the track. */
+test("the sign of a sample is not part of its level", () => {
+  /* Squaring is what makes this true without a special case. The old reading
+     took |v| and had to cap -32768, which has no positive twin in int16 — left
+     uncapped that one sample was the maximum normalise divides by, and it
+     quietly shrank every other bar in the track. */
   const acc = WF.createPeaks({ stride: 1 });
-  acc.push(pcm([-32768, 32767]));
-  assert.deepStrictEqual(acc.raw, [32767, 32767]);
-  assert.deepStrictEqual([...acc.finish(2)], [255, 255]);
+  acc.push(pcm([-32768, 32767, -20000, 20000]));
+  const [a, b, c, d] = acc.raw;
+  assert.strictEqual(c, d, "the same swing either way round reads the same");
+  assert.ok(Math.abs(a - b) <= 1, "and full scale is full scale in both directions");
+  assert.deepStrictEqual([...acc.finish(2)], [255, 156]);
 });
 
 test("resampling keeps the peaks rather than averaging them away", () => {
@@ -254,6 +282,34 @@ test("a file ffmpeg cannot read is remembered, so it is not retried for ever", a
     assert.strictEqual(second.peaks, null);
     assert.strictEqual(second.cached, true, "the miss came from the database");
     assert.strictEqual(decodes, 1, "ffmpeg is not spawned again to fail again");
+  } finally { r.cleanup(); }
+});
+
+test("a waveform measured by an older analysis is re-analysed, not drawn", async () => {
+  /*
+   * The size and mtime say the FILE has not changed, which is exactly why this
+   * needs its own answer: 0.4.50 changed what is measured, and without a
+   * generation every track already analysed would have drawn the old brick for
+   * ever — a decode only ever happens for a row that is not believed.
+   */
+  let decodes = 0;
+  const r = await rig({ decodeImpl: async () => { decodes++; return fakePeaks(decodes * 10); } });
+  try {
+    const id = r.trackIds("Spirit of Eden")[0];
+    await r.waveforms.forTrack(id);
+    assert.strictEqual(decodes, 1);
+
+    r.db.prepare("UPDATE waveforms SET gen = gen - 1 WHERE track_id = ?").run(id);
+    const after = await r.waveforms.forTrack(id);
+    assert.strictEqual(decodes, 2, "the row was measured by something else");
+    assert.strictEqual(after.cached, false);
+
+    /* And the row it wrote back answers to THIS analysis, or every visit to Now
+       playing would decode again for ever. */
+    assert.strictEqual(
+      r.db.prepare("SELECT gen FROM waveforms WHERE track_id = ?").get(id).gen, WF.WAVE_GEN);
+    await r.waveforms.forTrack(id);
+    assert.strictEqual(decodes, 2, "and is believed the next time");
   } finally { r.cleanup(); }
 });
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.50
+
+### The waveform is the shape of the record again
+- **It drew a brick.** Every bar came out much the same height, so the control
+  said almost nothing about the music — reported against a track whose shape is
+  plainly visible in other players.
+- **The cause was what was being measured.** Each bar was the loudest single
+  sample in its slice of the track, and a modern master is limited: something
+  touches the ceiling in nearly every window, and a phone gives each bar about a
+  second and a half. The answer was always "yes, something in here was loud".
+- **It measures loudness now** — the level over 16 milliseconds — and still
+  takes the loudest of those for each bar, so a quiet intro reads quiet, a
+  chorus reads loud, and a snare in a quiet bar still stands up.
+- **Every track is re-analysed once**, the first time you open Now playing on
+  it. Nothing to press: a waveform now records which analysis took it, so the
+  ones already stored are not believed.
+- **And it no longer runs ahead of the music.** The shape was drawn across the
+  full width while the dot travels between the ends its own size allows, so the
+  two disagreed by up to five seconds of a five-minute track — ahead at the
+  start, exact in the middle, behind at the end. A peak now sits under the dot
+  at the moment you hear it, everywhere in the track.
+
 ## 0.4.49
 
 ### Skip and back work on a room whose queue MusicD holds
