@@ -2623,41 +2623,59 @@ function drawWave(at) {
   const span = Math.max(1, w - thumbW);
   const head = inset + frac * span;
 
-  /* One bar per 2 CSS pixels. The stored waveform holds 1000 values and a phone
-     is ~390 CSS px wide, so a wider step throws most of them away; below 2px
-     the bars stop being separable and it reads as a filled shape rather than a
-     waveform. `step` is then the span divided back out, so the bars FILL the
-     travel exactly — stopping up to a pixel short would put the same
-     disagreement back at the right-hand end, smaller. */
-  const barW = 1;
-  const bars = Math.max(1, Math.floor(span / 2));
-  const step = span / bars;
-  const mid = h / 2;
+  /*
+   * ONE BAR PER DEVICE-PIXEL PITCH, not per 2 CSS pixels.
+   *
+   * A phone has three device pixels to every CSS one and the old step threw
+   * two of them away: ~172 bars for a five-minute track, a second and a half
+   * each, which is a coarse picture of a record however well it is measured.
+   * Two device pixels of ink and one of gap gives ~360 on the same phone and
+   * over a thousand on a tablet held sideways, and each one lands on a whole
+   * device pixel, so they stay separate instead of blurring into a band.
+   *
+   * Drawn in DEVICE pixels for that reason — the transform is dropped here and
+   * put back at the end. A screen with no pixels to spare keeps the old
+   * one-and-one, because at 1x a two-pixel bar and a one-pixel gap is a
+   * different, worse drawing rather than a finer one.
+   */
+  const pitch = dpr >= 2 ? 3 : 2;
+  const ink = pitch - 1;
+  const devSpan = span * dpr, devInset = inset * dpr, devHead = head * dpr;
+  const bars = Math.max(1, Math.floor(devSpan / pitch));
+  /* Fractional so the bars fill the travel exactly; the LEFT EDGE of each is
+     rounded, which is what keeps them crisp. */
+  const step = devSpan / bars;
+  const mid = Math.round((h / 2) * dpr);
+  const height = (h - 2) * dpr;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   for (let i = 0; i < bars; i++) {
-    /* Max across the peaks this bar covers, for the same reason the server
-       resamples by max: averaging flattens exactly what is worth seeing. */
+    /*
+     * Folded the way the server folds, and for the same reason: these are RMS
+     * levels, so the RMS of them is exactly the level of the whole span. A
+     * maximum here would put the flattening straight back — the loudest bucket
+     * in a bar of a limited record is the same number in every bar of it.
+     */
     const a = Math.floor(i * peaks.length / bars);
-    const b = Math.max(a + 1, Math.floor((i + 1) * peaks.length / bars));
-    let v = 0;
-    for (let j = a; j < b && j < peaks.length; j++) if (peaks[j] > v) v = peaks[j];
-    /* A floor of 1px so silence is a line rather than a gap — a gap reads as
-       "the waveform stopped loading", which is a different thing entirely. */
-    const barH = Math.max(1, (v / 255) * (h - 2));
-    /* Snapped to a whole DEVICE pixel. `step` is fractional so the bars can
-       fill the travel exactly, and a 1px bar drawn at a fractional offset is
-       antialiased into a 2px smudge — which would undo the sharpening the
-       backing store is sized for. */
-    const x = Math.round((inset + i * step) * dpr) / dpr;
+    const b = Math.min(peaks.length, Math.max(a + 1, Math.floor((i + 1) * peaks.length / bars)));
+    let sum = 0;
+    for (let j = a; j < b; j++) sum += peaks[j] * peaks[j];
+    const v = Math.sqrt(sum / (b - a));
+    /* A floor of one device pixel so silence is a line rather than a gap — a
+       gap reads as "the waveform stopped loading", which is a different thing
+       entirely. */
+    const barH = Math.max(1, Math.round((v / 255) * height));
+    const x = Math.round(devInset + i * step);
     /* A bar counts as played once its MIDDLE is behind the playhead, so the
        boundary lands where the dot is rather than a bar's width either side. */
-    const done = (x + barW / 2) <= head;
+    const done = (x + ink / 2) <= devHead;
     ctx.fillStyle = done ? played : ahead;
     /* The played side goes to full strength so the accent still reads as the
        position marker against a bright track ahead of it. */
     ctx.globalAlpha = done ? 1 : 0.72;
-    ctx.fillRect(x, mid - barH / 2, barW, barH);
+    ctx.fillRect(x, mid - Math.round(barH / 2), ink, barH);
   }
   ctx.globalAlpha = 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 /*

@@ -704,22 +704,47 @@ part of the fix.
   sideways from the same cards the hold starts on, so movement past
   `PICK_SLOP` cancels it — and the click that arrives behind the finger is the
   same gesture, so it is swallowed rather than treated as a tap.
-- **A waveform is averaged nowhere.** Peaks are resampled by MAXIMUM in
-  `lib/waveform.js`, on the server and again in the client's `drawWave()`.
-  Averaging peaks turns a sharp track into mush, which is the one thing a
-  waveform is for. Each track is normalised to its OWN loudest moment: an
-  absolute scale leaves a quietly-mastered record a flat line beside a loud one.
-- **BUT A "PEAK" IS A PEAK OF THE LEVEL ENVELOPE, NOT THE LOUDEST SAMPLE.** Read
-  as the largest sample in its slice, a modern master draws a BRICK: a limiter
-  puts something on the ceiling inside nearly any window you can name, a phone
-  has ~190 bars for a five-minute track, so every bar asks "was anything in
-  these one and a half seconds loud?" and every bar answers yes. Six releases of
-  a control that said nothing about the music, and it took a screenshot of
-  another player beside it to see. The 16ms stride is measured as RMS now — the
-  thing the ear would call loudness — and the reduction above is UNCHANGED, so
-  a snare in a quiet bar still lifts its bar. The rule the old code broke was
-  never "prefer peaks"; it was "do not average", and RMS of samples is not the
-  mean of peaks. Ask what a statistic SATURATES at before choosing it.
+- **A STORED WAVEFORM VALUE IS THE RMS OF ITS SLICE, AT EVERY SCALE — and it
+  took three goes to get there.** It began as the loudest SAMPLE in the slice,
+  which on a modern master draws a brick: a limiter puts something on the
+  ceiling inside almost any window you name. 0.4.50 changed the MEASUREMENT to
+  a short RMS and left the REDUCTION a maximum, so a bucket was the loudest
+  window inside it and a drawn bar the loudest bucket inside that — two rounds
+  of "the loudest moment in here" over a second and a half, which is very nearly
+  a constant. Measured against a record with a known envelope, the 10th, 50th
+  and 90th percentile of the drawn bars ALL came out at 1.00. Still a brick, one
+  layer down, and it took a second screenshot of another player to see it.
+- **SO THE REDUCTION IS THE SAME STATISTIC AS THE MEASUREMENT.** Combining RMS
+  values by RMS — root of the mean of the squares — is exactly the RMS of the
+  whole span, so a value folded twice equals one computed once over the same
+  audio and the picture does not depend on how many times it was folded. Error
+  against that known envelope: 0.140 with the maximum, 0.083 with this. The rule
+  the first version broke was never "prefer peaks", it was DO NOT AVERAGE PEAKS,
+  which this does not do — the mean of RMS values would be as wrong as the max,
+  because it is not the RMS of anything. Whatever a statistic is, ask what it
+  SATURATES at, and fold with the same one at every scale. `drawWave()` folds
+  the identical way, or the flattening comes straight back in the client.
+- **Each track is normalised to its OWN loudest moment**: an absolute scale
+  leaves a quietly-mastered record a flat line beside a loud one.
+- **A BAR IS A DEVICE PIXEL WIDE, NOT A CSS ONE.** Two CSS pixels a bar threw
+  away two device pixels in three on a phone — ~170 bars for a five-minute
+  track, a second and a half each, which is a coarse picture however well it is
+  measured. Two device pixels of ink and one of gap gives ~360 on the same
+  phone and over a thousand on a tablet held sideways, so `drawWave()` drops the
+  dpr transform, draws in device pixels on whole-pixel boundaries, and puts it
+  back. `BUCKETS` went 1000 → 4000 to feed that: below it the extra bars are
+  stretched and show nothing. A screen with no pixels to spare keeps one and
+  one, because at 1x a two-pixel bar is a different drawing rather than a finer
+  one.
+- **AND THE DECODE RATE WENT UP BECAUSE IT WAS FASTER, not in spite of being
+  slower.** 16 kHz was chosen on the assumption that the extra PCM had to be
+  paid for; measured over a five-minute FLAC it is the other way round — 16 kHz
+  203-216ms, 44.1 kHz 171-194ms — because nearly every file already IS 44.1 kHz
+  and asking for it means ffmpeg has nothing to resample, and the anti-alias
+  filter costs more than the bytes it saves. It is also more honest: the drop to
+  16 kHz lowpassed at 8 kHz, taking cymbals and sibilance out before they could
+  count towards the level, worth up to 4.9% of full height on bright material.
+  MEASURE THE THING YOU ARE TRADING AWAY BEFORE ASSUMING THE TRADE.
 - **A MEASUREMENT IS ONLY AS GOOD AS THE ANALYSIS THAT TOOK IT, so `WAVE_GEN`
   sits beside `rate`, `size` and `mtime` in `waveforms`.** The decode rate was
   already recorded because a shape taken at another rate is another shape — and

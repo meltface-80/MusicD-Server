@@ -1654,12 +1654,33 @@ test("the shape and the playhead share ONE mapping from time to x", () => {
   assert.match(fn, /const inset = thumbW \/ 2;/);
   assert.match(fn, /const span = Math\.max\(1, w - thumbW\);/);
   assert.match(fn, /const head = inset \+ frac \* span;/);
-  assert.match(fn, /const bars = Math\.max\(1, Math\.floor\(span \/ 2\)\);/,
+  assert.match(fn, /const bars = Math\.max\(1, Math\.floor\(devSpan \/ pitch\)\);/,
     "the bar count comes off the travel, not the canvas");
+  assert.match(fn, /const devSpan = span \* dpr/);
   assert.doesNotMatch(fn, /frac \* w\b/,
     "the playhead is a fraction of the TRAVEL, never of the width");
   assert.doesNotMatch(fn, /fillRect\(i \*/,
     "and a bar is placed from the inset, never from x = 0");
+});
+
+test("the waveform is folded by the same statistic the server stores", () => {
+  /*
+   * The stored values are RMS levels, so the RMS of them is exactly the level
+   * of the whole span. A MAXIMUM here would put the flattening straight back:
+   * the loudest bucket in a bar of a limited record is the same number in every
+   * bar of it, which is how the picture stayed a brick after the measurement
+   * was fixed.
+   */
+  const body = js.slice(js.indexOf("function drawWave("));
+  const fn = stripComments(body.slice(0, body.indexOf("\n}")), "js");
+  assert.match(fn, /sum \+= peaks\[j\] \* peaks\[j\]/);
+  assert.match(fn, /Math\.sqrt\(sum \/ \(b - a\)\)/);
+  assert.doesNotMatch(fn, /if \(peaks\[j\] > v\)/, "no maximum anywhere in the fold");
+
+  /* DEVICE pixels, or two of every three are thrown away on a phone. */
+  assert.match(fn, /ctx\.setTransform\(1, 0, 0, 1, 0, 0\)/);
+  assert.match(fn, /ctx\.setTransform\(dpr, 0, 0, dpr, 0, 0\)/,
+    "and put back, or everything drawn after this is in the wrong units");
 });
 
 test("the waveform and the bar read the same position", () => {

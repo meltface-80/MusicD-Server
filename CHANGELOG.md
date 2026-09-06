@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.53
+
+### The waveform shows what the record actually does
+- **The shape was still nearly flat**, and the reason was the reduction rather
+  than the measurement. 0.4.50 started measuring loudness properly but still
+  kept only the loudest moment out of each slice — twice over — and the loudest
+  moment in a second and a half of a modern record is much the same everywhere
+  in it. Each bar is now the level of its own slice, so a quiet verse reads
+  quieter than the chorus after it.
+- **Roughly twice as many bars**, drawn on whole device pixels: about 360 on a
+  phone where there were 170, and over a thousand on a tablet held sideways.
+  The stored shape is four times finer to feed them.
+- **Analysed at full rate.** Tracks were being decoded at 16 kHz, which filtered
+  out cymbals and sibilance before they could count. Now they are decoded as
+  they are — which turned out to be FASTER, because almost every file is already
+  44.1 kHz and there is then nothing to resample.
+- **Every track is re-analysed once**, the first time you open Now playing on
+  it. Nothing to press.
+
 ## 0.4.52
 
 ### Skip and back look right, and an album no longer ends early
