@@ -46,7 +46,7 @@ the Sonos side follows the
 | --- | --- |
 | **Your library, as it is** | An album is a folder. Title, artist and cover come from the tags and the folder name. |
 | **Plays to Sonos** | Rooms and groups read from the speakers. Gapless through the Sonos queue, nothing transcoded. |
-| **[Finds other players](#other-players)** | UPnP renderers — a WiiM, a MusicCast amp — appear in Settings › Zones, switched off until you want them. Transport and volume; queueing is not ready yet. |
+| **[Plays to other players](#other-players)** | UPnP renderers — a WiiM, a MusicCast amp — appear in Settings › Zones, switched off until you want them. Gapless where the device allows it. |
 | **Now playing** | Seek, volume, [the live queue](#the-queue) — and the [track's own waveform](#the-shape-of-the-track) drawn in the seek bar. |
 | **Remembers what you play** | Date added, last played and play counts, [counted by watching the speaker](#what-the-database-keeps). |
 | **[Home screen you arrange](#arranging-the-home-screen)** | Seven rows. Switch any off and reorder them in Settings › Home screen. |
@@ -192,7 +192,7 @@ commit it was built from and the date. Tap it to copy the line.
 | Tag | What it follows |
 | --- | --- |
 | `:latest` | the newest build of `main` |
-| `:0.4.46` | that exact version, for pinning |
+| `:0.4.47` | that exact version, for pinning |
 | `:0.3` | the newest patch of that minor version |
 | `:sha-abc1234` | one specific commit, for rolling back |
 
@@ -416,11 +416,18 @@ everything on the network, televisions included, so nothing joins your rooms
 until you tap **Available to play to**. Sonos rooms have no such switch — they
 were rooms already.
 
-Switched on, a renderer is a room like any other for **transport and volume**,
-and it appears in the room picker. **Queueing music to one is not ready yet**:
-Sonos holds its own queue and a stock renderer has none, so the server has to
-keep one for it. Asking to play to such a room says so plainly rather than
-failing at the device.
+Switched on, a renderer is a room like any other: it appears in the room
+picker, and albums play to it exactly as they do to a Sonos.
+
+**Sonos holds its own queue; a stock renderer has none**, so MusicD keeps one
+for it — which is why the queue screen, Random Album Radio and play counting
+all work the same on both. The queue survives a restart.
+
+**Gapless, where the device allows it.** MusicD hands the renderer the next
+track while the current one is still starting, so it crosses over without
+stopping. A device that cannot take a track early plays them one at a time with
+a short gap, and its zone page says so rather than leaving you hunting a fault
+in your network.
 
 Discovery needs the container on **host networking**, the same as Sonos —
 renderers are found by multicast, which a bridged container never sees. Set

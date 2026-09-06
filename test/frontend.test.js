@@ -2167,6 +2167,30 @@ test("Back and Escape walk out of a room the way you came in", () => {
     "the room falls back to the list before the list falls back to Settings");
 });
 
+test("a room that cannot play gaplessly says so; one that can says nothing", () => {
+  /*
+   * SetNextAVTransportURI is optional in AVTransport:1 and it is the whole of
+   * whether a record plays without gaps. A device that HAS it needs no
+   * announcement — that is simply how music sounds. One that has not would
+   * otherwise leave somebody hunting a fault in their network for a gap the
+   * hardware cannot avoid.
+   */
+  const show = js.slice(js.indexOf("function showZone()"));
+  const body = show.slice(0, show.indexOf("\n}"));
+  assert.match(body, /room\.can && room\.can\.SetNextAVTransportURI/,
+    "read from what the device said about itself, never assumed");
+  assert.match(body, /short gap between them/);
+  /* Only once it is a room — a device switched off is not playing anything. */
+  assert.match(body, /room\.enabled && !gapless/);
+
+  /* And the server sends the capability with the room, so the screen has it
+     without asking the device again. */
+  const server = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.match(server, /household\.all\(\)/);
+  const zones = fs.readFileSync(path.join(__dirname, "..", "lib", "zones.js"), "utf8");
+  assert.match(zones, /can: sonos \? null : room\.can/);
+});
+
 test("a grouped room says whose setting is actually in charge", () => {
   /*
    * The poll tops up COORDINATORS, so a grouped member's own switch would be a

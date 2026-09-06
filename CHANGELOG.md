@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.47
+
+### Albums play to a UPnP renderer, gaplessly
+- **Switched on, a renderer is a room like any other.** Albums play to it
+  exactly as to a Sonos — the queue screen, Random Album Radio and play
+  counting all work the same.
+- **MusicD keeps the queue a stock renderer has not.** Sonos holds its queue on
+  the speaker; standard UPnP has no queue at all, so the server holds one. It
+  is in the database, so it survives a restart rather than leaving a room
+  stopped between tracks after an update.
+- **Gapless, where the device allows it.** The next track is handed over while
+  the current one is still starting, so the device crosses over without
+  stopping — and handed over again every time it does, because that slot
+  empties when a device moves into it. A device that cannot take a track early
+  plays them one at a time, and its zone page says so rather than leaving you
+  hunting a fault in your network.
+- **The device is told what it is playing** — title, artist, album and cover —
+  and that byte-range seeking is supported, without which a certified renderer
+  may refuse to let you scrub.
+
 ## 0.4.46
 
 ### Finds players that are not Sonos

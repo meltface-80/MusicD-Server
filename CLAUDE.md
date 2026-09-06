@@ -444,6 +444,54 @@ part of the fix.
   that shredded its input, and a `Renderer` missing `transportSettings()` which
   made `/api/now` a 500 every five seconds. Neither was reachable from a unit
   test, and the second was found only by opening the screen in a browser.
+- **A ROOM THAT HOLDS NO QUEUE GETS ONE IN THE DATABASE.** `zone_queue` and
+  `zone_queue_at`, keyed by zone and 1-BASED position because that is how Sonos
+  numbers a queue and how every caller above already counts. In the database
+  rather than in memory for the same reason the play history is: the server
+  restarts, and a room whose queue vanished on an update would stop between
+  tracks with nothing to say why. A queue row names a TRACK and the URL is
+  rebuilt on the way out — `baseUrl()` changes between restarts, and a stored
+  URL would then point somewhere the device cannot reach.
+- **GAPLESS IS "ARMED AGAIN", NOT "ARMED".** `SetNextAVTransportURI` hands the
+  device the track after this one so it can pre-buffer and cross over without
+  stopping — and the slot EMPTIES when it does. Arming it once gives exactly
+  two gapless tracks and a gap after every one thereafter. So it is armed when
+  a track STARTS (a whole track of warning, not the few seconds a poll would
+  give) and armed AGAIN on every track change the poll notices. `advance()` in
+  `test/fake-dlna.js` crosses over and clears the slot precisely so that bug
+  cannot pass: a fake that never advanced would let it ship.
+- **WHERE THE ROOM IS COMES FROM THE QUEUE, NOT FROM THE DEVICE.** A renderer
+  playing one URI at a time reports `Track` as 1 for ever — it has no queue, so
+  it has no position in one. Believing it leaves the radio thinking a whole
+  album is still to come (it never tops up, and the music stops at the end of
+  the record with the switch still on) and the queue screen's divider pinned to
+  the top. `queue.position(pos)` is the one place that answers, and the fake
+  does NOT increment its track number, because a fake more helpful than a real
+  device hides the bug it exists to catch.
+- **AND THE POSITION IS FOUND FROM WHAT IS PLAYING, not by counting up.** A
+  device can be sent elsewhere by its own app; a counter that only incremented
+  would arm the wrong track for the rest of the evening with nothing to notice
+  the disagreement. `positionOf()` searches FORWARD from where the room was, so
+  a queue holding the same track twice resolves to the copy it is on.
+- **A TEST THAT PASSES BOTH WAYS IS NOT A TEST.** The first version of the
+  radio-on-a-server-queue test queued ONE album, and passed with the position
+  bug in place — everything after the first track belonged to the album
+  playing, so "is this the last album?" was true either way. It takes TWO
+  albums to tell the difference. Mutate the fix out and watch the test fail, or
+  it is decoration.
+- **WORK THE POLL DOES NOT WAIT FOR STILL HAS TO BE TESTABLE.** Arming the next
+  track and topping up the radio are deliberately not awaited, so a slow device
+  cannot hold up counting plays in another room — which makes a test that polls
+  and asserts immediately assert on nothing. `settle()` exists for that and
+  nothing in production calls it.
+- **TWO DIALECTS OF DIDL, STATED IN ONE PLACE.** Sonos needs the
+  `RINCON_AssociatedZPUDN` sentinel and is content with `*` for protocolInfo's
+  fourth field. A stock renderer needs neither the sentinel (a Sonos namespace,
+  meaningless to it) nor a bare field: `DLNA.ORG_OP=01` says BYTE-RANGE SEEK IS
+  SUPPORTED, and a certified DMR told nothing may refuse to scrub at all. One
+  `dlna` flag on `itemXml()` rather than two functions that can drift — and it
+  is claimed honestly, because `/stream/` answers real 206s. A renderer sent no
+  metadata shows the file name or nothing, so every track carries it.
 - **A stream URL a speaker cannot reach is silently unplayable.** Sonos fetches
   audio itself, so `localhost`, `127.0.0.1` and container-internal addresses all
   produce a queue that loads and then does nothing. Every URI handed to a player
