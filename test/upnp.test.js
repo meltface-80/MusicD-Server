@@ -97,7 +97,7 @@ test("a UPnP fault surfaces its error code, not the HTTP status", async () => {
 test("an unreachable player fails with a message naming it", async () => {
   await assert.rejects(
     () => upnp.soap("127.0.0.1", AV_TRANSPORT, "Play", { Speed: 1 },
-                    { port: 11497, controlPath: CONTROL_PATH }),
+                    { port: 11498, controlPath: CONTROL_PATH }),
     (e) => {
       assert.ok(e instanceof upnp.UPnPError);
       assert.match(e.message, /Play to 127\.0\.0\.1 failed/);
