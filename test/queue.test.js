@@ -51,7 +51,8 @@ test("a queue implements all of what a queue is, so a second one has a list", ()
    * would be a method lib/playback.js could come to depend on while the other
    * implementation knows nothing about it.
    */
-  const required = ["list", "length", "add", "clear", "startAt", "jumpTo", "position"];
+  const required = ["list", "length", "add", "clear", "startAt", "jumpTo",
+                    "position", "next", "previous"];
   const proto = SonosQueue.prototype;
   for (const name of required) {
     assert.strictEqual(typeof proto[name], "function", `a queue must have ${name}()`);
@@ -151,21 +152,35 @@ test("one place decides where a room's queue lives", () => {
     "the callers ask queueFor() rather than holding one of their own");
 });
 
-test("the transport stayed on the player, where both protocols have it", () => {
+test("the line is whether an action needs a LIST, not whether it looks like transport", () => {
   /*
-   * A queue is the list and where in it we are. Play, pause, seek-within-a-
-   * track and volume are the same actions on any UPnP device, and pulling them
-   * behind this line too would have made the seam a second copy of Player
-   * rather than a boundary.
+   * This guard used to forbid next() and previous() here too, on the reasoning
+   * that a queue is "the list and where in it we are" and everything else is
+   * transport. That reasoning shipped two buttons that did nothing: 0.4.47 sent
+   * AVTransport's Next and Previous to a stock renderer, which moves through
+   * the queue the DEVICE holds — and a stock renderer holds none.
+   *
+   * THE REAL DIVIDING LINE is whether an action means anything with no list at
+   * all. Play, pause, stop, seek-within-a-track and volume do: they are the
+   * same actions on any device, playing anything. Next and previous do not —
+   * they are a move through a list, so they belong to whatever holds it.
    */
   const src = codeOf("queue.js");
   for (const action of ["setVolume", "setMute", "\\.pause\\(", "\\.stop\\(",
-                        "\\.next\\(", "\\.previous\\(", "\\.seek\\("]) {
+                        "\\.seek\\("]) {
     assert.ok(!new RegExp(action).test(src), `lib/queue.js drives ${action}`);
   }
-  /* play() is the one exception and it is deliberate: starting at a position
-     is not "begin playing" until something presses play. */
+  /* play() is the one exception among those and it is deliberate: starting at
+     a position is not "begin playing" until something presses play. */
   assert.match(src, /startAt\([\s\S]{0,400}this\.player\.play\(\)/);
+
+  /* And lib/playback.js sends neither to a player directly — the queue decides
+     what "next" means, because only it knows whether there is a list. */
+  const pb = codeOf("playback.js");
+  assert.ok(!/coord\.next\(\)/.test(pb) && !/coord\.previous\(\)/.test(pb),
+    "lib/playback.js still sends Next or Previous to the device");
+  assert.match(pb, /this\.queueFor\(coord\)\.next\(\)/);
+  assert.match(pb, /this\.queueFor\(coord\)\.previous\(\)/);
 });
 
 /* ---------------------------------------------------------------- */
@@ -457,4 +472,86 @@ test("the radio tops up a queue the server holds, and knows where the room is", 
     const after = await r.queue().length();
     assert.ok(after > 7, "a third album went on behind it: " + after);
   } finally { await r.cleanup(); }
+});
+
+test("next and previous move a room whose queue the server holds", async () => {
+  /*
+   * THE BUG 0.4.47 SHIPPED. Both buttons sent AVTransport's own Next and
+   * Previous, which move through the queue the DEVICE holds — and a stock
+   * renderer holds none. It is playing one URI with nothing to move to, so the
+   * buttons did nothing at all while play and pause worked perfectly, which is
+   * exactly how it was reported.
+   *
+   * Driven against the device, because "did the room actually move" is the
+   * only thing that settles it.
+   */
+  const r = await upnpRig({ port: 49189 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    const first = r.device.state.currentUri;
+    assert.strictEqual(r.queue().at(), 1);
+
+    await r.playback.command(WIIM, "next");
+    assert.strictEqual(r.queue().at(), 2, "the room moved on");
+    assert.notStrictEqual(r.device.state.currentUri, first,
+      "and the device is playing something else");
+    assert.strictEqual(r.device.state.transportState, "PLAYING");
+    /* And the track after THAT is armed, so pressing next does not cost the
+       record its gaplessness from there on. */
+    assert.ok(r.device.state.nextUri, "the following track was armed");
+
+    await r.playback.command(WIIM, "next");
+    assert.strictEqual(r.queue().at(), 3);
+
+    await r.playback.command(WIIM, "previous");
+    assert.strictEqual(r.queue().at(), 2, "and back again");
+
+    /* NOTHING was sent to the device's own Next or Previous: it has no queue
+       to move through, and asking it to would be the bug. */
+    assert.ok(!r.device.actions().includes("Next"));
+    assert.ok(!r.device.actions().includes("Previous"));
+  } finally { await r.cleanup(); }
+});
+
+test("the ends of the queue are said in words", async () => {
+  /*
+   * "Nothing is queued at position 0" is true and unhelpful. Somebody pressing
+   * previous on the first track has done nothing wrong and should be told
+   * what happened, not shown the inside of a lookup.
+   */
+  const r = await upnpRig({ port: 49190 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Field Recordings"));   // two tracks
+    await assert.rejects(() => r.playback.command(WIIM, "previous"),
+      /first track in the queue/);
+
+    await r.playback.command(WIIM, "next");
+    assert.strictEqual(r.queue().at(), 2);
+    await assert.rejects(() => r.playback.command(WIIM, "next"),
+      /last track in the queue/);
+    /* And the room is left where it was rather than stopped. */
+    assert.strictEqual(r.queue().at(), 2);
+    assert.strictEqual(r.device.state.transportState, "PLAYING");
+  } finally { await r.cleanup(); }
+});
+
+test("a Sonos still moves through its own queue", async () => {
+  /*
+   * The other half. A speaker that holds its queue knows where it is, and its
+   * Previous already does the "restart this track if you are well into it"
+   * thing people expect from the button — reimplementing either would be worse
+   * than both.
+   */
+  const fake = createFakeSonos({ port: 11420 });
+  await fake.listen();
+  try {
+    const player = new Player({ ip: "127.0.0.1", uuid: "RINCON_X", name: "Kitchen", port: 11420 });
+    const queue = new SonosQueue(player);
+    await queue.next();
+    await queue.previous();
+    assert.deepStrictEqual(fake.actions(), ["Next", "Previous"],
+      "sent straight to the speaker, which is the thing that holds the list");
+  } finally {
+    await fake.close();
+  }
 });

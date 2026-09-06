@@ -2930,7 +2930,11 @@ async function loadZones() {
   const list = $("zones-list");
   const note = $("zones-note");
   try {
-    const { rooms, error } = await api("/api/zones");
+    /* ?all=1 — the ONE caller that wants devices which are not rooms. This is
+       the screen where they are switched on, and a device you cannot see is a
+       device you cannot switch on. Everything else, the room picker included,
+       reads the default and gets rooms. */
+    const { rooms, error } = await api("/api/zones?all=1");
     state.zones = rooms || [];
     list.textContent = "";
     if (!state.zones.length) {

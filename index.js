@@ -863,10 +863,21 @@ app.post("/api/lastfm/disconnect", api((req, res) => {
 
 app.get("/api/zones", api(async (req, res) => {
   await household.refresh({ force: req.query.refresh === "1" });
-  /* EVERYTHING DISCOVERED, not only what is switched on: this is what Settings
-     › Zones is drawn from, and a device you cannot see is a device you cannot
-     switch on. The `enabled` flag is what the room picker filters by. */
-  const rooms = household.all().map(z => ({
+  /*
+   * ROOMS BY DEFAULT; everything discovered only when asked for.
+   *
+   * THE DEFAULT IS THE SAFE ONE deliberately. 0.4.46 made this return
+   * everything, because Settings › Zones needs to show a device in order to
+   * offer its switch — and the ROOM PICKER reads the same endpoint, so a
+   * television that had been switched off was still offered as somewhere to
+   * play. Filtering in the one caller that wanted everything would have left
+   * every future caller one forgotten line away from the same bug.
+   *
+   * So: ?all=1 is the screen that does the switching, and a plain read is the
+   * rooms, which is what the picker, and anything else that asks, should get.
+   */
+  const listed = req.query.all === "1" ? household.all() : household.rooms();
+  const rooms = listed.map(z => ({
     ...z,
     /* Every room's switches from this one read, rather than a request each. */
     radio: radio.status(z.uuid)

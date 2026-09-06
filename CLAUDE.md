@@ -373,6 +373,19 @@ part of the fix.
   first, because the player may be on a radio stream and Play would resume
   THAT. A server-side queue will implement both identically — that it CAN is a
   fact about that protocol, not a licence to merge them.
+- **THE LINE IS WHETHER AN ACTION NEEDS A LIST, NOT WHETHER IT LOOKS LIKE
+  TRANSPORT.** Play, pause, stop, seek and volume all mean something to a device
+  holding one URI with nothing after it, so they go to the PLAYER. Next and
+  previous do not: they mean "the track after this one in the queue", and a
+  stock renderer has no queue to count through — AVTransport's `Next` is
+  accepted and moves nothing, which is exactly what a WiiM did (the album
+  played, play/pause worked, skip and back were dead buttons). They belong to
+  whatever HOLDS the list, so `SonosQueue` hands them to the speaker and
+  `ServerQueue` steps by one itself. Grouping the buttons by how they LOOK on
+  the screen put two of them on the wrong side of the seam. The ends of the
+  list are a refusal somebody reads — "that is the last track in the queue" —
+  not a silent no-op, because a button that does nothing is indistinguishable
+  from this bug.
 - **MOVING A FUNCTION IS ONLY HALF THE JOB; CHANGING ITS SIGNATURE WHILE YOU
   MOVE IT IS THE OTHER HALF.** 0.4.43 lifted `ssdpSearch()` into `lib/upnp.js`
   and gave it a search target and `{ip, location}` answers. `_doRefresh()` kept
@@ -405,6 +418,15 @@ part of the fix.
   rooms before the setting existed, and one that could be switched off would be
   a feature broken by an upgrade, so `setEnabled()` REFUSES a Sonos uuid rather
   than storing an answer a later version might read.
+- **ONE ENDPOINT, TWO AUDIENCES: MAKE THE DEFAULT THE SAFE ONE.** 0.4.46
+  changed `/api/zones` to return everything discovered, because Settings ›
+  Zones has to SHOW a device in order to offer its switch — and the ROOM PICKER
+  reads the same endpoint. A television switched off was still selectable from
+  the mini bar and from Now playing. Filtering in the one caller that wanted
+  everything would have left every future caller one forgotten line from the
+  same bug, so the DEFAULT is the rooms and `?all=1` is the screen that does
+  the switching. Whenever one endpoint serves a screen that administers a thing
+  and a screen that uses it, the plain read belongs to the user, not the admin.
 - **NOTHING IS AT A KNOWN ADDRESS EXCEPT ON SONOS.** Sonos publishes a table of
   control URLs every player shares; a stock renderer names its own in its
   device description and no two makes agree. `lib/dlna.js` fetches and reads
