@@ -196,14 +196,15 @@ test("the line is whether an action needs a LIST, not whether it looks like tran
  */
 const WIIM = "uuid:11111111-2222-3333-4444-555555555555";
 
-async function upnpRig({ port, gapless = true } = {}) {
+async function upnpRig({ port, gapless = true, sink } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-sq-"));
   const music = path.join(root, "music");
   buildLibrary(music);
   const db = dbLib.open(path.join(root, "data"));
   await scanner.scan(db, [music], { artDir: path.join(root, "data", "cache", "art") });
 
-  const device = createFakeRenderer({ port, name: "WiiM Pro Plus", gapless });
+  const device = createFakeRenderer({ port, name: "WiiM Pro Plus", gapless,
+                                     ...(sink === undefined ? {} : { sink }) });
   await device.listen();
 
   const renderers = new dlna.Renderers({ seeds: [device.location] });
@@ -369,6 +370,37 @@ async function stops(r) {
   r.device.state.transportState = "STOPPED";
   for (let i = 0; i < 2; i++) { await r.playback.poll(); await r.playback.settle(); }
 }
+
+test("a room is filtered by what IT plays, not by what a Sonos plays", async () => {
+  /*
+   * Reported by reading philippe44's LMS-to-uPnP bridge, which asks
+   * GetProtocolInfo and this did not. Every room went through the Sonos list
+   * whatever kind it was, so a renderer that does not decode FLAC was handed
+   * FLAC and failed silently — and one that plays Opus was refused it with an
+   * error naming a speaker its owner may not own.
+   */
+  const r = await upnpRig({ port: 49203, sink: ["http-get:*:audio/mpeg:*"] });
+  try {
+    await assert.rejects(
+      () => r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden")),   // .wav fixtures
+      (e) => {
+        assert.match(e.message, /WiiM Pro Plus cannot play any of these files/,
+          "the ROOM is named, not a manufacturer: " + e.message);
+        assert.match(e.message, /It handles mpeg\./, "and it says what it did offer");
+        return true;
+      });
+    assert.strictEqual(await r.queue().length(), 0, "and nothing was queued");
+  } finally { await r.cleanup(); }
+});
+
+test("and the same room takes what it did offer", async () => {
+  const r = await upnpRig({ port: 49204, sink: ["http-get:*:audio/wav:*"] });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    assert.ok(await r.queue().length() > 0, "the wav files went on");
+    assert.strictEqual(r.device.state.transportState, "PLAYING");
+  } finally { await r.cleanup(); }
+});
 
 test("a device that cannot hand over early still plays, one track at a time", async () => {
   /*

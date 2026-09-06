@@ -589,9 +589,30 @@ app.post("/api/sort", api((req, res) => {
   res.json({ view, options: library.sortOptions() });
 }));
 
+/*
+ * CAN ANYTHING IN THIS HOUSE PLAY THIS FILE?
+ *
+ * The album screen badges files that will not play, and it has no room to ask
+ * about — you have not chosen where to listen yet. Answering for SONOS
+ * whatever you own was the old behaviour and it badged every Opus and DSD file
+ * on an install with no Sonos in it. Answering "any enabled room" is the
+ * honest version of the same warning, and it degrades correctly: a house with
+ * one Sonos gets exactly what it got before.
+ *
+ * No rooms on the network is not evidence about the file, so it says yes.
+ */
+function playsAnywhere(file) {
+  const rooms = household.rooms();
+  if (!rooms.length) return true;
+  return rooms.some(zone => {
+    const player = household.get(zone.uuid);
+    return !player || player.plays(file);
+  });
+}
+
 app.get("/api/album/:id", api((req, res) => {
   const id = decodeId(req.params.id);
-  const album = id ? library.album(db, id) : null;
+  const album = id ? library.album(db, id, { plays: playsAnywhere }) : null;
   if (!album) return res.status(404).json({ error: "No such album." });
   res.json(album);
 }));

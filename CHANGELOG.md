@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.54
+
+### A room plays what IT plays
+- **Every room was being judged by what a Sonos can play.** On a UPnP room that
+  was wrong twice over: files it handles perfectly well — Opus, DSD, WMA — were
+  refused with an error naming Sonos, and files it cannot decode were sent to it
+  anyway and failed silently.
+- **Each device is now asked what it accepts** when it is found, and only sent
+  files it offered to play. A device that will not say is offered everything, so
+  nothing that worked before stops working.
+- **The error names the room and says what it does handle**, instead of naming a
+  speaker you may not own.
+- **The album screen's "cannot play" badge follows suit** — it marks a file only
+  when nothing you own can play it. A house with one Sonos sees exactly what it
+  saw before; a house with a WiiM stops seeing warnings about files that play.
+
 ## 0.4.53
 
 ### The waveform shows what the record actually does

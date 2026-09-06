@@ -62,6 +62,11 @@ test("control URLs come from the description, never from a guess", async () => {
     assert.strictEqual(device.control.RenderingControl, "/ctl/rc");
     assert.strictEqual(device.port, 49160, "and the port comes off the description's own URL");
 
+    /* Describing it asks what it will play, which is a control call and not a
+       document — see the sink tests below. */
+    assert.deepStrictEqual(fake.actions(), ["GetProtocolInfo"]);
+    fake.forget();
+
     /* And driving it actually reaches them. */
     const renderer = new dlna.Renderer(device);
     await renderer.play();
@@ -127,6 +132,70 @@ test("a device that refuses an action it never advertised says so", async () => 
   }
 });
 
+test("what a device will PLAY is read, not assumed either", async () => {
+  /*
+   * The one thing philippe44's LMS-to-uPnP bridge asks that this did not.
+   * Until 0.4.54 every room was filtered through the SONOS format list — wrong
+   * in both directions here: a WiiM was refused the Opus and DSD it plays,
+   * with an error naming a speaker its owner may not own, and anything that
+   * could not decode FLAC was handed FLAC because the Sonos list allows it.
+   */
+  const fake = createFakeRenderer({
+    port: 49176,
+    sink: ["http-get:*:audio/mpeg:*", "http-get:*:audio/wav:DLNA.ORG_PN=LPCM"]
+  });
+  await fake.listen();
+  try {
+    const renderer = new dlna.Renderer(await dlna.describe(fake.location));
+    assert.strictEqual(renderer.plays({ ext: ".mp3", mime: "audio/mpeg" }), true);
+    assert.strictEqual(renderer.plays({ ext: ".wav", mime: "audio/wav" }), true,
+      "the fourth field is extra, not part of the format");
+    assert.strictEqual(renderer.plays({ ext: ".flac", mime: "audio/flac" }), false,
+      "it did not offer FLAC and must not be handed one");
+    assert.strictEqual(renderer.playsWhat, "mpeg, wav");
+  } finally {
+    await fake.close();
+  }
+});
+
+test("a protocol we cannot serve over is not read as a format we can", async () => {
+  /* protocolInfo's FIRST field is the protocol. A device that will take DSD
+     over RTSP has not offered to take it over HTTP, which is the only way this
+     server can hand it anything. */
+  const fake = createFakeRenderer({
+    port: 49177,
+    sink: ["http-get:*:audio/mpeg:*", "rtsp-rtp-udp:*:audio/dsd:*"]
+  });
+  await fake.listen();
+  try {
+    const renderer = new dlna.Renderer(await dlna.describe(fake.location));
+    assert.strictEqual(renderer.plays({ ext: ".dsf", mime: "audio/dsd" }), false);
+    assert.strictEqual(renderer.playsWhat, "mpeg");
+  } finally {
+    await fake.close();
+  }
+});
+
+test("a device that will not say what it plays is offered everything", async () => {
+  /*
+   * The safe direction, and the opposite of the capability rules above: a
+   * missing ACTION means a feature is withheld, but a missing format list is
+   * not evidence against any file. Refusing everything would turn a working
+   * room into a dead one over a question the device declined to answer.
+   */
+  for (const [port, sink] of [[49178, null], [49179, ["http-get:*:*:*"]]]) {
+    const fake = createFakeRenderer({ port, sink });
+    await fake.listen();
+    try {
+      const renderer = new dlna.Renderer(await dlna.describe(fake.location));
+      assert.strictEqual(renderer.plays({ ext: ".dsf", mime: "audio/x-dsd" }), true);
+      assert.strictEqual(renderer.playsWhat, "", "and there is no list to print");
+    } finally {
+      await fake.close();
+    }
+  }
+});
+
 test("a device with no RenderingControl is refused a volume, not sent one", async () => {
   /*
    * Some renderers genuinely publish no RenderingControl. Asking anyway would
@@ -139,6 +208,7 @@ test("a device with no RenderingControl is refused a volume, not sent one", asyn
   try {
     const device = await dlna.describe(fake.location);
     assert.strictEqual(device.control.RenderingControl, "", "it has none");
+    fake.forget();                       // measuring what the VOLUME call sends
     const renderer = new dlna.Renderer(device);
     await assert.rejects(() => renderer.volume(), /has no RenderingControl/);
     assert.deepStrictEqual(fake.actions(), [], "and nothing was sent");
@@ -163,6 +233,7 @@ test("a device with no play mode reports NORMAL rather than taking a screen down
   await fake.listen();
   try {
     const renderer = new dlna.Renderer(await dlna.describe(fake.location));
+    fake.forget();                       // measuring what THIS call sends
     /* The fake does not implement it — it is not in BASE_ACTIONS — so this is
        the refusing path, driven rather than described. */
     assert.deepStrictEqual(await renderer.transportSettings(), { playMode: "NORMAL" });
