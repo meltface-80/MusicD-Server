@@ -27,6 +27,8 @@ const { createRadio } = require("./lib/radio");
 const { createIdentify } = require("./lib/identify");
 const { createWaveforms } = require("./lib/waveforms");
 const { Household } = require("./lib/sonos");
+const { Renderers } = require("./lib/dlna");
+const { Zones } = require("./lib/zones");
 const { localAddress } = require("./lib/upnp");
 const { Playback } = require("./lib/playback");
 const { decodeId } = require("./lib/ids");
@@ -39,6 +41,20 @@ const settingsLib = require("./lib/settings");
 
 function list(value) {
   return String(value || "").split(/[,:;]/).map(s => s.trim()).filter(Boolean);
+}
+
+/*
+ * A list of URLs, which list() CANNOT parse.
+ *
+ * list() splits on a colon as well as a comma, because it was written for
+ * hostnames and room names where that is a reasonable separator. A URL is
+ * full of colons: "http://192.168.0.236:49152/description.xml" comes back as
+ * three fragments, none of them a URL, and the device is silently never
+ * described. Reusing a helper whose CONTRACT does not fit the input is the
+ * same mistake as reusing a name — it type-checks and it is wrong.
+ */
+function urlList(value) {
+  return String(value || "").split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
 }
 
 const PORT = Number(process.env.PORT || 3400);
@@ -117,10 +133,39 @@ const covers = createCovers({
 duplicates.regroup(db);
 const picks = picksLib.createCache(db);
 
-const household = new Household({
+const sonosHousehold = new Household({
   hosts: list(process.env.SONOS_HOSTS),
   include: list(process.env.INCLUDE_ZONES),
   exclude: list(process.env.EXCLUDE_ZONES)
+});
+
+/*
+ * Stock UPnP renderers — a WiiM, a MusicCast amp, anything that answers a
+ * MediaRenderer search. Found, listed, and switched off until somebody says
+ * otherwise; see lib/zones.js for why that default runs the other way from
+ * every other one in this project.
+ *
+ * UPNP_DISCOVERY=false removes the sweep entirely, the same courtesy
+ * COVER_LOOKUP=false extends: a house with nothing but Sonos in it should not
+ * multicast for renderers that are not there.
+ */
+const UPNP_DISCOVERY = process.env.UPNP_DISCOVERY !== "false";
+const renderers = new Renderers({
+  /* DESCRIPTION URLs, not hostnames: a renderer's is wherever it says it is,
+     and there is no port to assume — the WiiM answers on 49152, a Samsung on
+     9197. For a network where multicast does not survive the switch. */
+  seeds: urlList(process.env.UPNP_DEVICES),
+  /* A Sonos answers a MediaRenderer search too, so every room would otherwise
+     be listed twice. lib/dlna.js also spots one by its queue actions; this is
+     the exact half of that pair. */
+  excludeUuids: (uuid) => !!sonosHousehold.get(uuid)
+});
+
+/* Discovery off means no renderers, ever — not an empty sweep on a timer. */
+if (!UPNP_DISCOVERY) renderers.refresh = async () => renderers.devices;
+
+const household = new Zones({
+  sonos: sonosHousehold, renderers, settings
 });
 
 /* The origin a speaker uses to fetch audio from this server. It is resolved
@@ -818,20 +863,36 @@ app.post("/api/lastfm/disconnect", api((req, res) => {
 
 app.get("/api/zones", api(async (req, res) => {
   await household.refresh({ force: req.query.refresh === "1" });
-  const rooms = household.rooms().map(z => {
-    const members = household.membersOf(z.uuid);
-    return {
-      uuid: z.uuid, name: z.name,
-      coordinator: z.coordinator,
-      isCoordinator: z.coordinator === z.uuid,
-      grouped: members.length > 1,
-      members: members.map(m => m.name),
-      /* Settings › Zones paints every room's switches from this one read,
-         rather than a request per room. */
-      radio: radio.status(z.uuid)
-    };
-  });
+  /* EVERYTHING DISCOVERED, not only what is switched on: this is what Settings
+     › Zones is drawn from, and a device you cannot see is a device you cannot
+     switch on. The `enabled` flag is what the room picker filters by. */
+  const rooms = household.all().map(z => ({
+    ...z,
+    /* Every room's switches from this one read, rather than a request each. */
+    radio: radio.status(z.uuid)
+  }));
   res.json({ rooms, error: household.lastError });
+}));
+
+/*
+ * Switching a discovered device on, so it becomes a room somebody can play to.
+ *
+ * Off is the default and this is the only thing that changes it — see
+ * lib/zones.js for why that default runs the other way from every other one in
+ * this project. A Sonos room is refused rather than silently accepted: it has
+ * no switch, and storing an answer for one would leave a setting a later
+ * version might read and act on.
+ */
+app.post("/api/zone", api(async (req, res) => {
+  const { zone, enabled } = req.body || {};
+  if (!zone) return res.status(400).json({ error: "No room given." });
+  if (enabled === undefined) return res.status(400).json({ error: "Nothing to change." });
+  await household.refresh();
+  try {
+    res.json({ uuid: zone, enabled: household.setEnabled(zone, !!enabled) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 }));
 
 app.get("/api/now", api(async (req, res) => {
@@ -881,11 +942,22 @@ app.post("/api/volume", api(async (req, res) => {
   res.json(await playback.volume(zone, level === undefined ? undefined : Number(level)));
 }));
 
+/*
+ * Grouping is a Sonos idea and only Sonos implements it.
+ *
+ * A stock renderer has neither action, so sending it one would reach a screen
+ * as a UPnP fault. Refused here, in words, with the reason — and /api/zones
+ * reports `grouped: false` for one so nothing offers the control in the first
+ * place.
+ */
 app.post("/api/group", api(async (req, res) => {
   const { zone, action, coordinator } = req.body || {};
   await household.refresh({ force: true });
   const player = household.get(zone);
   if (!player) return res.status(404).json({ error: "That room is not on the network right now." });
+  if (!sonosHousehold.get(zone)) {
+    return res.status(400).json({ error: "Only Sonos rooms can be grouped." });
+  }
   if (action === "leave") await player.becomeStandalone();
   else if (action === "join" && coordinator) await player.joinGroup(coordinator);
   else return res.status(400).json({ error: "Unknown grouping action." });
@@ -1074,12 +1146,20 @@ function start() {
 
     household.refresh({ force: true })
       .then(() => {
-        const rooms = household.rooms();
-        console.log(rooms.length
-          ? `  sonos   : ${rooms.map(r => r.name).join(", ")}`
-          : `  sonos   : no players found — ${household.lastError}`);
+        const sonosRooms = sonosHousehold.rooms();
+        console.log(sonosRooms.length
+          ? `  sonos   : ${sonosRooms.map(r => r.name).join(", ")}`
+          : `  sonos   : no players found — ${sonosHousehold.lastError}`);
+        if (!UPNP_DISCOVERY) return console.log("  upnp    : discovery off");
+        const found = renderers.rooms();
+        /* Named with their state, because "found but off" is the normal
+           answer and looks like a failure if it is not said. */
+        console.log(found.length
+          ? `  upnp    : ${found.map(d =>
+              `${d.name}${household.isEnabled(d.uuid) ? "" : " (off)"}`).join(", ")}`
+          : "  upnp    : no renderers found");
       })
-      .catch(e => console.error("  sonos   : discovery failed — " + e.message));
+      .catch(e => console.error("  rooms   : discovery failed — " + e.message));
 
     if (SCAN_ON_START) runScan("startup");
     /* A scan sweeps for covers on its way out. Without one there is nothing to

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.46
+
+### Finds players that are not Sonos
+- **UPnP renderers now appear in Settings › Zones** — a WiiM, a MusicCast amp,
+  a Bluesound node, anything that answers a MediaRenderer search — with the
+  maker and model under the name.
+- **A found device is switched off.** The search answers for everything on the
+  network, televisions included, so nothing joins your rooms until you tap
+  **Available to play to**. Sonos rooms have no such switch; they were rooms
+  already.
+- **Switched on, it is a room for transport and volume** and appears in the
+  room picker.
+- **Queueing to one is not ready.** Sonos holds its own queue and a stock
+  renderer has none, so the server has to keep one for it — that is the next
+  release. Until then, asking to play to such a room says so in a sentence
+  rather than failing at the device.
+- **Your Sonos rooms are not listed twice**, even though they answer the same
+  search: they are recognised by the queue actions only a Sonos has.
+- `UPNP_DISCOVERY=false` stops the search entirely; `UPNP_DEVICES` takes
+  description URLs for a network where multicast does not get through.
+
 ## 0.4.45
 
 ### Fixes Sonos discovery, broken in 0.4.43

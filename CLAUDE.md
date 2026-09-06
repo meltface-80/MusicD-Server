@@ -394,6 +394,56 @@ part of the fix.
   `startAt()` — the string had left its body and the extra SOAP call went out
   all the same. Source-reading guards are for things that must be ABSENT from
   a file; behaviour is driven against the fake.
+- **DISCOVERED IS NOT ENABLED, and this is the one default in the project that
+  runs the other way.** An SSDP search answers for every renderer on the
+  network — a 65" Samsung turned up beside the WiiM on the first real sweep. So
+  a found device is LISTED in Settings › Zones and switched OFF until somebody
+  says otherwise: `zone.enabled.<uuid>`, absent meaning no. Deliberately the
+  opposite of `ROWS_OFF_KEY`, and for a reason worth stating — a home row added
+  by an update should appear, and a device that appeared on somebody's network
+  should not silently join their speakers. Sonos rooms are exempt: they were
+  rooms before the setting existed, and one that could be switched off would be
+  a feature broken by an upgrade, so `setEnabled()` REFUSES a Sonos uuid rather
+  than storing an answer a later version might read.
+- **NOTHING IS AT A KNOWN ADDRESS EXCEPT ON SONOS.** Sonos publishes a table of
+  control URLs every player shares; a stock renderer names its own in its
+  device description and no two makes agree. `lib/dlna.js` fetches and reads
+  it. Guessing "/AVTransport/Control" works on one brand and silently 404s on
+  the rest — `test/fake-dlna.js` serves RELATIVE URLs under a path nothing
+  would guess, for exactly that reason.
+- **CAPABILITIES ARE READ, NOT ASSUMED.** Half of AVTransport is optional —
+  `SetNextAVTransportURI`, the whole of whether gapless is possible, and `Seek`
+  among them. The SCPD action list says what a device actually implements, so
+  it is read once at discovery and kept in `can`. A feature offered for a
+  device that cannot do it is worse than one withheld, because nobody reports
+  it: the music just gaps, or the bar will not drag.
+- **A SONOS ANSWERS A MEDIARENDERER SEARCH TOO — all four did.** Without the
+  dedup every Sonos room is listed twice, the second time as a stock renderer
+  with no queue and no grouping. Two checks: the UDN the Sonos household
+  already claims (exact), and the QUEUE ACTIONS in its SCPD (capability, for
+  the window before the topology has been read). Never the manufacturer
+  string — branding gets rebranded.
+- **WHICH HOUSEHOLD OWNS AN ID IS ASKED, NEVER INFERRED FROM ITS SHAPE.** A
+  `RINCON_` and a `uuid:` do not collide today and `lib/zones.js` does not lean
+  on it: the day a device ships an id in the other's shape, a rule that guessed
+  would send its commands to the wrong household.
+- **A HELPER WHOSE CONTRACT DOES NOT FIT THE INPUT IS THE SAME BUG AS A NAME
+  REUSED.** `list()` splits on a COLON as well as a comma, because it was
+  written for hostnames. Handed a description URL it returns
+  `["http", "//192.168.0.236", "49152/description.xml"]` — three fragments,
+  none of them a URL, and the device silently never described. It type-checks
+  and it is wrong. `urlList()` is its own function for that reason.
+- **A REFUSAL SOMEBODY IS MEANT TO READ IS NOT A 500.** `NoQueue` throws with
+  `status: 501`: the server has not broken, this room was asked for something
+  it cannot do yet. A 5xx puts a red line in the browser console that sends
+  whoever finds it looking for a crash that never happened.
+- **THE WIRING IS WHAT BREAKS, so one test boots the real index.js.**
+  `test/zones.test.js` spawns the server against a fake speaker and a fake
+  renderer and drives `/api/zones`, `/api/zone`, `/api/volume` and `/api/play`
+  the way a phone does. Both bugs in this release were wiring — a URL helper
+  that shredded its input, and a `Renderer` missing `transportSettings()` which
+  made `/api/now` a 500 every five seconds. Neither was reachable from a unit
+  test, and the second was found only by opening the screen in a browser.
 - **A stream URL a speaker cannot reach is silently unplayable.** Sonos fetches
   audio itself, so `localhost`, `127.0.0.1` and container-internal addresses all
   produce a queue that loads and then does nothing. Every URI handed to a player

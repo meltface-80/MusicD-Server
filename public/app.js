@@ -2950,12 +2950,23 @@ function zoneRow(room) {
   const btn = el("button", "menu-item");
   btn.type = "button";
   const bits = [];
-  if (room.radio && room.radio.enabled) bits.push("Radio on");
+  /*
+   * WHAT IT IS comes before what is set on it. A device found by discovery and
+   * left switched off is not in the room picker at all, and a row that said
+   * nothing about that would read as a room that has simply stopped working.
+   */
+  if (room.switchable && !room.enabled) bits.push("Off");
+  if (room.enabled && room.radio && room.radio.enabled) bits.push("Radio on");
   /* Which rooms it is playing with, because that is what decides whose
      settings are in charge — see showZone(). */
   if (room.grouped) bits.push("with " + room.members.filter(n => n !== room.name).join(", "));
+  /* A stock renderer says whose it is: a house can hold several and
+     "MediaRenderer" is not a name anybody chose. */
+  if (room.switchable && room.maker) bits.push(room.maker);
+
   btn.append(el("span", "menu-text", room.name));
   if (bits.length) btn.append(el("span", "menu-sub", bits.join(" · ")));
+  btn.classList.toggle("is-off", room.switchable && !room.enabled);
   btn.addEventListener("click", () => openZone(room.uuid));
   return btn;
 }
@@ -2992,6 +3003,29 @@ function showZone() {
       `its radio setting is the one in use while they are grouped.`;
   }
 
+  /*
+   * THE SWITCH THAT DECIDES WHETHER THIS IS A ROOM AT ALL.
+   *
+   * Only for a device found by discovery: a Sonos room was one before this
+   * setting existed, and one that could be switched off would be a feature
+   * broken by an upgrade. Everything below it is about a room that IS one, so
+   * it is all absent while this is off — the same rule the genre option
+   * follows under the radio.
+   */
+  const avail = $("zone-available");
+  avail.classList.toggle("hidden", !room.switchable);
+  avail.classList.toggle("is-off", !room.enabled);
+  paintToggle("zone-available", room.enabled);
+  $("zone-what").classList.toggle("hidden", !room.switchable);
+  if (room.switchable) {
+    $("zone-what").textContent = [room.maker, room.model].filter(Boolean).join(" ") ||
+      "A UPnP renderer on the network.";
+  }
+
+  /* A device that is switched off is not a room, so it has no room settings. */
+  const isRoom = room.enabled;
+  $("zone-radio").classList.toggle("hidden", !isRoom);
+
   const radio = room.radio || { enabled: false, matchGenre: true };
   $("zone-radio").classList.toggle("is-off", !radio.enabled);
   /* No words: the switch says which way it is set, and a line repeating that
@@ -2999,7 +3033,7 @@ function showZone() {
   paintToggle("zone-radio", radio.enabled);
 
   const genre = $("zone-radio-genre");
-  genre.classList.toggle("hidden", !radio.enabled);
+  genre.classList.toggle("hidden", !isRoom || !radio.enabled);
   genre.classList.toggle("is-off", !radio.matchGenre);
   paintToggle("zone-radio-genre", radio.matchGenre);
 }
@@ -3795,6 +3829,19 @@ function wire() {
   });
 
   $("menu-zones-open").addEventListener("click", () => { showMenuView("zones"); loadZones(); });
+
+  $("zone-available").addEventListener("click", async () => {
+    const room = currentZone();
+    if (!room || !room.switchable) return;
+    try {
+      const { enabled } = await post("/api/zone", { zone: room.uuid, enabled: !room.enabled });
+      room.enabled = enabled;
+      showZone();
+      /* The list behind this screen is now wrong about this room, and walking
+         back to it is the very next thing anybody does. */
+      loadZones();
+    } catch (e) { toast(e.message, true); }
+  });
   $("menu-zones-back").addEventListener("click", () => showMenuView("settings"));
   $("menu-zone-back").addEventListener("click", () => showMenuView("zones"));
 
