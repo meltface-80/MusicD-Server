@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.49
+
+### Skip and back work on a room whose queue MusicD holds
+- **Skip and back did nothing on a WiiM.** The album played and play/pause
+  worked, but the previous and next buttons were dead.
+- **The cause** was sending them to the device. Next and Previous move through
+  the queue the PLAYER holds, and a stock UPnP renderer has none — so it
+  accepted both commands and moved nowhere.
+- **They are asked of the queue now**, like every other question about what is
+  playing next: a Sonos still steps through its own queue on the speaker, and a
+  room whose queue MusicD holds is moved by MusicD.
+- **The ends of the queue say so.** Skipping past the last track or going back
+  from the first now says which, rather than looking like the same dead button.
+
 ## 0.4.48
 
 ### A device you switched off is no longer offered as a room
