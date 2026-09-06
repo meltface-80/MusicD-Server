@@ -1524,7 +1524,11 @@ main {
   position: absolute; left: 0; right: 0; top: 0; height: 2px;
   background: var(--bg-elev-2);
 }
-.mt-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width .8s linear; }
+/* The transition SMOOTHS THE TICK and nothing else, so it lasts exactly one:
+   paintProgress() writes a new width every 250ms, and .8s made the bar chase a
+   value it never reached — permanently about half a second behind the music.
+   It is switched off in JS for any move BACKWARDS; see setMiniFill(). */
+.mt-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 250ms linear; }
 
 .mt-info {
   display: flex; align-items: center; gap: 10px;

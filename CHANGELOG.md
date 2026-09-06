@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.51
+
+### Back starts the track again, and the mini bar stops sliding backwards
+- **Back on the first track was an error.** Eighteen seconds into the first
+  track of a record, deciding to hear it from the beginning, got "That is the
+  first track in the queue." — the one press the button was there for.
+- **Back is "start this again" once you are a few seconds into a track**, and
+  "the one before" inside them, which is what every back button does. A second
+  press still goes back a track, because the first one put the track at zero.
+- **Unchanged on Sonos**, which has always done this on the speaker.
+- **The mini bar's progress no longer slides back to the left** when a record
+  moves on to the next track. It is simply empty, as it should have been. Its
+  movement while a track plays is smoother too — the animation was more than
+  three times longer than the updates feeding it, so the bar sat about half a
+  second behind the music for the whole track.
+
 ## 0.4.50
 
 ### The waveform is the shape of the record again

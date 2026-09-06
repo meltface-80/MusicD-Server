@@ -385,7 +385,28 @@ part of the fix.
   the screen put two of them on the wrong side of the seam. The ends of the
   list are a refusal somebody reads — "that is the last track in the queue" —
   not a silent no-op, because a button that does nothing is indistinguishable
-  from this bug.
+  from this bug. CORROBORATED BY THE ONE PIECE OF PRIOR ART THAT SOLVES THIS
+  EXACT PROBLEM: philippe44's LMS-to-uPnP bridge, which puts a UPnP renderer
+  behind a server that holds the playlist, sends `SetAVTransportURI`,
+  `SetNextAVTransportURI`, `Play`, `Pause`, `Stop`, `Seek` and `SetPlayMode`
+  and NOTHING ELSE. Its whole AVTransport vocabulary is in `avt_util.c` and
+  neither Next nor Previous is in it.
+- **BACK IS NOT THE MIRROR OF NEXT, and reading it as one shipped a refusal
+  where the whole point of the press was.** Eighteen seconds into the first
+  track of a record, deciding to hear it from the beginning, and getting "That
+  is the first track in the queue." Every back button ever made restarts the
+  track once you are into it: Sonos's own Previous does it in the firmware
+  (which is why `SonosQueue` delegates rather than reimplementing), and LMS's
+  rew is the same idea with a double press — "either starts the same song over,
+  or the previous one" (Slim/Buttons/Common.pm). `JUST_STARTED_SECONDS` is the
+  window, and the SECOND press goes back for free: a restart puts the position
+  at zero, so the press after it lands inside the window. The device is asked
+  how far in it is, one round trip on a press somebody is waiting for; a device
+  that will not say is taken as "well into it", because restarting a track you
+  meant to leave costs one more press and leaving a track you meant to restart
+  loses your place. `test/fake-dlna.js` resets `relTime` on
+  `SetAVTransportURI` for this reason — a fake that did not would make a
+  restart indistinguishable from a jump back.
 - **MOVING A FUNCTION IS ONLY HALF THE JOB; CHANGING ITS SIGNATURE WHILE YOU
   MOVE IT IS THE OTHER HALF.** 0.4.43 lifted `ssdpSearch()` into `lib/upnp.js`
   and gave it a search target and `{ip, location}` answers. `_doRefresh()` kept
@@ -633,6 +654,17 @@ part of the fix.
   thrown both away. Take out the gesture that was rejected and keep what was
   asked for — and say plainly which is which, because that is the user's call
   to reverse, not a decision to make silently.
+- **A TRANSITION DOES NOT KNOW WHY A VALUE CHANGED.** `.mt-progress-fill`
+  carries one so the 250ms tick reads as movement — and it animated the jump
+  from the end of one track to the start of the next just as happily, so the
+  mini bar slid visibly BACK to the left every time a record moved on, where it
+  should simply be empty. `setMiniFill()` writes any move backwards with the
+  transition off, and the forced reflow between the two writes is the half that
+  is easy to leave out: without reading a layout property the browser folds them
+  into one style recalculation and the slide happens anyway. The duration is one
+  TICK, not the .8s it shipped with — a transition longer than the interval
+  feeding it is a bar chasing a value it never reaches, permanently about half a
+  second behind the music.
 - **A hold on a card must lose to a scroll.** The carousels are flicked
   sideways from the same cards the hold starts on, so movement past
   `PICK_SLOP` cancels it — and the click that arrives behind the finger is the
