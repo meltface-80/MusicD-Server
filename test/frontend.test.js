@@ -1578,6 +1578,32 @@ test("a slow waveform cannot land under a track that has already changed", () =>
   assert.match(fn, /"\/api\/track\/" \+ b64url\(id\) \+ "\/waveform"/);
 });
 
+test("the shape and the playhead share ONE mapping from time to x", () => {
+  /*
+   * A range input cannot let its thumb hang off either end, so the dot travels
+   * thumbW/2 to width - thumbW/2. 0.4.34 moved the COLOUR BOUNDARY onto that
+   * travel and left the bars laid from 0 to width, which put the two mappings
+   * thumbW * (0.5 - frac) apart: half a thumb ahead of the music at the start,
+   * level in the middle, half a thumb behind it at the end. On a phone that is
+   * several seconds of a five-minute track, and it reads as the waveform
+   * running ahead of what you can hear — which is how it was reported.
+   *
+   * Both now come off `inset` and `span`. The absence check is the load-bearing
+   * one: the width is what must NOT decide where a bar goes.
+   */
+  const body = js.slice(js.indexOf("function drawWave("));
+  const fn = stripComments(body.slice(0, body.indexOf("\n}")), "js");
+  assert.match(fn, /const inset = thumbW \/ 2;/);
+  assert.match(fn, /const span = Math\.max\(1, w - thumbW\);/);
+  assert.match(fn, /const head = inset \+ frac \* span;/);
+  assert.match(fn, /const bars = Math\.max\(1, Math\.floor\(span \/ 2\)\);/,
+    "the bar count comes off the travel, not the canvas");
+  assert.doesNotMatch(fn, /frac \* w\b/,
+    "the playhead is a fraction of the TRAVEL, never of the width");
+  assert.doesNotMatch(fn, /fillRect\(i \*/,
+    "and a bar is placed from the inset, never from x = 0");
+});
+
 test("the waveform and the bar read the same position", () => {
   /* Drawn from the same number in the same function, so the two can never
      disagree about where the track is — and drawn FIRST, because drawWave is

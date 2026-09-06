@@ -2578,14 +2578,35 @@ function drawWave(at) {
      property inherits downward, and documentElement is its ancestor rather
      than its descendant, so asking there would silently get nothing. */
   const thumbW = parseFloat(getComputedStyle(host).getPropertyValue("--seek-thumb")) || 14;
-  const head = thumbW / 2 + frac * (w - thumbW);
+
+  /*
+   * THE SHAPE LIVES IN THE THUMB'S TRAVEL, NOT ACROSS THE CANVAS.
+   *
+   * Getting the dot onto the boundary was only half of it. The bars were still
+   * laid from 0 to w while the dot travels thumbW/2 to w - thumbW/2, so the two
+   * mappings from TIME to X disagreed by thumbW * (0.5 - frac): half a thumb
+   * ahead of the music at the start, level in the middle, half a thumb behind
+   * it at the end. On a phone that is seven pixels of a ~340px bar — several
+   * seconds of a five-minute track — and it reads exactly as the user reported
+   * it: the waveform running ahead of what you can hear.
+   *
+   * So the shape is inset to the travel and both are computed from `span`.
+   * A peak is then under the dot at the moment you hear it, at every point in
+   * the track rather than only halfway through.
+   */
+  const inset = thumbW / 2;
+  const span = Math.max(1, w - thumbW);
+  const head = inset + frac * span;
 
   /* One bar per 2 CSS pixels. The stored waveform holds 1000 values and a phone
      is ~390 CSS px wide, so a wider step throws most of them away; below 2px
      the bars stop being separable and it reads as a filled shape rather than a
-     waveform. */
-  const barW = 1, step = 2;
-  const bars = Math.max(1, Math.floor(w / step));
+     waveform. `step` is then the span divided back out, so the bars FILL the
+     travel exactly — stopping up to a pixel short would put the same
+     disagreement back at the right-hand end, smaller. */
+  const barW = 1;
+  const bars = Math.max(1, Math.floor(span / 2));
+  const step = span / bars;
   const mid = h / 2;
   for (let i = 0; i < bars; i++) {
     /* Max across the peaks this bar covers, for the same reason the server
@@ -2597,14 +2618,19 @@ function drawWave(at) {
     /* A floor of 1px so silence is a line rather than a gap — a gap reads as
        "the waveform stopped loading", which is a different thing entirely. */
     const barH = Math.max(1, (v / 255) * (h - 2));
+    /* Snapped to a whole DEVICE pixel. `step` is fractional so the bars can
+       fill the travel exactly, and a 1px bar drawn at a fractional offset is
+       antialiased into a 2px smudge — which would undo the sharpening the
+       backing store is sized for. */
+    const x = Math.round((inset + i * step) * dpr) / dpr;
     /* A bar counts as played once its MIDDLE is behind the playhead, so the
        boundary lands where the dot is rather than a bar's width either side. */
-    const done = (i * step + barW / 2) <= head;
+    const done = (x + barW / 2) <= head;
     ctx.fillStyle = done ? played : ahead;
     /* The played side goes to full strength so the accent still reads as the
        position marker against a bright track ahead of it. */
     ctx.globalAlpha = done ? 1 : 0.72;
-    ctx.fillRect(i * step, mid - barH / 2, barW, barH);
+    ctx.fillRect(x, mid - barH / 2, barW, barH);
   }
   ctx.globalAlpha = 1;
 }

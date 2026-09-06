@@ -642,6 +642,36 @@ part of the fix.
   Averaging peaks turns a sharp track into mush, which is the one thing a
   waveform is for. Each track is normalised to its OWN loudest moment: an
   absolute scale leaves a quietly-mastered record a flat line beside a loud one.
+- **BUT A "PEAK" IS A PEAK OF THE LEVEL ENVELOPE, NOT THE LOUDEST SAMPLE.** Read
+  as the largest sample in its slice, a modern master draws a BRICK: a limiter
+  puts something on the ceiling inside nearly any window you can name, a phone
+  has ~190 bars for a five-minute track, so every bar asks "was anything in
+  these one and a half seconds loud?" and every bar answers yes. Six releases of
+  a control that said nothing about the music, and it took a screenshot of
+  another player beside it to see. The 16ms stride is measured as RMS now — the
+  thing the ear would call loudness — and the reduction above is UNCHANGED, so
+  a snare in a quiet bar still lifts its bar. The rule the old code broke was
+  never "prefer peaks"; it was "do not average", and RMS of samples is not the
+  mean of peaks. Ask what a statistic SATURATES at before choosing it.
+- **A MEASUREMENT IS ONLY AS GOOD AS THE ANALYSIS THAT TOOK IT, so `WAVE_GEN`
+  sits beside `rate`, `size` and `mtime` in `waveforms`.** The decode rate was
+  already recorded because a shape taken at another rate is another shape — and
+  so is one taken with another STATISTIC, which nothing said. Without it every
+  track already analysed keeps its brick for ever, because a file whose size
+  and mtime have not changed is never decoded again. Exactly `cover_lookups.gen`
+  and `TAG_SCHEMA`: bump it whenever the numbers would come out different for
+  audio that has not.
+- **A RANGE INPUT'S THUMB CANNOT HANG OFF EITHER END, SO THE SHAPE BESIDE IT
+  LIVES IN THE TRAVEL, NOT THE WIDTH.** Getting the dot onto the colour boundary
+  was only half of it: the bars were still laid from 0 to `w` while the dot
+  travels `thumbW/2` to `w - thumbW/2`, so the two mappings from TIME to X were
+  `thumbW * (0.5 - frac)` apart — measured at +3.8s, +2.0, 0, -1.5, -4.9 across
+  a five-minute track. The waveform ran ahead of the music for the whole first
+  half, and it survived being looked at because it is exact in the middle, which
+  is where anybody checks. `inset` and `span` now feed both, and `step` divides
+  the span back out so the bars fill it exactly. Whenever a drawing has to agree
+  with a native control, derive BOTH from the control's real geometry — one of
+  them being right is what hides the other being wrong.
 - **A waveform squeezed into the seek bar's own height is not readable.** At
   14px every peak lands within a few pixels of every other and the shape reads
   as a texture. The canvas draws at `--wave-h` (34px) and the INPUT IS GROWN to
