@@ -289,7 +289,7 @@
      albums exactly as they are on disk, and plays them to your speakers — no metadata service, no
      automatic matching, no streaming accounts.</p>
   <div class="badges">
-    <span class="badge" id="ver-badge">v0.4.46</span>
+    <span class="badge" id="ver-badge">v0.4.47</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT licence</span>
     <span class="badge plain">Your files, your speakers</span>
@@ -356,8 +356,9 @@
       <div class="card">
         <h3><span class="em">🔌</span>Players that are not Sonos</h3>
         <p>UPnP renderers — a WiiM, a MusicCast amp — turn up in Settings › Zones with the maker
-           under the name, switched off until you want them. Transport and volume today; queueing
-           to one is the next release.</p>
+           under the name, switched off until you want them. Switched on, albums play to one
+           exactly as to a Sonos: MusicD keeps the queue a stock renderer has not, and hands it
+           the next track early so a record plays without gaps.</p>
       </div>
       <div class="card">
         <h3><span class="em">📻</span>Random Album Radio</h3>
@@ -721,7 +722,7 @@
   var IMAGE = "musicd-server";
   var REPO  = "meltface-80/MusicD-Server";
   var VOLUME = "musicd-server-data";
-  var FALLBACK_VERSION = "0.4.46";
+  var FALLBACK_VERSION = "0.4.47";
 
   var els = {
     modes:     document.getElementById("modes"),

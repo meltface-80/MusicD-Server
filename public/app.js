@@ -3018,8 +3018,21 @@ function showZone() {
   paintToggle("zone-available", room.enabled);
   $("zone-what").classList.toggle("hidden", !room.switchable);
   if (room.switchable) {
-    $("zone-what").textContent = [room.maker, room.model].filter(Boolean).join(" ") ||
+    const what = [room.maker, room.model].filter(Boolean).join(" ") ||
       "A UPnP renderer on the network.";
+    /*
+     * WHAT IT CANNOT DO IS WORTH A LINE; what it can is not.
+     *
+     * Handing a device the next track before this one ends is optional in the
+     * protocol, and it is the whole of whether a record plays without gaps.
+     * A device that has it needs no announcement — that is simply how music
+     * sounds. One that has not would otherwise leave somebody hunting a fault
+     * in their network for a gap the hardware cannot avoid.
+     */
+    const gapless = room.can && room.can.SetNextAVTransportURI;
+    $("zone-what").textContent = room.enabled && !gapless
+      ? what + " — it cannot take the next track early, so there is a short gap between them."
+      : what;
   }
 
   /* A device that is switched off is not a room, so it has no room settings. */

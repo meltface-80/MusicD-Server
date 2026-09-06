@@ -236,22 +236,35 @@ test("a discovered renderer reaches the app, off, and can be switched on", async
     assert.strictEqual(vol.volume, 42, JSON.stringify(vol));
     assert.strictEqual(fakeRenderer.state.volume, 42, "the device actually heard it");
 
-    /* But playing to it is refused IN WORDS, not as a UPnP fault from a device
-       asked to do something it never claimed it could. */
+    /*
+     * AND IT PLAYS — the 0.4.47 change. Until then this asked for something
+     * the room could not do and was refused in words; now the server holds a
+     * queue for it, so the album goes on and the device is pointed at the
+     * first track.
+     */
     const albums = await (await fetch(base + "/api/albums?row=library&limit=1")).json();
     const played = await fetch(base + "/api/play", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ zone: wiim.uuid, albumId: albums.albums[0].id, mode: "play" })
     });
-    const refusal = await played.json();
-    assert.ok(refusal.error, "it refused: " + JSON.stringify(refusal));
-    /* NOT a 500. The server did not break — this room was asked for something
-       it cannot do yet, and a 5xx would put a red line in the browser console
-       for anybody looking for a crash that did not happen. */
-    assert.strictEqual(played.status, 501, "refused as unimplemented, not as broken");
-    assert.match(refusal.error, /cannot queue music to WiiM Pro Plus yet/);
-    assert.ok(!fakeRenderer.actions().includes("SetAVTransportURI"),
-      "and nothing was sent to the device");
+    const result = await played.json();
+    assert.strictEqual(played.status, 200, JSON.stringify(result));
+    assert.ok(result.queued > 1, "a whole album went on: " + JSON.stringify(result));
+    assert.match(fakeRenderer.state.currentUri, /\/stream\//,
+      "the device was pointed at the first track");
+    assert.strictEqual(fakeRenderer.state.transportState, "PLAYING");
+
+    /* AND THE ONE AFTER IT WAS ARMED, which is the whole of gapless: the
+       device pre-buffers it and crosses over without stopping. Armed now,
+       while the first track is only just starting. */
+    assert.match(fakeRenderer.state.nextUri, /\/stream\//,
+      "the next track was handed over before this one ends");
+    assert.notStrictEqual(fakeRenderer.state.nextUri, fakeRenderer.state.currentUri);
+
+    /* The queue screen reads it back. */
+    const queue = await (await fetch(
+      base + "/api/queue?zone=" + encodeURIComponent(wiim.uuid))).json();
+    assert.strictEqual(queue.total, result.queued, JSON.stringify(queue).slice(0, 200));
 
     /* A Sonos room is refused a switch by the endpoint too. */
     const nope = await fetch(base + "/api/zone", {

@@ -46,10 +46,25 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+/*
+ * UNESCAPED, the way a real device's XML parser hands a value to whatever uses
+ * it. A DIDL-Lite document travels inside a SOAP argument, so it arrives as
+ * &lt;dc:title&gt;… — and a fake that returned that verbatim would make a
+ * caller's perfectly good metadata look like it had not been sent, or make
+ * broken metadata look fine.
+ */
+function unesc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, "&");        // last, so "&amp;lt;" survives as "&lt;"
+}
+
 function tag(xml, name) {
   const m = new RegExp(`<(?:[\\w-]+:)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[\\w-]+:)?${name}>`, "i")
     .exec(xml || "");
-  return m ? m[1] : "";
+  return m ? unesc(m[1]) : "";
 }
 
 /*
@@ -236,7 +251,37 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
     location: `http://${host}:${port}/description.xml`,
     listen: () => new Promise(resolve => server.listen(port, host, resolve)),
     close:  () => new Promise(resolve => server.close(resolve)),
-    actions: () => state.calls.map(c => c.action)
+    actions: () => state.calls.map(c => c.action),
+    /*
+     * THE DEVICE FINISHING A TRACK AND CROSSING INTO THE NEXT ONE.
+     *
+     * The single most important thing this fake does. Gapless is not "the next
+     * URI was set once" — it is "the next URI is set AGAIN, every time, for as
+     * long as the queue lasts". The slot EMPTIES when a device advances into
+     * it, so a controller that armed it once and stopped gets exactly two
+     * gapless tracks and a gap after every one thereafter.
+     *
+     * A fake that never advanced would pass a test suite with that bug in it.
+     */
+    advance() {
+      if (!state.nextUri) { state.transportState = "STOPPED"; return false; }
+      state.currentUri = state.nextUri;
+      state.currentMeta = state.nextMeta;
+      state.nextUri = ""; state.nextMeta = "";
+      /*
+       * `track` DELIBERATELY DOES NOT MOVE. A renderer playing one URI at a
+       * time has one item in its media and reports Track as 1 for ever — it
+       * has no queue, so it has no position in one.
+       *
+       * Incrementing it here would be this fake being more helpful than a real
+       * device, and would hide the bug it exists to catch: a caller that asks
+       * the DEVICE where in the queue the room is gets 1 every time, and the
+       * radio then believes a whole album is still to come and never tops up.
+       */
+      state.relTime = "0:00:00";
+      state.transportState = "PLAYING";
+      return true;
+    }
   };
 }
 
