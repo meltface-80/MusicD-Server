@@ -407,6 +407,41 @@ part of the fix.
   loses your place. `test/fake-dlna.js` resets `relTime` on
   `SetAVTransportURI` for this reason — a fake that did not would make a
   restart indistinguishable from a jump back.
+- **A DEVICE IS THE LAST TO KNOW WHAT IT IS PLAYING.** A renderer handed a URI
+  carries on describing the track BEFORE it while it opens the stream — a
+  second or two on a WiiM — so a poll landing just after a press reads the room
+  as still on the old track, still advancing. Press skip near the end of a
+  record and its waveform sits there fully played before the new one appears;
+  press back and the bar stays at 98% before dropping. Sonos has no such window
+  because its own Next moves the queue INSIDE THE SPEAKER before it answers,
+  which is exactly why this was only ever reported on the UPnP rooms.
+  `playing(pos)` is the one place that answers — `{ uri, seconds, duration }` —
+  and while the device is still naming the track it was LEAVING, the answer is
+  what it was told, at the top, with no duration so the caller falls back to the
+  library's. Two things make it safe: **arriving is reporting that URI AT THE
+  TOP, not the URI alone** — a restart does not change the URI at all, so a URI
+  test calls it settled on the first poll and hands back the position from
+  before the press — and **a device reporting anything that is neither what it
+  was told nor what it was leaving has genuinely gone somewhere and is believed
+  AT ONCE**, or this window would argue with a redirect for five seconds.
+- **AND THAT FACT HAS TO OUTLIVE THE OBJECT THAT RECORDED IT.** `queueFor()`
+  builds a queue per call, so "what this device was last handed" written onto
+  `this` is forgotten the moment it is written. The Map lives on `Playback` and
+  is passed in. Whenever a short-lived object records something about a window
+  of time, ask what is still holding it on the next call.
+- **THE END OF A TRACK IS NOT THE END OF THE RECORD, and on a room whose queue
+  the server holds nobody else will say so.** A stock renderer plays ONE URI and
+  stops; the poll skipped every room that was not PLAYING, so an album ended
+  wherever the device fell silent. Two ways in: a device with no
+  `SetNextAVTransportURI` (every track, so it played exactly one and stopped for
+  good), and a device that HAS it and did not cross over anyway. philippe44's
+  LMS-to-uPnP bridge has handled both since forever — `NextTrack()` and
+  `SQ_NEXT_FAILED` — and reading it is how this was found, from a test whose own
+  name ("still plays, one track at a time") asserted only that the FIRST track
+  played. **A SILENT DEVICE IS THE SAME SHAPE WHETHER IT RAN OUT OF TRACK OR
+  SOMEBODY PRESSED STOP**, so which one it is is REMEMBERED (`halted`) rather
+  than inferred: restarting music a person deliberately silenced is far worse
+  than an album that ended early, and anything that starts music clears it.
 - **MOVING A FUNCTION IS ONLY HALF THE JOB; CHANGING ITS SIGNATURE WHILE YOU
   MOVE IT IS THE OTHER HALF.** 0.4.43 lifted `ssdpSearch()` into `lib/upnp.js`
   and gave it a search target and `{ip, location}` answers. `_doRefresh()` kept
@@ -811,6 +846,12 @@ part of the fix.
   service in `test/` now refuses the way the real one does — GitHub 415s an
   octet-stream archive request, MusicBrainz 403s an unidentified client, and
   Last.fm rejects a wrong signature. Keep it that way when adding another.
+- **AND THE FAKE RENDERER IS NOT INSTANTANEOUS.** `state.settleMs` makes
+  `GetPositionInfo` keep answering with the values from before the last
+  `SetAVTransportURI`, which is what a real device does while it opens a stream
+  and the window a controller polling just after a press lands in. A fake that
+  changes everything the moment it is told hides every bug in that window —
+  the skip and back reports were both invisible until it could hesitate.
 - **THE FAKE SONOS CAN ALSO SAY NOTHING AT ALL.** `state.faults` makes it
   refuse; `state.dropOnce` makes it drop the connection once, which is what a
   busy player looks like from here. Both are needed to drive the two halves of
@@ -834,6 +875,16 @@ part of the fix.
   build can undo it for a shortcut already created. `test/frontend.test.js`
   guards this by matching the TAG, not the word, so the comment explaining their
   absence does not trip it.
+- **`:hover` STICKS ON A TOUCHSCREEN, so every hover style is behind
+  `@media (hover: hover)`.** A tap leaves the element hovered until something
+  else is tapped: the light ring stayed round the skip button long after the
+  press, and the same was true of every album card, menu row and track row in
+  the file. All 38 of them are guarded and `test/frontend.test.js` fails on a
+  bare `:hover`, because one added later brings the bug straight back. A
+  selector list mixing `:hover` with `:active` or `:focus-visible` is SPLIT
+  rather than wrapped — a press and a keyboard are not a pointer, and guarding
+  the pair together takes those away too, which is a quieter regression than
+  the one being fixed.
 - **A fixed element is not fixed while iOS is scrolling with the keyboard up.**
   It gets re-anchored to the visual viewport, which lifts anything pinned to the
   bottom onto the keys. Everything with a `bottom:` subtracts `--kb-inset`

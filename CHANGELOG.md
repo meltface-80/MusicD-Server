@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.52
+
+### Skip and back look right, and an album no longer ends early
+- **Skip and back showed the wrong track for a moment.** On a UPnP room the
+  screen kept painting the track you had just left, still advancing, for a
+  second or two — so skipping near the end of a track showed its waveform fully
+  played before the new one appeared, and pressing back left the bar at the end
+  of the track it was restarting. The room is asked what it is playing now
+  rather than the device, which spends that moment still describing the track
+  before. Measured at two seconds of the wrong track before, under six hundred
+  milliseconds after; Sonos never had it.
+- **An album could end early on a UPnP room, and now cannot.** A device that
+  cannot be handed the next track before the current one finishes played ONE
+  track and stopped for good; a device that can, and missed the hand-over,
+  did the same thing intermittently. Either way the room is moved on to the next
+  track. A room somebody actually stopped or paused stays that way.
+- **The ring round a button no longer stays there after you tap it.** A
+  touchscreen leaves whatever you last tapped looking hovered until you tap
+  something else — the skip and back buttons made it obvious, but it was every
+  album card, menu row and track row too.
+
 ## 0.4.51
 
 ### Back starts the track again, and the mini bar stops sliding backwards
