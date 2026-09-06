@@ -211,7 +211,13 @@ test("a discovered renderer reaches the app, off, and can be switched on", async
       await new Promise(r => setTimeout(r, 200));
     }
 
-    const listed = await (await fetch(base + "/api/zones?refresh=1")).json();
+    /*
+     * ?all=1 IS THE SETTINGS SCREEN'S READ, and a plain one is the room
+     * picker's. They differ, and the bug that made them differ was shipping
+     * one endpoint for both: a television switched off was still offered as
+     * somewhere to play, from the mini bar and from Now playing.
+     */
+    const listed = await (await fetch(base + "/api/zones?all=1&refresh=1")).json();
     const names = listed.rooms.map(r => r.name);
     assert.ok(names.includes("Kitchen"), "the speaker is a room: " + names.join(", "));
     const wiim = listed.rooms.find(r => r.name === "WiiM Pro Plus");
@@ -221,12 +227,23 @@ test("a discovered renderer reaches the app, off, and can be switched on", async
     assert.strictEqual(wiim.can.SetNextAVTransportURI, true,
       "and what it can do came with it, read from the device");
 
+    /* A PLAIN READ IS THE ROOMS, and it must not carry the device that is
+       switched off — that read is what the room picker draws from. */
+    const pickable = await (await fetch(base + "/api/zones")).json();
+    assert.deepStrictEqual(pickable.rooms.map(r => r.name), ["Kitchen"],
+      "the picker is offered rooms only: " + pickable.rooms.map(r => r.name).join(", "));
+
     /* Switch it on the way the room screen does. */
     const on = await (await fetch(base + "/api/zone", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ zone: wiim.uuid, enabled: true })
     })).json();
     assert.strictEqual(on.enabled, true, JSON.stringify(on));
+
+    /* And NOW it is offered, because now it is a room. */
+    const after = await (await fetch(base + "/api/zones")).json();
+    assert.deepStrictEqual(after.rooms.map(r => r.name).sort(),
+      ["Kitchen", "WiiM Pro Plus"], "the picker gained it once it was switched on");
 
     /* It is a room now — the volume control reaches the device. */
     const vol = await (await fetch(base + "/api/volume", {

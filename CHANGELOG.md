@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.48
+
+### A device you switched off is no longer offered as a room
+- **A discovered device that is switched off was still selectable** from the
+  mini transport bar and from Now playing, even though Settings › Zones showed
+  it disabled — a television could be picked as somewhere to play.
+- **The cause** was one endpoint serving two screens: 0.4.46 made `/api/zones`
+  return everything discovered so the Zones screen could show a device in order
+  to offer its switch, and the room picker reads the same endpoint.
+- **The room list is the default again**, and only the screen that does the
+  switching asks for more — so a caller cannot land in the same place by
+  forgetting a filter.
+
 ## 0.4.47
 
 ### Albums play to a UPnP renderer, gaplessly

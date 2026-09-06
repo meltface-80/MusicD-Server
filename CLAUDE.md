@@ -405,6 +405,15 @@ part of the fix.
   rooms before the setting existed, and one that could be switched off would be
   a feature broken by an upgrade, so `setEnabled()` REFUSES a Sonos uuid rather
   than storing an answer a later version might read.
+- **ONE ENDPOINT, TWO AUDIENCES: MAKE THE DEFAULT THE SAFE ONE.** 0.4.46
+  changed `/api/zones` to return everything discovered, because Settings ›
+  Zones has to SHOW a device in order to offer its switch — and the ROOM PICKER
+  reads the same endpoint. A television switched off was still selectable from
+  the mini bar and from Now playing. Filtering in the one caller that wanted
+  everything would have left every future caller one forgotten line from the
+  same bug, so the DEFAULT is the rooms and `?all=1` is the screen that does
+  the switching. Whenever one endpoint serves a screen that administers a thing
+  and a screen that uses it, the plain read belongs to the user, not the admin.
 - **NOTHING IS AT A KNOWN ADDRESS EXCEPT ON SONOS.** Sonos publishes a table of
   control URLs every player shares; a stock renderer names its own in its
   device description and no two makes agree. `lib/dlna.js` fetches and reads

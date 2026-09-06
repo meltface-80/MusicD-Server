@@ -2167,6 +2167,31 @@ test("Back and Escape walk out of a room the way you came in", () => {
     "the room falls back to the list before the list falls back to Settings");
 });
 
+test("the room picker is offered rooms, not everything discovered", () => {
+  /*
+   * THE BUG THIS EXISTS FOR. 0.4.46 changed /api/zones to return every device
+   * discovered, because Settings › Zones has to SHOW one in order to offer its
+   * switch — and the room picker reads the same endpoint. A television that
+   * had been switched off was still selectable from the mini transport bar and
+   * from Now playing.
+   *
+   * The endpoint's DEFAULT is now the safe one: a plain read is the rooms.
+   * Only the screen that does the switching asks for more, so a future caller
+   * cannot land in the same place by forgetting a filter.
+   */
+  const picker = js.slice(js.indexOf("async function openZoneSheet"));
+  const body = picker.slice(0, picker.indexOf("\n}"));
+  assert.match(body, /api\("\/api\/zones" \+ \(refresh \? "\?refresh=1" : ""\)\)/,
+    "the picker reads the default");
+  assert.ok(!body.includes("all=1"), "and never asks for what is switched off");
+
+  /* The one caller that does ask, and the server honouring it. */
+  const load = js.slice(js.indexOf("async function loadZones"));
+  assert.match(load.slice(0, load.indexOf("\n}")), /\/api\/zones\?all=1/);
+  const server = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  assert.match(server, /req\.query\.all === "1" \? household\.all\(\) : household\.rooms\(\)/);
+});
+
 test("a room that cannot play gaplessly says so; one that can says nothing", () => {
   /*
    * SetNextAVTransportURI is optional in AVTransport:1 and it is the whole of
