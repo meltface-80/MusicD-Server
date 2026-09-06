@@ -489,6 +489,41 @@ part of the fix.
   it. Guessing "/AVTransport/Control" works on one brand and silently 404s on
   the rest — `test/fake-dlna.js` serves RELATIVE URLs under a path nothing
   would guess, for exactly that reason.
+- **AND SO IS WHAT A DEVICE WILL PLAY.** Every room was filtered through the
+  SONOS format list until 0.4.54, whichever kind of room it was — wrong in both
+  directions on a renderer: a WiiM was refused the Opus, DSD and WMA it decodes
+  perfectly well, with an error naming a speaker its owner may not own, and
+  anything that could not decode FLAC was handed FLAC because the Sonos list
+  allows it. ConnectionManager's `GetProtocolInfo` is how a device says, and
+  `plays(file)` is the one place each kind answers for itself. The FIRST field
+  of a protocolInfo entry is the protocol, so `rtsp-rtp-udp:*:audio/dsd:*` is
+  not an offer this server can take up; `*` in the format field means it did not
+  narrow it down. This is the one thing philippe44's LMS-to-uPnP bridge asks
+  that this did not.
+- **A MISSING FORMAT LIST IS NOT EVIDENCE, WHICH IS THE OPPOSITE OF A MISSING
+  ACTION.** An action absent from the SCPD means a feature is WITHHELD; a
+  device that refuses `GetProtocolInfo`, is too busy to answer, or answers `*`
+  has said nothing about any file — so it is offered everything. Refusing
+  everything would turn a working room into a dead one over a question the
+  device declined to answer. Ask which way round "we do not know" should fail,
+  every time; it is not the same answer twice running.
+- **AND THE SONOS ANSWER IS THE ONE EXCEPTION, kept BY EXTENSION.** Sonos does
+  implement `GetProtocolInfo` and answers with hundreds of entries, including
+  formats that do not work from a third-party HTTP server — so the curated list
+  wins, the same trade its table of control URLs makes. By extension rather
+  than MIME because MIME cannot express the distinction that matters: Opus maps
+  to `audio/ogg`, which Sonos plays, and Opus inside it is not. It lives in
+  `lib/sonos.js` now; it spent five releases in `lib/scanner.js`, which never
+  used it — a fact about one manufacturer's speakers has no business in the
+  thing that reads folders.
+- **THE BADGE AND THE QUEUE BUILDER ASK THE SAME FUNCTION, or they drift.**
+  They once worked it out separately — one from the extension, the other from
+  the MIME type — and disagreed about Opus, so the badge said nothing and the
+  track then vanished on Play. `library.album()` takes an injected `plays`
+  now, and `/api/album` supplies "any enabled room", because the album screen
+  has no room to ask about: you have not chosen where to listen. That degrades
+  correctly — one Sonos in the house gives exactly what it gave before — and
+  stops badging every Opus file on an install that owns no Sonos.
 - **CAPABILITIES ARE READ, NOT ASSUMED.** Half of AVTransport is optional —
   `SetNextAVTransportURI`, the whole of whether gapless is possible, and `Seek`
   among them. The SCPD action list says what a device actually implements, so
@@ -871,6 +906,14 @@ part of the fix.
   service in `test/` now refuses the way the real one does — GitHub 415s an
   octet-stream archive request, MusicBrainz 403s an unidentified client, and
   Last.fm rejects a wrong signature. Keep it that way when adding another.
+- **AND THE FAKE RENDERER DOES NOT OFFER TO PLAY EVERYTHING.** `BASE_SINK`
+  deliberately omits WMA and DSD and includes one entry under a protocol this
+  server cannot serve, because a stand-in that accepted the world would prove
+  nothing about the caller honouring the answer. `sink: null` omits
+  ConnectionManager altogether, which is the "it would not say" case. And
+  `forget()` exists because DISCOVERY now makes a control call: a test about
+  what driving the device sends says where its window starts rather than
+  quietly allowing for a call it is not talking about.
 - **AND THE FAKE RENDERER IS NOT INSTANTANEOUS.** `state.settleMs` makes
   `GetPositionInfo` keep answering with the values from before the last
   `SetAVTransportURI`, which is what a real device does while it opens a stream

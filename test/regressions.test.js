@@ -16,6 +16,7 @@ const dbLib = require("../lib/db");
 const scanner = require("../lib/scanner");
 const library = require("../lib/library");
 const sonosLib = require("../lib/sonos");
+const dlna = require("../lib/dlna");
 const { Playback } = require("../lib/playback");
 const { buildLibrary, wav } = require("./fixtures");
 const { createFakeSonos } = require("./fake-sonos");
@@ -254,7 +255,11 @@ test("playing from a track starts on THAT track when the album has unplayable fi
     const playback = new Playback({ db, household, baseUrl: () => "http://192.168.1.9:3400" });
 
     const albumId = db.prepare("SELECT id FROM albums").get().id;
-    const album = library.album(db, albumId);
+    /* THE SAME PLAYER THE QUEUE BUILDER WILL ASK, which is the whole of what
+       keeps the badge and the queue from drifting apart — they are one
+       function now rather than two rules that agreed by hand. */
+    const kitchen = household.get("RINCON_AAA01400");
+    const album = library.album(db, albumId, { plays: (f) => kitchen.plays(f) });
     assert.strictEqual(album.tracks.length, 4, "all four are listed");
     /* The untagged WMA sorts first, having no track number — which is exactly
        why the row's POSITION is the wrong thing to send to the queue builder. */
@@ -285,15 +290,34 @@ test("Opus is reported unplayable, consistently on both sides", async () => {
   fs.writeFileSync(path.join(dir, "02 Two.wav"), wav({ title: "Two", album: "Album", track: 2 }));
 
   const db = await scanned(ws);
-  const album = library.album(db, db.prepare("SELECT id FROM albums").get().id);
-  const opus = album.tracks.find(t => t.title === "01 One");
+  const albumId = db.prepare("SELECT id FROM albums").get().id;
 
-  /* Opus maps to audio/ogg, which is why a MIME-based check in the client
-     disagreed with the extension-based one on the server: the badge said
-     nothing and then the track silently vanished on Play. */
+  /* ASKED OF A SONOS. Opus maps to audio/ogg, which is why a MIME-based check
+     in the client disagreed with the extension-based one on the server: the
+     badge said nothing and then the track silently vanished on Play. */
+  const sonos = new sonosLib.Player({ ip: "127.0.0.1", uuid: "RINCON_X", name: "Kitchen" });
+  const onSonos = library.album(db, albumId, { plays: (f) => sonos.plays(f) });
+  const opus = onSonos.tracks.find(t => t.title === "01 One");
   assert.strictEqual(opus.mime, "audio/ogg");
   assert.strictEqual(opus.playable, false, "Sonos does not decode Opus");
-  assert.strictEqual(album.tracks.find(t => t.title === "Two").playable, true);
+  assert.strictEqual(onSonos.tracks.find(t => t.title === "Two").playable, true);
+
+  /*
+   * AND THE SAME FILE ON A DEVICE THAT SAYS IT PLAYS IT. This is the half that
+   * was wrong until 0.4.54: every room was answered for by the Sonos list, so
+   * a WiiM was badged — and refused — for a container it decodes perfectly
+   * well, with an error naming a speaker the owner may not even have.
+   */
+  const wiim = new dlna.Renderer({
+    name: "WiiM Pro Plus", control: {}, serviceType: {}, can: {},
+    sink: new Set(["audio/ogg", "audio/wav"])
+  });
+  const onWiim = library.album(db, albumId, { plays: (f) => wiim.plays(f) });
+  assert.strictEqual(onWiim.tracks.find(t => t.title === "01 One").playable, true);
+
+  /* A device that declared nothing is not evidence against the file. */
+  const quiet = new dlna.Renderer({ name: "Something", control: {}, serviceType: {}, can: {} });
+  assert.strictEqual(quiet.plays({ ext: ".dsf", mime: "audio/x-dsd" }), true);
   db.close();
   ws.cleanup();
 });

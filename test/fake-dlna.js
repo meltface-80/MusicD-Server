@@ -31,6 +31,20 @@ const http = require("http");
 
 const AVT = "urn:schemas-upnp-org:service:AVTransport:1";
 const RC = "urn:schemas-upnp-org:service:RenderingControl:1";
+const CM = "urn:schemas-upnp-org:service:ConnectionManager:1";
+
+/* What a renderer typically says it will take. Deliberately NOT everything:
+   the point of asking is to find out what a device WILL NOT play, so a fake
+   that listed the world would prove nothing about the caller honouring the
+   answer. No audio/x-ms-wma and no DSD here, which is realistic. */
+const BASE_SINK = [
+  "http-get:*:audio/mpeg:*", "http-get:*:audio/flac:*",
+  "http-get:*:audio/mp4:*",  "http-get:*:audio/wav:*",
+  "http-get:*:audio/ogg:*",
+  /* Something we cannot serve, to prove the protocol field is read rather
+     than the list being taken whole. */
+  "rtsp-rtp-udp:*:audio/dsd:*"
+];
 
 /* What a plain renderer implements. Deliberately NOT a superset of everything
    in AVTransport: half of that specification is optional and the point of
@@ -74,12 +88,16 @@ function tag(xml, name) {
  *                     MediaRenderer search" case
  * @param noRendering  omit RenderingControl entirely — a real thing, and the
  *                     reason volume is asked for rather than assumed
+ * @param sink         protocolInfo entries this device answers GetProtocolInfo
+ *                     with. null omits ConnectionManager altogether, which is
+ *                     the "it would not say" case the caller has to survive.
  */
 function createFakeRenderer({
   port = 49152, host = "127.0.0.1", name = "Fake Renderer",
   uuid = "uuid:11111111-2222-3333-4444-555555555555",
   maker = "Test Audio Ltd", model = "Renderer One",
-  gapless = true, seekable = true, queueActions = [], noRendering = false
+  gapless = true, seekable = true, queueActions = [], noRendering = false,
+  sink = BASE_SINK
 } = {}) {
   const avtActions = [...BASE_ACTIONS, ...queueActions];
   if (gapless) avtActions.push("SetNextAVTransportURI");
@@ -90,7 +108,10 @@ function createFakeRenderer({
      the device does not implement — which is a fake being wrong in exactly the
      direction that hides a real bug, and it is why this is worth getting
      right rather than making the guard lenient. */
-  const implemented = { "/ctl/avt": avtActions, "/ctl/rc": rcActions };
+  const cmActions = ["GetProtocolInfo", "GetCurrentConnectionIDs"];
+  const implemented = {
+    "/ctl/avt": avtActions, "/ctl/rc": rcActions, "/ctl/cm": cmActions
+  };
 
   const state = {
     calls: [],
@@ -134,6 +155,8 @@ function createFakeRenderer({
   <SCPDURL>svc/avt.xml</SCPDURL><controlURL>ctl/avt</controlURL></service>
 ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
   <SCPDURL>svc/rc.xml</SCPDURL><controlURL>ctl/rc</controlURL></service>`}
+${sink === null ? "" : ` <service><serviceType>${CM}</serviceType>
+  <SCPDURL>svc/cm.xml</SCPDURL><controlURL>ctl/cm</controlURL></service>`}
 </serviceList></device></root>`;
 
   function scpd(names) {
@@ -155,6 +178,9 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
       if (url === "/svc/avt.xml") return send(scpd(avtActions));
       if (url === "/svc/rc.xml") {
         return noRendering ? (res.writeHead(404), res.end()) : send(scpd(rcActions));
+      }
+      if (url === "/svc/cm.xml") {
+        return sink === null ? (res.writeHead(404), res.end()) : send(scpd(cmActions));
       }
       res.writeHead(404); return res.end();
     }
@@ -253,6 +279,11 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
           });
         }
 
+        case "GetProtocolInfo":
+          /* Source is what it can SEND and is empty for a renderer; Sink is
+             what it will accept, which is the half a controller reads. */
+          return reply({ Source: "", Sink: (sink || []).join(",") });
+
         case "GetMediaInfo":
           return reply({
             NrTracks: state.currentUri ? 1 : 0, MediaDuration: state.duration,
@@ -287,6 +318,10 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
     listen: () => new Promise(resolve => server.listen(port, host, resolve)),
     close:  () => new Promise(resolve => server.close(resolve)),
     actions: () => state.calls.map(c => c.action),
+    /* "Measure from here." Discovery itself now asks GetProtocolInfo, so a
+       test about what DRIVING the device sends says where its window starts
+       rather than allowing for a call it is not talking about. */
+    forget: () => { state.calls.length = 0; },
     /*
      * THE DEVICE FINISHING A TRACK AND CROSSING INTO THE NEXT ONE.
      *
@@ -320,4 +355,4 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
   };
 }
 
-module.exports = { createFakeRenderer, BASE_ACTIONS };
+module.exports = { createFakeRenderer, BASE_ACTIONS, BASE_SINK };
