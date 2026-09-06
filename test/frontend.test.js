@@ -1578,6 +1578,37 @@ test("a slow waveform cannot land under a track that has already changed", () =>
   assert.match(fn, /"\/api\/track\/" \+ b64url\(id\) \+ "\/waveform"/);
 });
 
+test("the mini bar's fill never animates backwards", () => {
+  /*
+   * `.mt-progress-fill` carries a transition so the 250ms tick reads as
+   * movement. A transition does not know WHY a width changed, so the jump from
+   * the end of one track to the start of the next was animated too — the bar
+   * slid visibly back to the left every time a record moved on, which is how
+   * it was reported. It should simply be empty.
+   *
+   * The forced reflow is the half that is easy to leave out: without reading a
+   * layout property between the two writes the browser folds them into one
+   * style recalculation and the slide happens anyway.
+   */
+  const body = js.slice(js.indexOf("function setMiniFill("));
+  const fn = stripComments(body.slice(0, body.indexOf("\n}")), "js");
+  assert.match(fn, /transition = "none"/);
+  assert.match(fn, /void fill\.offsetWidth/, "the write has to be committed while it is off");
+  assert.match(fn, /removeProperty\("transition"\)/,
+    "and the stylesheet's transition put back, or the tick stops being smoothed");
+  assert.match(fn, /to >= from/, "only a move backwards is switched off");
+
+  /* Written in ONE place, so a second call site cannot reintroduce the slide. */
+  const writes = [...stripComments(js, "js").matchAll(/\$\("mt-fill"\)/g)].length;
+  assert.strictEqual(writes, 1, "only setMiniFill touches the fill");
+
+  /* One tick long. At .8s the bar chased a value it never reached and sat
+     about half a second behind the music for the whole track. */
+  assert.match(css, /\.mt-progress-fill \{[^}]*transition: width 250ms linear/);
+  assert.match(stripComments(js, "js"), /\}, 250\);/,
+    "and 250ms is what the ticker actually paints at");
+});
+
 test("the shape and the playhead share ONE mapping from time to x", () => {
   /*
    * A range input cannot let its thumb hang off either end, so the dot travels

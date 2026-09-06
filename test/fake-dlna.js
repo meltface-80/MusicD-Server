@@ -191,6 +191,12 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
              device does and what makes the re-arm worth testing. */
           state.nextUri = ""; state.nextMeta = "";
           state.track = 1;
+          /* AND IT PLAYS FROM THE TOP. Obvious of a real renderer and easy to
+             leave out of a fake — and leaving it out hides the back button:
+             "start this again" is only distinguishable from "the one before"
+             because a restart puts the position back to zero, which is what
+             makes the second press go back a track. */
+          state.relTime = "0:00:00";
           return reply({});
 
         case "SetNextAVTransportURI":

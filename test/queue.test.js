@@ -513,25 +513,96 @@ test("next and previous move a room whose queue the server holds", async () => {
   } finally { await r.cleanup(); }
 });
 
-test("the ends of the queue are said in words", async () => {
+test("the end of the queue is said in words", async () => {
   /*
-   * "Nothing is queued at position 0" is true and unhelpful. Somebody pressing
-   * previous on the first track has done nothing wrong and should be told
-   * what happened, not shown the inside of a lookup.
+   * "Nothing is queued at position 3" is true and unhelpful. Somebody pressing
+   * next on the last track has done nothing wrong and should be told what
+   * happened, not shown the inside of a lookup — and the room is left playing
+   * rather than stopped.
+   *
+   * There is no matching refusal at the TOP of the queue: back has somewhere
+   * to go there, which is the start of the track. See below.
    */
   const r = await upnpRig({ port: 49190 });
   try {
     await r.playback.playAlbum(WIIM, r.albumId("Field Recordings"));   // two tracks
-    await assert.rejects(() => r.playback.command(WIIM, "previous"),
-      /first track in the queue/);
-
     await r.playback.command(WIIM, "next");
     assert.strictEqual(r.queue().at(), 2);
     await assert.rejects(() => r.playback.command(WIIM, "next"),
       /last track in the queue/);
-    /* And the room is left where it was rather than stopped. */
     assert.strictEqual(r.queue().at(), 2);
     assert.strictEqual(r.device.state.transportState, "PLAYING");
+  } finally { await r.cleanup(); }
+});
+
+test("back on the first track starts it again rather than refusing", async () => {
+  /*
+   * REPORTED AGAINST A WiiM: eighteen seconds into the first track of a record,
+   * deciding to hear it from the beginning, and getting "That is the first
+   * track in the queue." 0.4.49 read back as the mirror of next and refused at
+   * the top of the list — the one press the button was there for.
+   */
+  const r = await upnpRig({ port: 49191 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    r.device.state.relTime = "0:00:18";
+    const uri = r.device.state.currentUri;
+
+    await r.playback.command(WIIM, "previous");
+
+    assert.strictEqual(r.queue().at(), 1, "still on the first track");
+    assert.strictEqual(r.device.state.currentUri, uri, "and it is the same track");
+    assert.strictEqual(r.device.state.relTime, "0:00:00", "played from the top");
+    assert.strictEqual(r.device.state.transportState, "PLAYING");
+  } finally { await r.cleanup(); }
+});
+
+test("back is start-this-again once you are into a track, and only then the one before", async () => {
+  /*
+   * The convention every back button follows, and the reason a SECOND press
+   * does go back: a restart puts the track at zero, so the press after it
+   * lands inside JUST_STARTED_SECONDS.
+   */
+  const r = await upnpRig({ port: 49192 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    await r.playback.command(WIIM, "next");
+    assert.strictEqual(r.queue().at(), 2);
+    const second = r.device.state.currentUri;
+
+    /* Well into it: back means this one, from the top. */
+    r.device.state.relTime = "0:01:12";
+    await r.playback.command(WIIM, "previous");
+    assert.strictEqual(r.queue().at(), 2, "the same track");
+    assert.strictEqual(r.device.state.currentUri, second);
+
+    /* The device now reports the top of the track, as a real one does after
+       being pointed at a URI — so the next press is inside the window. */
+    assert.strictEqual(r.device.state.relTime, "0:00:00");
+    await r.playback.command(WIIM, "previous");
+    assert.strictEqual(r.queue().at(), 1, "and now it goes back");
+    assert.notStrictEqual(r.device.state.currentUri, second);
+  } finally { await r.cleanup(); }
+});
+
+test("a device that will not say where it is has its track restarted", async () => {
+  /*
+   * The safe side of the trade, and it is not symmetric: restarting a track you
+   * meant to leave costs one more press, while leaving a track you meant to
+   * restart loses your place in it.
+   */
+  const r = await upnpRig({ port: 49193 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    await r.playback.command(WIIM, "next");
+    const second = r.device.state.currentUri;
+    r.device.state.faults.set("GetPositionInfo", 501);
+
+    await r.playback.command(WIIM, "previous");
+    assert.strictEqual(r.queue().at(), 2, "it stayed where it was");
+    assert.strictEqual(r.device.state.currentUri, second);
+    assert.strictEqual(r.device.state.transportState, "PLAYING",
+      "and a refused position did not become a refused button");
   } finally { await r.cleanup(); }
 });
 

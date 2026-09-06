@@ -1369,7 +1369,7 @@ function renderNow(now) {
     $("mt-title").textContent = state.zone ? "Nothing playing" : "Choose a room";
     $("mt-artist").textContent = state.zone ? state.zone.name : "";
     $("mt-art").classList.add("hidden");
-    $("mt-fill").style.width = "0";
+    setMiniFill(0);
     setPlayIcons(false);
     $("mini").classList.add("is-idle");
     return;
@@ -2462,7 +2462,7 @@ function paintProgress() {
   const elapsed = now.state === "PLAYING" ? (Date.now() - state.positionAt) / 1000 : 0;
   const position = Math.min(now.duration || 0, (now.position || 0) + elapsed);
 
-  $("mt-fill").style.width = now.duration ? `${(position / now.duration) * 100}%` : "0";
+  setMiniFill(now.duration ? (position / now.duration) * 100 : 0);
 
   /* Not while a finger is on the seek bar — the poll must not yank the thumb
      out from under it. */
@@ -2475,6 +2475,31 @@ function paintProgress() {
   drawWave(position);
   fillRange(seek, position, Number(seek.max) || 1);
   $("np-cur").textContent = mmss(position);
+}
+
+/*
+ * THE MINI BAR'S FILL, WHICH MUST NEVER ANIMATE BACKWARDS.
+ *
+ * `.mt-progress-fill` carries a CSS transition so the 250ms tick reads as
+ * movement rather than a series of steps. A transition does not know WHY a
+ * width changed, though — so the jump from the end of one track to the start of
+ * the next was animated too, and the bar slid visibly back to the left every
+ * time a record moved on. What it should do is simply be empty.
+ *
+ * So a move backwards is written with the transition off. The forced reflow is
+ * load-bearing: without reading a layout property between the two writes the
+ * browser coalesces them into one style recalculation, the transition is back
+ * on before the width is committed, and the slide happens anyway.
+ */
+function setMiniFill(pct) {
+  const fill = $("mt-fill");
+  const to = Math.max(0, Math.min(100, pct));
+  const from = parseFloat(fill.style.width) || 0;
+  if (to >= from) { fill.style.width = to + "%"; return; }
+  fill.style.transition = "none";
+  fill.style.width = to + "%";
+  void fill.offsetWidth;              // commit it while the transition is off
+  fill.style.removeProperty("transition");
 }
 
 function startProgressTicker() {
