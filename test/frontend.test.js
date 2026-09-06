@@ -1530,11 +1530,20 @@ test("the waveform is decoration under the seek bar, never a replacement", () =>
    * unreadable in height — every bar within a few pixels of every other, which
    * is a texture rather than a shape. The canvas draws at --wave-h and the
    * INPUT IS GROWN to match: a range centres its own track and thumb in its
-   * box, so a 34px input puts the thumb exactly on the waveform's midline with
-   * no offset to keep in step, and the whole shape becomes draggable rather
-   * than just the 4px line the plain bar occupies.
+   * box, so the thumb lands exactly on the waveform's midline with no offset
+   * to keep in step, and the whole shape becomes draggable rather than just
+   * the 4px line the plain bar occupies.
+   *
+   * Asserted as a RELATION rather than a number. The old version pinned the
+   * literal 34px, which says nothing about what the height is for and has to be
+   * edited every time somebody decides it should be taller — a test that only
+   * ever reports that a value was deliberately changed.
    */
-  assert.match(css, /--wave-h: 34px;/);
+  const waveH = /--wave-h:\s*(\d+)px;/.exec(css);
+  assert.ok(waveH, "the height is a token, so two rules can share it");
+  const thumb = Number(/--seek-thumb:\s*(\d+)px;/.exec(css)[1]);
+  assert.ok(Number(waveH[1]) >= thumb * 3,
+    `${waveH[1]}px leaves too little between a trough and a peak to read`);
   assert.match(css, /\.np-progress\.has-wave \.np-seek \{ height: var\(--wave-h\);/);
   assert.match(css, /\.np-wave \{[^}]*height: var\(--wave-h\)/s);
   /* Chrome's UA sheet puts margin: 2px on input[type=range]. The canvas is
@@ -1681,6 +1690,39 @@ test("the waveform is folded by the same statistic the server stores", () => {
   assert.match(fn, /ctx\.setTransform\(1, 0, 0, 1, 0, 0\)/);
   assert.match(fn, /ctx\.setTransform\(dpr, 0, 0, dpr, 0, 0\)/,
     "and put back, or everything drawn after this is in the wrong units");
+});
+
+test("a bar's HEIGHT is not rounded to a device pixel", () => {
+  /*
+   * The last quantisation in the whole pipeline, and for a while the largest.
+   * Everything before it is exact — an RMS folded by RMS is the RMS of the span
+   * — and then the height was snapped to a whole device pixel: at the 34px this
+   * shipped at, one of those was worth 1.04% of full scale against a stored
+   * value good to 0.39%, so the picture was being quantised more coarsely than
+   * it was measured. Against a known envelope the rounding WAS the error, 0.32%
+   * of full height with it and 0.12% without, and the 0.12% left is the store.
+   *
+   * Measured on the real canvas the client draws: 339 distinct bar heights with
+   * this, 123 with Math.round put back — neighbouring bars collapsing onto one
+   * level is exactly the flattening the taller canvas exists to show.
+   *
+   * The floor stays. Silence is a line, because a gap reads as "the waveform
+   * stopped loading", which is a different thing entirely.
+   */
+  const body = js.slice(js.indexOf("function drawWave("));
+  const fn = stripComments(body.slice(0, body.indexOf("\n}")), "js");
+  assert.match(fn, /const barH = Math\.max\(1, \(v \/ 255\) \* height\);/);
+  assert.doesNotMatch(fn, /Math\.round\(\(v \/ 255\)/,
+    "the height carries the precision the store measured");
+  /* And the OFFSET too: rounding half the height pushed every odd-numbered bar
+     half a pixel off the midline. */
+  assert.match(fn, /ctx\.fillRect\(x, mid - barH \/ 2, ink, barH\);/);
+  assert.doesNotMatch(fn, /mid - Math\.round\(barH/,
+    "a bar is centred on the midline exactly");
+  /* The horizontal placement is the opposite case and stays rounded: a bar's
+     LEFT EDGE on a fractional device pixel is a bar smeared across three
+     columns instead of drawn on two. */
+  assert.match(fn, /const x = Math\.round\(devInset \+ i \* step\);/);
 });
 
 test("the waveform and the bar read the same position", () => {

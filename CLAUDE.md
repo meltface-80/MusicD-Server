@@ -810,6 +810,42 @@ part of the fix.
   stretched and show nothing. A screen with no pixels to spare keeps one and
   one, because at 1x a two-pixel bar is a different drawing rather than a finer
   one.
+- **A DOWNMIX IS AN ADDITION, AND ADDITIONS CANCEL.** The decode asked ffmpeg
+  for `-ac 1` under a comment claiming a mono bar is "the max of the two
+  channels anyway". It is not: ffmpeg AVERAGES them, and the average of x and
+  -x is nothing. Measured on a stereo file whose channels are inverted against
+  each other, the downmix came back at RMS 0 — dead silence — where the pair is
+  RMS 2896. Any record with a phase-flipped or heavily decorrelated passage was
+  drawn quieter than it is, and in the limit as a flat line. `DECODE_CHANNELS`
+  is 2, and NOTHING IN THE ACCUMULATOR HAD TO KNOW: it sums the square of every
+  sample and divides by the count, and the root of the mean of L² and R² over a
+  window IS the level of the pair, so interleaved stereo falls out on its own.
+  The one thing that had to move is the STRIDE — ten milliseconds is twice as
+  many samples now — which is why it is computed from the rate AND the channel
+  count rather than written down, and why a test asserts the two agree. Whenever
+  a comment explains why a lossy shortcut is safe, check the tool actually does
+  what the comment says.
+- **THE DRAWN HEIGHT WAS THE LAST QUANTISATION, AND FOR A WHILE THE LARGEST.**
+  Everything up to the stored bucket is exact, and then `drawWave()` snapped the
+  bar to a whole device pixel — at 34px one of those was worth 1.04% of full
+  scale against a stored value good to 0.39%, so the picture was quantised more
+  coarsely than it was measured. Against a known envelope the rounding WAS the
+  error: 0.32% of full height with it, 0.12% without, and the 0.12% left is the
+  eight-bit store, which is finer than a device pixel at any height that fits on
+  a screen — so more bits would buy nothing anybody can see. On the real canvas
+  it is 339 distinct bar heights against 123 with the rounding back. A
+  fractional height antialiases the two END CAPS and nothing else, because the
+  bar stays on whole device pixels HORIZONTALLY: a left edge at a fraction is a
+  bar smeared over three columns instead of drawn on two, which is the opposite
+  trade. Ask of every rounding whether it is coarser than the thing it is
+  rounding.
+- **AND HEIGHT IS ACCURACY, not only taste.** `--wave-h` went 34px → 64px
+  because a device pixel is worth half as much at twice the height (1.04% →
+  0.54%), and because the complaint was that peaks and troughs read too much
+  alike. The two are the same fact from either end. `test/frontend.test.js`
+  asserts the height as a RELATION to `--seek-thumb` rather than as a literal,
+  because a test pinning the number only ever reports that somebody changed it
+  on purpose.
 - **AND THE DECODE RATE WENT UP BECAUSE IT WAS FASTER, not in spite of being
   slower.** 16 kHz was chosen on the assumption that the extra PCM had to be
   paid for; measured over a five-minute FLAC it is the other way round — 16 kHz
