@@ -91,9 +91,36 @@ test("the sign of a sample is not part of its level", () => {
   assert.deepStrictEqual([...acc.finish(2)], [255, 156]);
 });
 
-test("resampling keeps the peaks rather than averaging them away", () => {
+test("resampling is the same statistic at every scale", () => {
+  /*
+   * These are RMS levels, so the RMS of them IS the level of the whole span —
+   * folding twice gives what folding once would have given, and the drawn shape
+   * does not depend on how many times it passed through here.
+   */
   const spiky = [0, 0, 0, 900, 0, 0, 0, 100];
-  assert.deepStrictEqual(WF.resample(spiky, 2), [900, 100]);
+  assert.deepStrictEqual(WF.resample(spiky, 2), [450, 50]);
+
+  const once = WF.resample(spiky, 2);
+  const twice = WF.resample(WF.resample(spiky, 4), 2);
+  once.forEach((v, i) => assert.ok(Math.abs(v - twice[i]) < 1e-9,
+    `folded once ${v}, folded twice ${twice[i]}`));
+});
+
+test("a maximum would flatten a limited record; this does not", () => {
+  /*
+   * THE SECOND HALF OF THE BRICK, and the reason 0.4.50 did not finish the job.
+   * A limiter puts something on the ceiling inside almost any window you name,
+   * so the loudest level in a bar is the same number in a quiet bar and a loud
+   * one. Two of these spans hold one ceiling-height moment each and differ by a
+   * factor of ten in how much of the span is loud.
+   */
+  const busy = new Array(20).fill(900);
+  const sparse = new Array(20).fill(90); sparse[7] = 900;
+  const out = WF.resample(busy.concat(sparse), 2);
+  assert.strictEqual(Math.round(out[0]), 900);
+  assert.ok(out[1] < 250, "the sparse span is not read as loud: " + out[1].toFixed(0));
+  /* A maximum would have called both of them 900. */
+  assert.ok(out[0] / out[1] > 3, "and the two are plainly different heights");
 });
 
 test("a clip shorter than the bar is stretched, not left as a stub", () => {
@@ -156,12 +183,13 @@ test("ffmpeg is asked for the FIRST audio stream, as mono, at the stored rate", 
   /* -map 0:a:0 matters: a rip carrying a commentary track would otherwise be
      drawn from whichever stream ffmpeg picked by its own rules. */
   assert.ok(args.join(" ").includes("-map 0:a:0"), args.join(" "));
-  /* Raw mono PCM at the stored rate, on stdout. Decoding to 8 kHz would make
-     ffmpeg lowpass at 4 kHz first and quietly flatten every cymbal and snare
-     before the peak detector could see them. */
+  /* Raw mono PCM at the stored rate, on stdout. Asking for the rate nearly
+     every file already IS means ffmpeg has nothing to resample, which measured
+     FASTER than the 16 kHz it replaced as well as keeping the cymbals and
+     sibilance a lowpass at 8 kHz would have thrown away. */
   assert.deepStrictEqual(args.slice(-7),
-    ["-f", "s16le", "-ac", "1", "-ar", "16000", "-"]);
-  assert.strictEqual(WFD.DECODE_RATE, 16000, "and the store records which rate that was");
+    ["-f", "s16le", "-ac", "1", "-ar", "44100", "-"]);
+  assert.strictEqual(WFD.DECODE_RATE, 44100, "and the store records which rate that was");
   assert.ok(args.includes("-nostdin"), "never wait on a terminal that is not there");
 });
 
@@ -181,7 +209,7 @@ test("a damaged file that decoded most of the way still gets a waveform", async 
      would mean a truncated download shows nothing rather than nearly all. */
   const out = await WFD.decodeWaveform("/music/truncated.mp3",
     { spawn: fakeSpawn({ stdout: [pcm(new Array(600).fill(5000))], code: 1, stderr: "truncated\n" }) });
-  assert.ok(out && out.length === 1000);
+  assert.ok(out && out.length === WF.BUCKETS);
   assert.strictEqual(Math.max(...out), 255);
 });
 
@@ -206,12 +234,14 @@ test("the shape that goes in is the shape that comes out", async (t) => {
   fs.rmSync(root, { recursive: true, force: true });
 
   if (!out) return t.skip("no ffmpeg on this machine");
-  assert.strictEqual(out.length, 1000);
-  const quiet = out[200], loud = out[800];
-  assert.ok(loud > 240, "the loud half reaches full scale: " + loud);
-  assert.ok(quiet > 20 && quiet < 60, "the quiet half is about 15%: " + quiet);
+  assert.strictEqual(out.length, WF.BUCKETS);
+  /* By FRACTION of the track, so the bucket count can move without this
+     quietly starting to assert about a different moment in the audio. */
+  const at = (f) => out[Math.floor(f * WF.BUCKETS)];
+  assert.ok(at(0.8) > 240, "the loud half reaches full scale: " + at(0.8));
+  assert.ok(at(0.2) > 20 && at(0.2) < 60, "the quiet half is about 15%: " + at(0.2));
   /* The transition is where it was put, not smeared across the track. */
-  assert.ok(out[490] < 60 && out[510] > 240, "the step is at the half way point");
+  assert.ok(at(0.49) < 60 && at(0.51) > 240, "the step is at the half way point");
 });
 
 /* ---------------------------------------------------------------- */
