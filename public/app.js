@@ -2660,10 +2660,24 @@ function drawWave(at) {
     let sum = 0;
     for (let j = a; j < b; j++) sum += peaks[j] * peaks[j];
     const v = Math.sqrt(sum / (b - a));
-    /* A floor of one device pixel so silence is a line rather than a gap — a
-       gap reads as "the waveform stopped loading", which is a different thing
-       entirely. */
-    const barH = Math.max(1, Math.round((v / 255) * height));
+    /*
+     * NOT ROUNDED TO A WHOLE PIXEL. Everything before this point is exact — an
+     * RMS folded by RMS is the RMS of the whole span — and then the height was
+     * snapped to a device pixel, which at the old 34px was worth 1.04% of full
+     * scale against a stored value good to 0.39%. The picture was being
+     * quantised more coarsely than it was measured, and against a known
+     * envelope that rounding WAS the error: 0.32% with it, 0.12% without, and
+     * the 0.12% left is the eight-bit store, which is finer than a device
+     * pixel at any height that fits on a screen.
+     *
+     * A fractional height antialiases the two END CAPS and nothing else — the
+     * bar stays on whole device pixels horizontally, so it is the top edge that
+     * gains precision rather than the whole shape losing crispness.
+     *
+     * The floor stays, in device pixels: silence is a line rather than a gap,
+     * because a gap reads as "the waveform stopped loading".
+     */
+    const barH = Math.max(1, (v / 255) * height);
     const x = Math.round(devInset + i * step);
     /* A bar counts as played once its MIDDLE is behind the playhead, so the
        boundary lands where the dot is rather than a bar's width either side. */
@@ -2672,7 +2686,9 @@ function drawWave(at) {
     /* The played side goes to full strength so the accent still reads as the
        position marker against a bright track ahead of it. */
     ctx.globalAlpha = done ? 1 : 0.72;
-    ctx.fillRect(x, mid - Math.round(barH / 2), ink, barH);
+    /* Centred on the midline exactly. Rounding the offset as well as the height
+       pushed an odd-numbered bar half a pixel upwards, every time. */
+    ctx.fillRect(x, mid - barH / 2, ink, barH);
   }
   ctx.globalAlpha = 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

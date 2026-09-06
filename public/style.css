@@ -1243,8 +1243,14 @@ main {
      height and the input is GROWN to match. Bound to the plain bar's 14px
      instead, the shape is legible in length and unreadable in height — every
      bar within a few pixels of every other, which is a texture rather than a
-     waveform. */
-  --wave-h: 34px;
+     waveform.
+
+     64px rather than the 34 it shipped at, and the reason is ACCURACY as much
+     as taste: the drawn height is the one place the shape is still rounded, so
+     at 34px one device pixel was worth 1.04% of full height against the stored
+     value's 0.39% — the picture was being quantised more coarsely than it was
+     measured. Taller is also simply more room between a trough and a peak. */
+  --wave-h: 64px;
   /* The thumb's diameter, named because the WAVEFORM has to know it too. A
      range's thumb centre travels thumbW/2 .. width - thumbW/2, so a waveform
      whose colour boundary runs 0 .. width disagrees with it by half a thumb at

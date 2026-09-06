@@ -67,6 +67,45 @@ test("a limited master is not drawn as a brick", () => {
     "and the quiet half is a fraction of it, not the same bar: " + out[0]);
 });
 
+test("interleaved stereo is the level of the PAIR, not of one channel", () => {
+  /*
+   * WHAT `-ac 1` COST, and why nothing in here had to change to fix it.
+   *
+   * The accumulator sums the square of every sample and divides by how many
+   * there were, so the root of the mean of L² and R² over a window IS the level
+   * of the pair — interleaving falls out on its own. What does NOT survive a
+   * downmix is a passage whose channels disagree: ffmpeg AVERAGES them, and an
+   * average of x and -x is nothing at all.
+   */
+  const inverted = [];
+  for (let i = 0; i < 200; i++) inverted.push(4000, -4000);   // L, R, L, R …
+  const acc = WF.createPeaks({ stride: 400 });                // 200 frames
+  acc.push(pcm(inverted));
+  assert.deepStrictEqual(acc.raw, [4000], "the pair is as loud as either channel");
+
+  /* And what the downmix would have handed it instead. Built here rather than
+     asserted about ffmpeg, because the point is the SHAPE of the loss: this
+     passage is not quieter under a downmix, it is silent. */
+  const mono = [];
+  for (let i = 0; i < inverted.length; i += 2) mono.push((inverted[i] + inverted[i + 1]) / 2);
+  const was = WF.createPeaks({ stride: 200 });
+  was.push(pcm(mono));
+  assert.deepStrictEqual(was.raw, [0], "which is the bug: a whole passage drawn as nothing");
+});
+
+test("the level window is ten milliseconds of FRAMES, however many channels a frame has", () => {
+  /*
+   * NO PARTIAL MIGRATION. Moving to two channels doubles the samples in a
+   * window, so a stride left at the mono figure would measure five milliseconds
+   * and call it ten — no error anywhere, just a different analysis under the
+   * same generation number. The default and the decoder's own stride are the
+   * same arithmetic, stated once here.
+   */
+  const want = Math.round(WFD.DECODE_RATE * WFD.DECODE_CHANNELS * WF.LEVEL_MS / 1000);
+  assert.strictEqual(WF.STRIDE, want,
+    `${WF.STRIDE} samples is ${(1000 * WF.STRIDE / (WFD.DECODE_RATE * WFD.DECODE_CHANNELS)).toFixed(1)}ms`);
+});
+
 test("a sample split across two chunks is still one sample", () => {
   /* ffmpeg writes to a pipe and the OS breaks it wherever it likes, so a
      16-bit sample arrives in halves regularly. Reading the stray byte as a
@@ -176,20 +215,25 @@ function fakeSpawn({ stdout = [], code = 0, stderr = "", fail = false, hang = fa
   return spawn;
 }
 
-test("ffmpeg is asked for the FIRST audio stream, as mono, at the stored rate", async () => {
+test("ffmpeg is asked for the FIRST audio stream, BOTH channels, at the stored rate", async () => {
   const spawn = fakeSpawn({ stdout: [pcm(new Array(600).fill(9000))] });
   await WFD.decodeWaveform("/music/x.flac", { spawn, buckets: 8 });
   const args = spawn.calls[0].args;
   /* -map 0:a:0 matters: a rip carrying a commentary track would otherwise be
      drawn from whichever stream ffmpeg picked by its own rules. */
   assert.ok(args.join(" ").includes("-map 0:a:0"), args.join(" "));
-  /* Raw mono PCM at the stored rate, on stdout. Asking for the rate nearly
-     every file already IS means ffmpeg has nothing to resample, which measured
-     FASTER than the 16 kHz it replaced as well as keeping the cymbals and
-     sibilance a lowpass at 8 kHz would have thrown away. */
+  /* Raw PCM at the stored rate, on stdout. Asking for the rate nearly every
+     file already IS means ffmpeg has nothing to resample, which measured FASTER
+     than the 16 kHz it replaced as well as keeping the cymbals and sibilance a
+     lowpass at 8 kHz would have thrown away.
+
+     AND BOTH CHANNELS, because `-ac 1` averages them rather than taking the
+     louder — a stereo file whose channels are inverted against each other came
+     back as RMS 0, dead silence, where the pair is RMS 2896. */
   assert.deepStrictEqual(args.slice(-7),
-    ["-f", "s16le", "-ac", "1", "-ar", "44100", "-"]);
+    ["-f", "s16le", "-ac", "2", "-ar", "44100", "-"]);
   assert.strictEqual(WFD.DECODE_RATE, 44100, "and the store records which rate that was");
+  assert.strictEqual(WFD.DECODE_CHANNELS, 2);
   assert.ok(args.includes("-nostdin"), "never wait on a terminal that is not there");
 });
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.56
+
+### The waveform, taller and exact
+- **The shape is drawn from BOTH channels.** It was being mixed down to one
+  first, and a mix-down is an addition — a passage whose two channels are out of
+  phase cancels to silence. Measured on a file built that way: nothing at all
+  where there should have been a full-height bar. Anything with a wide or
+  phase-flipped stereo image was drawn quieter than it is.
+- **A bar is no longer rounded to a whole screen pixel.** Everything before that
+  step was exact and then the height was snapped, which threw away more than the
+  stored value ever had. Measured against a record with a known shape, that
+  rounding was most of the remaining error.
+- **And it is taller** — 64px rather than 34 — so there is somewhere for the
+  difference between a quiet passage and a loud one to show. That also halves
+  what a single screen pixel is worth, so the two changes pull the same way.
+- Every waveform is re-analysed once, the first time you open a track, because
+  the numbers would come out differently for audio that has not changed.
+
 ## 0.4.55
 
 ### The build stops sitting there
