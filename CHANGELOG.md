@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.55
+
+### The build stops sitting there
+- **Nothing in the app changed.** All of this is the test suite.
+- **One test file was searching the network for real speakers** — twenty-four
+  times, three seconds each — because it was set up without being told there
+  were none. That one file took seventy-five seconds; it now takes three, and
+  the whole suite went from over a minute to twenty-seven seconds. On a build
+  machine, where that kind of search is far less predictable, it is what the
+  build was waiting on.
+- **Two tests added in 0.4.54 were using ports another file needs empty**, so
+  when they overlapped they answered each other's questions. Ports now belong to
+  one file, checked mechanically rather than by remembering.
+- **And a test that hangs now fails by name within a minute**, instead of
+  running until something else stops it.
+
 ## 0.4.54
 
 ### A room plays what IT plays

@@ -213,7 +213,18 @@ async function upnpRig({ port, gapless = true, sink } = {}) {
 
   const settings = settingsLib.open(db);
   const household = new Zones({
-    sonos: new Household({ hosts: [] }), renderers, settings
+    /*
+     * NO REAL MULTICAST. An empty `hosts` sends `Household` down the discovery
+     * path, and `ssdpSearch` then waits out its full three seconds finding the
+     * nothing that is there — once per test, twenty-four times, which was
+     * SEVENTY-FIVE SECONDS of this file and most of the suite's running time.
+     * On a CI runner, where multicast in a container is anybody's guess, it was
+     * worse than slow.
+     *
+     * `discover` is injectable for exactly this: these tests are about a
+     * renderer, and the Sonos side of the house is deliberately empty.
+     */
+    sonos: new Household({ hosts: [], discover: async () => [] }), renderers, settings
   });
   household.setEnabled(WIIM, true);
 
@@ -440,7 +451,7 @@ test("a hand-over that silently failed does not end the album", async () => {
    * ends its record wherever the hand-over happened to miss, intermittently,
    * which is the worst kind of fault to be left with.
    */
-  const r = await upnpRig({ port: 49198 });
+  const r = await upnpRig({ port: 49205 });
   try {
     await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
     assert.ok(r.device.state.nextUri, "armed");
@@ -459,7 +470,7 @@ test("a room somebody stopped stays stopped", async () => {
    * silenced is far worse than an album that ended early — and it is the
    * failure mode that makes the fix above dangerous if it guesses.
    */
-  for (const [action, port] of [["stop", 49199], ["pause", 49200]]) {
+  for (const [action, port] of [["stop", 49206], ["pause", 49200]]) {
     const r = await upnpRig({ port });
     try {
       await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));

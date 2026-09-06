@@ -330,6 +330,45 @@ database and nothing else. A pick must connect to what was actually played —
 being unplayed is a scoring bonus, never a reason to be picked, because a row of
 merely-unplayed albums is the Random row wearing a different name.
 
+## The suite runs its files IN PARALLEL
+
+`node --test test/*.test.js` runs each file in its own process, at the same
+time. Two consequences, both of which have bitten:
+
+- **A PORT IS OWNED BY ONE FILE, and `test/suite.test.js` fails the build
+  otherwise.** 0.4.54 added tests that listened on 49198 and 49199 — the two
+  addresses `test/dlna.test.js` asserts nothing is listening on, because "a
+  device that has gone" and "this is not a renderer" are only testable against a
+  dead port. Whenever the files overlapped, those assertions were being made
+  against a live fake renderer. NO ALLOW-LIST: two files sharing a port that
+  nothing listens on is harmless today and one edit away from not being, and a
+  rule with exceptions is one nobody can apply without reading them. A fake with
+  no port of its own is the same collision by a quieter route, so that is
+  checked too.
+- **A HANG IS THE WORST SHAPE A FAILURE CAN TAKE, so `npm test` carries
+  `--test-timeout`.** That collision went green on the branch twice and then sat
+  for a quarter of an hour on main with no output naming anything — nothing to
+  read, nothing to bisect, and a job that would have burned six hours of
+  somebody's runner before GitHub stopped it. Sixty seconds is ~20x the slowest
+  test in the suite, and a test that exceeds it now FAILS BY NAME with exit 1.
+  Whenever a check can wedge rather than fail, give it a deadline: a slow red is
+  worth any amount of silent amber.
+- **AND A GREEN RUN IS NOT PROOF WHEN THE FAILURE IS A RACE.** The same tree
+  passed twice and hung on the third run. A test that depends on which files
+  happen to overlap will do that, which is why the rule above is enforced by
+  reading the files rather than by running them.
+- **NO TEST GOES LOOKING FOR REAL DEVICES.** A `Household` with an empty
+  `hosts` takes the DISCOVERY path, so `ssdpSearch` waits out its full three
+  seconds finding the nothing that is on a test machine — `upnpRig` did that
+  once per test, twenty-four times, and `test/queue.test.js` took SEVENTY-FIVE
+  SECONDS on its own. Injecting `discover` took it to three. The whole suite
+  went from 64 seconds to 27. On a CI runner, where multicast inside a container
+  is anybody's guess, it was worse than slow: that file is what the build was
+  sitting on. Both `Household` and `Renderers` take an injectable for exactly
+  this, and `test/suite.test.js` fails the build for either one left to perform
+  a real search. A UNIT TEST THAT TOUCHES THE NETWORK IS SLOW HERE AND
+  UNPREDICTABLE SOMEWHERE ELSE.
+
 ## Pre-flight before every commit
 
 ```bash
