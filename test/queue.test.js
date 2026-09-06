@@ -52,7 +52,7 @@ test("a queue implements all of what a queue is, so a second one has a list", ()
    * implementation knows nothing about it.
    */
   const required = ["list", "length", "add", "clear", "startAt", "jumpTo",
-                    "position", "next", "previous"];
+                    "position", "playing", "next", "previous"];
   const proto = SonosQueue.prototype;
   for (const name of required) {
     assert.strictEqual(typeof proto[name], "function", `a queue must have ${name}()`);
@@ -360,20 +360,119 @@ test("a Sonos still gets the sentinel, and no DLNA flags", async () => {
   assert.match(forDlna, /protocolInfo="http-get:\*:audio\/flac:DLNA\.ORG_OP=01;/);
 });
 
+/*
+ * Nothing has stopped the room but the end of a track: the window in which a
+ * device might merely be opening a URI it was just handed has passed.
+ */
+async function stops(r) {
+  r.playback.sentUris.clear();
+  r.device.state.transportState = "STOPPED";
+  for (let i = 0; i < 2; i++) { await r.playback.poll(); await r.playback.settle(); }
+}
+
 test("a device that cannot hand over early still plays, one track at a time", async () => {
   /*
    * SetNextAVTransportURI is optional. A device without it is not refused —
    * it plays with a gap between tracks, which is what that device can do, and
    * `can` was read from its own description rather than assumed.
+   *
+   * "ONE TRACK AT A TIME" IS THE PART THAT WAS NEVER ASSERTED. The first
+   * version of this test stopped at "the first track plays", which was true
+   * with the album ending there for ever — nothing armed the next one and the
+   * poll skipped any room that was not PLAYING, so a renderer without the
+   * action played exactly one track and stopped. Found by reading philippe44's
+   * LMS-to-uPnP bridge, which has handled it since forever.
    */
   const r = await upnpRig({ port: 49184, gapless: false });
   try {
     assert.strictEqual(r.queue().gapless, false);
     await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    const first = r.device.state.currentUri;
     assert.strictEqual(r.device.state.transportState, "PLAYING", "it plays");
     assert.strictEqual(r.device.state.nextUri, "", "nothing was handed over");
     assert.ok(!r.device.actions().includes("SetNextAVTransportURI"),
       "and it was never asked to do what it said it could not");
+
+    await stops(r);
+    assert.strictEqual(r.device.state.transportState, "PLAYING", "the record did not end");
+    assert.strictEqual(r.queue().at(), 2);
+    assert.notStrictEqual(r.device.state.currentUri, first, "it is on the second track");
+  } finally { await r.cleanup(); }
+});
+
+test("a hand-over that silently failed does not end the album", async () => {
+  /*
+   * The other way to arrive at a stopped device: the slot WAS armed and the
+   * device stopped instead of crossing over. The bridge calls this
+   * SQ_NEXT_FAILED and asks the server to move on; without it a gapless room
+   * ends its record wherever the hand-over happened to miss, intermittently,
+   * which is the worst kind of fault to be left with.
+   */
+  const r = await upnpRig({ port: 49198 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    assert.ok(r.device.state.nextUri, "armed");
+    const first = r.device.state.currentUri;
+
+    await stops(r);
+    assert.strictEqual(r.device.state.transportState, "PLAYING");
+    assert.notStrictEqual(r.device.state.currentUri, first);
+  } finally { await r.cleanup(); }
+});
+
+test("a room somebody stopped stays stopped", async () => {
+  /*
+   * A SILENT DEVICE IS THE SAME SHAPE EITHER WAY, so which one it is is
+   * remembered rather than inferred. Restarting music a person deliberately
+   * silenced is far worse than an album that ended early — and it is the
+   * failure mode that makes the fix above dangerous if it guesses.
+   */
+  for (const [action, port] of [["stop", 49199], ["pause", 49200]]) {
+    const r = await upnpRig({ port });
+    try {
+      await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+      const on = r.device.state.currentUri;
+      await r.playback.command(WIIM, action);
+      r.playback.sentUris.clear();
+      for (let i = 0; i < 2; i++) { await r.playback.poll(); await r.playback.settle(); }
+
+      assert.notStrictEqual(r.device.state.transportState, "PLAYING",
+        `${action} was undone by the poll`);
+      assert.strictEqual(r.device.state.currentUri, on, "and it did not move on");
+      assert.strictEqual(r.queue().at(), 1);
+    } finally { await r.cleanup(); }
+  }
+});
+
+test("play after a stop lets the poll move the room on again", async () => {
+  /* The flag has to be cleared by anything that starts music, or a room that
+     was once stopped never advances itself again. */
+  const r = await upnpRig({ port: 49201 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    await r.playback.command(WIIM, "stop");
+    await r.playback.command(WIIM, "play");
+    const first = r.device.state.currentUri;
+
+    await stops(r);
+    assert.strictEqual(r.queue().at(), 2, "the room advanced");
+    assert.notStrictEqual(r.device.state.currentUri, first);
+  } finally { await r.cleanup(); }
+});
+
+test("the end of the record is the end, not a loop", async () => {
+  const r = await upnpRig({ port: 49202 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Field Recordings"));   // two tracks
+    await r.playback.command(WIIM, "next");
+    assert.strictEqual(r.queue().at(), 2);
+    const last = r.device.state.currentUri;
+
+    await stops(r);
+    assert.strictEqual(r.queue().at(), 2, "it stayed at the end");
+    assert.strictEqual(r.device.state.currentUri, last);
+    assert.strictEqual(r.device.state.transportState, "STOPPED",
+      "and nothing started it again");
   } finally { await r.cleanup(); }
 });
 
@@ -532,6 +631,99 @@ test("the end of the queue is said in words", async () => {
       /last track in the queue/);
     assert.strictEqual(r.queue().at(), 2);
     assert.strictEqual(r.device.state.transportState, "PLAYING");
+  } finally { await r.cleanup(); }
+});
+
+test("a device still opening a URI is not read as the room being on the one before", async () => {
+  /*
+   * REPORTED AGAINST A WiiM: press skip and the screen keeps painting the
+   * PREVIOUS track, still advancing, for a second or two — so a skip near the
+   * end of a record shows that track's waveform fully played before the new one
+   * appears. A renderer handed a URI carries on describing the track before it
+   * while it opens the stream; Sonos has no such window, because its own Next
+   * moves the queue inside the speaker before it answers.
+   */
+  const r = await upnpRig({ port: 49194 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    const first = r.device.state.currentUri;
+    r.device.state.relTime = "0:04:00";        // well into it, which is when people skip
+    r.device.state.settleMs = 4000;
+
+    await r.playback.command(WIIM, "next");
+    /* The fixture is honest about the window: asked where it is, the device
+       still names the track it was playing before the press. */
+    const said = await r.household.get(WIIM).positionInfo();
+    assert.strictEqual(said.uri, first);
+    assert.strictEqual(said.relTime, "0:04:00");
+
+    const now = await r.playback.nowPlaying(WIIM);
+    assert.notStrictEqual(now.track.id, r.queue().trackAt(1),
+      "but the room is reported on the track it was told to play");
+    assert.strictEqual(now.position, 0, "at the top of it, not four minutes in");
+    assert.strictEqual(now.duration, now.track.duration,
+      "and its own length, not the length of the track that just ended");
+  } finally { await r.cleanup(); }
+});
+
+test("a restart is not settled until the device is back at the top", async () => {
+  /*
+   * The same report wearing different clothes. Back near the end of a track
+   * restarts it WITHOUT changing the URI, so asking "is the device on the URI
+   * we sent" says yes on the first poll and hands back the position from before
+   * the press — the bar sits at 98% for a moment instead of going to zero.
+   */
+  const r = await upnpRig({ port: 49195 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    r.device.state.relTime = "0:03:30";
+    r.device.state.settleMs = 4000;
+
+    await r.playback.command(WIIM, "previous");     // well in: restarts this track
+    const now = await r.playback.nowPlaying(WIIM);
+
+    assert.strictEqual(r.queue().at(), 1, "the same track");
+    assert.strictEqual(now.position, 0, "and it is at the top of it");
+  } finally { await r.cleanup(); }
+});
+
+test("a device sent somewhere else by its own app is believed at once", async () => {
+  /*
+   * The window must not become an argument. It exists for a device that has not
+   * caught up — one reporting a track that is neither what it was told nor what
+   * it was leaving has genuinely gone somewhere, and the room follows it.
+   */
+  const r = await upnpRig({ port: 49196 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    const queue = r.queue();
+    const fifth = queue.trackAt(5);
+
+    /* Straight at the device, inside the settling window of the play above. */
+    await r.household.get(WIIM).setAvTransportUri(
+      "http://192.168.1.9:3400/stream/" + require("../lib/ids").encodeId(fifth) + ".wav");
+    const now = await r.playback.nowPlaying(WIIM);
+    assert.strictEqual(now.track.id, fifth, "the room follows what is playing");
+  } finally { await r.cleanup(); }
+});
+
+test("what a device was last handed outlives the object that recorded it", async () => {
+  /*
+   * queueFor() builds a queue per call, so a fact about a window of SECONDS
+   * would be forgotten the moment it was written down. The Map lives on
+   * Playback for that reason, and this is the assertion that says so: the
+   * queue asked is not the queue that did the sending.
+   */
+  const r = await upnpRig({ port: 49197 });
+  try {
+    await r.playback.playAlbum(WIIM, r.albumId("Spirit of Eden"));
+    r.device.state.relTime = "0:04:00";
+    r.device.state.settleMs = 4000;
+    await r.playback.command(WIIM, "next");
+
+    const fresh = r.queue();                       // a brand new ServerQueue
+    assert.ok(fresh.sent, "it can still see what the device was handed");
+    assert.strictEqual(fresh.playing({ uri: r.device.state.currentUri, relTime: "0:04:00" }).seconds, 0);
   } finally { await r.cleanup(); }
 });
 

@@ -99,6 +99,19 @@ function createFakeRenderer({
     nextUri: "", nextMeta: "",
     relTime: "0:00:00", duration: "0:00:00", track: 0,
     volume: 30, muted: false,
+    /*
+     * A DEVICE IS NOT INSTANTANEOUS, and pretending it is hides a whole class
+     * of bug in the controller.
+     *
+     * Set `settleMs` and GetPositionInfo keeps answering with the values from
+     * BEFORE the last SetAVTransportURI for that long — which is what a real
+     * renderer does while it opens the new stream, and the window a controller
+     * that polls just after a press lands in. Sonos has no equivalent: its own
+     * Next moves the speaker's queue atomically, which is why this only ever
+     * bit the rooms whose queue the server holds.
+     */
+    settleMs: 0,
+    settling: null,
     /* Actions to answer with a UPnP fault, for driving a caller's handling. */
     faults: new Map()
   };
@@ -185,6 +198,13 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
 
       switch (action) {
         case "SetAVTransportURI":
+          /* What the device will keep reporting until it has settled. */
+          if (state.settleMs > 0) {
+            state.settling = {
+              until: Date.now() + state.settleMs,
+              uri: state.currentUri, relTime: state.relTime, duration: state.duration
+            };
+          }
           state.currentUri = tag(body, "CurrentURI");
           state.currentMeta = tag(body, "CurrentURIMetaData");
           /* A new current track clears the next slot, which is what a real
@@ -216,13 +236,22 @@ ${noRendering ? "" : ` <service><serviceType>${RC}</serviceType>
             CurrentTransportStatus: "OK", CurrentSpeed: "1"
           });
 
-        case "GetPositionInfo":
+        case "GetPositionInfo": {
+          const s = state.settling && Date.now() < state.settling.until ? state.settling : null;
+          if (s) {
+            return reply({
+              Track: state.track, TrackDuration: s.duration,
+              RelTime: s.relTime, AbsTime: s.relTime,
+              TrackURI: s.uri, TrackMetaData: ""
+            });
+          }
           return reply({
             Track: state.track, TrackDuration: state.duration,
             TrackMetaData: state.currentMeta, TrackURI: state.currentUri,
             RelTime: state.relTime, AbsTime: state.relTime,
             RelCount: 0, AbsCount: 0
           });
+        }
 
         case "GetMediaInfo":
           return reply({

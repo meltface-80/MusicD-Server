@@ -1578,6 +1578,33 @@ test("a slow waveform cannot land under a track that has already changed", () =>
   assert.match(fn, /"\/api\/track\/" \+ b64url\(id\) \+ "\/waveform"/);
 });
 
+test("every hover style is behind a real pointer", () => {
+  /*
+   * :hover STICKS ON A TOUCHSCREEN. A tap leaves the element hovered until
+   * something else is tapped, so the light ring stayed round the skip button
+   * long after the press — reported on Now playing, and true of every one of
+   * these: album cards, menu rows, track rows, the lot.
+   *
+   * `@media (hover: hover)` is the whole fix, and it has to be ALL of them or
+   * the next one somebody adds brings the bug back.
+   */
+  const guardless = css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, "");
+  const left = (stripComments(guardless, "css").match(/:hover/g) || []).length;
+  assert.strictEqual(left, 0, "these would stick after a tap on a phone");
+  assert.ok((css.match(/@media \(hover: hover\)/g) || []).length > 30,
+    "and the guards are actually there, rather than the hover styles deleted");
+
+  /* A PRESS AND A KEYBOARD ARE NOT A POINTER. Guarding a selector list that
+     mixes them takes the touch and keyboard states away too, which is a
+     quieter regression than the one being fixed. */
+  assert.match(css, /\.search-chip:active \{/);
+  assert.match(css, /\.artist-link:focus-visible \{/);
+  const inside = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)]
+    .map(m => m[1]).join("\n");
+  assert.doesNotMatch(inside, /:active/, "a press must work without a pointer");
+  assert.doesNotMatch(inside, /:focus/, "and so must a keyboard");
+});
+
 test("the mini bar's fill never animates backwards", () => {
   /*
    * `.mt-progress-fill` carries a transition so the 250ms tick reads as
