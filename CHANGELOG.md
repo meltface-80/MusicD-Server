@@ -4,6 +4,22 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.1.4
+- **Updates never lose your library or edits, and never rescan it.** After a manual or
+  in-app update the whole library is there the moment the server is back and plays
+  straight away; the start-up check only reads files that are new or changed.
+- Album edits are also saved to `album-edits.json` in the data folder and restored from it
+  if the database ever has to start over. A database that must be replaced hands over its
+  edits, play history and settings first; one from a newer version is never moved aside.
+- Music mounted somewhere new (e.g. `/music` → `/music/4tb`) is recognised as the same files:
+  albums, ids, play history, playlists and edits stay, and nothing is re-read.
+- A drive that isn't mounted (an empty mount point) keeps its albums instead of having them
+  removed and re-read when it's back.
+- On a first scan, albums appear and play as they're found rather than when it finishes.
+- `docker-compose.yml` (and the Pages install builder) name the volume `musicd-server-data`
+  explicitly, so Compose and `docker run` use the same one; the server warns, in the log
+  and on screen, when `/app/data` isn't a named volume and would be lost with the container.
+
 ## v0.1.3
 - **In-app updates work.** Settings → Check for updates → Update installs the newest
   release and restarts the server in place (the same updater as MusicD Remote: the

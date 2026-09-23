@@ -157,6 +157,8 @@ function createServer(overrides = {}) {
     log(`[musicd] listening on ${ctx.baseUrl()} — open it in a browser`);
     zones.start();
     features.wire();
+    // Albums found by a scan appear (and play) as it goes, not only at the end.
+    scanner.onProgress = () => library.reload();
     const scan = () => scanner.scan().then(r => { if (r.status !== "running") ctx.afterScan(); })
       .catch(e => log("[scan] " + e.message));
     setTimeout(scan, 500);

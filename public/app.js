@@ -13670,7 +13670,11 @@ initServiceBrowser({
     // so every row fills, rather than leaving "No albums" on screen.
     if (albums && el.dataset.wasEmpty === "1") { location.reload(); return; }
     let msg = null, err = false;
-    if (!albums) {
+    if (j.data_persistent === false) {
+      msg = "Your library, album edits and play history are stored inside the container and will be lost " +
+            "when it's replaced. Add  -v musicd-server-data:/app/data  to the docker run command.";
+      err = true;
+    } else if (!albums) {
       if (j.music_dir_exists === false || last.status === "no-music") {
         msg = "No music folder at " + dir + " inside the container. Add your library to the docker run command " +
               "with  -v /path/to/your/Music:" + dir + ":ro  and start it again.";
