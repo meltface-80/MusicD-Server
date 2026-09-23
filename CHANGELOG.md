@@ -4,6 +4,13 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.1.6
+- No more "No Sonos rooms found yet" while an update (or any restart) is under way. The
+  speakers found last time are remembered and asked first, so rooms are back within a
+  couple of seconds instead of up to 30; until the server has looked, it says it is still
+  searching and the page shows nothing. "Can't reach MusicD Server" no longer flashes up
+  while an update restarts the server either — only if it stays away outside an update.
+
 ## v0.1.5
 - Album edits always show. An album page opened from a tile drawn before the edit (another
   row, an earlier screen, a page restored after an update) kept the old title and year,
