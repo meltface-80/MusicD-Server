@@ -151,6 +151,13 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(img.status, 200);
       assert.equal(img.headers.get("content-type"), "image/jpeg");
     });
+    await t.test("the share card's review can be switched off", async () => {
+      assert.equal((await api("settings/share-links")).card.review, true);
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).card.review, true);
+      assert.equal((await api("settings/share-links", { card_review: false })).card.review, false);
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).card.review, false);
+      assert.equal((await api("settings/share-links", { card_review: true })).card.review, true);
+    });
     await t.test("labels are not part of this server", async () => {
       // The fixture's Album One is tagged LABEL=Parlophone; none of it may surface.
       const a = await api("album?offset=" + cd.offset);

@@ -33,7 +33,36 @@
    * and between them they cost the user every way out of a bad frame.
    *
    * test/static/viewport-scale.test.js keeps them from coming back.
+   *
+   * MusicD Server DOES block zoom (asked for: no pinch, no double-tap), and
+   * does it without either trap above:
+   *   - the viewport meta says maximum-scale=1,user-scalable=no, and every
+   *     element has touch-action: pan-x pan-y (style.css) — that is all
+   *     Android and desktop browsers need, and it stops double-tap on iOS;
+   *   - iOS Safari ignores the meta for pinching, so gesturestart is
+   *     cancelled — and because that takes away the way out of a page left
+   *     at the wrong scale, the page puts ITSELF back to 1:1 whenever it
+   *     finds itself scaled (after a rotation, a keyboard, anything), by
+   *     re-applying the viewport meta. Nobody ever needs to pinch out.
+   *   - touchend is never cancelled, so no tap is ever lost.
    */
+  {
+    const vpMeta = document.querySelector('meta[name="viewport"]');
+    const vpContent = vpMeta ? vpMeta.getAttribute("content") : "";
+    const unscale = () => {
+      const vv = window.visualViewport;
+      if (!vpMeta || !vv || Math.abs(vv.scale - 1) < 0.01) return;
+      vpMeta.setAttribute("content", vpContent.replace("initial-scale=1", "initial-scale=1.0001"));
+      setTimeout(() => vpMeta.setAttribute("content", vpContent), 60);
+    };
+    const settle = () => { unscale(); setTimeout(unscale, 350); setTimeout(unscale, 1000); };
+    ["gesturestart", "gesturechange"].forEach(t =>
+      document.addEventListener(t, (e) => { e.preventDefault(); }, { passive: false }));
+    window.addEventListener("orientationchange", settle, { passive: true });
+    window.addEventListener("pageshow", settle, { passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", settle, { passive: true });
+    document.addEventListener("focusout", () => setTimeout(unscale, 300), { passive: true });
+  }
 
   /* ------------------------------------------------------------------
    * THE WINDOW MUST NEVER BE SCROLLED. Keep it pinned.
@@ -9801,7 +9830,9 @@
           if (j.album && j.album.score != null) score = j.album.score;
           if (j.album && j.album.isBestNewMusic) bestNew = true;
           const desc = j.album && j.album.description;
-          if (desc) {
+          // Settings → Share Card → Review switched off: a card without it.
+          const wantReview = !(j.card && j.card.review === false);
+          if (desc && wantReview) {
             // Card height grows to fit, so show most of the review.
             // Cap generously (~10 sentences / 1400 chars) to avoid an
             // absurdly tall card from a very long Wikipedia article.
@@ -11375,7 +11406,26 @@
       renderShareToggles(shareReviewsList, shareLinkState.reviews,
         ids => saveShareLinks({ reviews: ids }));
       renderShareDefault(shareLinkState.services);
+      renderCardReview(!(shareLinkState.card && shareLinkState.card.review === false));
     } catch (e) { /* the panes stay empty; nothing else depends on them */ }
+  }
+
+  const cardReviewInput = document.getElementById("share-card-review");
+  const cardReviewNote  = document.getElementById("share-card-review-note");
+  function renderCardReview(on) {
+    if (!cardReviewInput) return;
+    cardReviewInput.checked = on;
+    if (cardReviewNote) {
+      cardReviewNote.textContent = on
+        ? "On. The card carries the write-up about the album under the cover."
+        : "Off. The card shows the cover, title, artist and year — no write-up.";
+    }
+  }
+  if (cardReviewInput) {
+    cardReviewInput.addEventListener("change", () => {
+      renderCardReview(cardReviewInput.checked);
+      saveShareLinks({ card_review: cardReviewInput.checked });
+    });
   }
   loadShareLinkSettings();
 

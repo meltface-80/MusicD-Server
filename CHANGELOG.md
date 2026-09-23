@@ -18,6 +18,11 @@ move together — `npm test` fails if they don't.
   the current cover (uncached) instead of the old placeholder, and the album page swaps
   every stale tile on screen to the new cover. Re-saving to make a cover appear is no
   longer needed.
+- No zooming in the browser or home-screen app: pinch and double-tap zoom are off
+  (viewport, `touch-action` on every element, and iOS pinch gestures cancelled). The page
+  puts itself back to 1:1 if it ever finds itself scaled, so it can't get stuck zoomed.
+- Settings → Share Card → **On the card: Review** switches the write-up on the share card
+  on or off (on by default).
 
 ## v0.1.4
 - **Updates never lose your library or edits, and never rescan it.** After a manual or

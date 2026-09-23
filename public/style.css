@@ -209,7 +209,7 @@ html, body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  touch-action: manipulation;        /* disable double-tap-zoom, keep scroll */
+  touch-action: pan-x pan-y;         /* scroll only: no pinch zoom, no double-tap zoom */
   -webkit-text-size-adjust: 100%;
   -webkit-user-select: none;         /* disable tap-to-select on iOS/Android */
   user-select: none;
@@ -4823,3 +4823,10 @@ body.show-quality .album-quality { display: block; }
 .ae-foot { display: flex; gap: 10px; margin-top: 20px; }
 .ae-foot .action-btn { flex: 1 1 0; }
 .ae-reset { display: block; margin: 14px auto 0; }
+
+/* No zooming, anywhere. touch-action is not inherited through a scroller
+   (<main>, the sheets), so html/body alone left every screen's content
+   zoomable: each element says it for itself. pan-x pan-y keeps scrolling and
+   drops both pinch and double-tap zoom. Controls that own their gesture
+   (drag handles: touch-action: none) have more specific rules and win. */
+*, *::before, *::after { touch-action: pan-x pan-y; }
