@@ -49,7 +49,7 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 function createServer(overrides = {}) {
   Object.assign(config, overrides);
-  const db = DB.open(config.dataDir);
+  const db = DB.open(config.dataDir, { log });
   const library = new Library(db, { musicRoot: config.musicDir, log });
   const scanner = new Scanner({ db, root: config.musicDir, log });
   const artwork = new Artwork({ library, cacheDir: path.join(config.dataDir, "art"), log });
@@ -142,6 +142,12 @@ function createServer(overrides = {}) {
     library.reload();
     const ff = FF.info();
     log(`[musicd] MusicD Server ${pkg.version} — music in ${config.musicDir}, data in ${config.dataDir}`);
+    const parent = path.dirname(config.musicDir), base = path.basename(config.musicDir);
+    let strays = [];
+    try { strays = fs.readdirSync(parent).filter(n => n !== base && n.startsWith(base) && fs.statSync(path.join(parent, n)).isDirectory()); } catch (e) {}
+    if (strays.length) {
+      log(`[musicd] WARNING: ${strays.map(n => path.join(parent, n)).join(", ")} will not be scanned — mount each music folder inside ${config.musicDir}, e.g. -v /path/to/Music:${path.join(config.musicDir, "name")}:ro`);
+    }
     log(ff.ok ? `[musicd] ${ff.version}${ff.soxr ? " (soxr resampler)" : ""}` : "[musicd] WARNING: ffmpeg not found — hi-res files cannot be converted for Sonos");
     await new Promise((resolve, reject) => {
       const srv = app.listen(config.port, "0.0.0.0", resolve);

@@ -6137,6 +6137,257 @@
     if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
   });
 
+  // ---- Edit album ---------------------------------------------------------
+  // Title, artist and year corrections plus a cover for an album without one.
+  // Nothing is written to the music (it's mounted read-only): the server keeps
+  // the edits in its database and lays them over the scan. An album with no
+  // cover of its own is searched for straight away; a sure match (same tracks,
+  // artist and title) is picked for you, anything less is offered to choose
+  // from, with a box for pasting an image address found elsewhere.
+  const aeEl = document.getElementById("album-edit-overlay");
+  const ae = aeEl && {
+    img: document.getElementById("ae-cover-img"),
+    status: document.getElementById("ae-cover-status"),
+    find: document.getElementById("ae-find"),
+    remove: document.getElementById("ae-art-remove"),
+    undo: document.getElementById("ae-art-undo"),
+    search: document.getElementById("ae-search"),
+    sStatus: document.getElementById("ae-search-status"),
+    cands: document.getElementById("ae-candidates"),
+    url: document.getElementById("ae-url"),
+    urlUse: document.getElementById("ae-url-use"),
+    urlErr: document.getElementById("ae-url-err"),
+    title: document.getElementById("ae-title"),
+    artist: document.getElementById("ae-artist"),
+    year: document.getElementById("ae-year"),
+    err: document.getElementById("ae-err"),
+    save: document.getElementById("ae-save"),
+    reset: document.getElementById("ae-reset")
+  };
+  let aeState = null;   // { album, data, pick: {url, source, label} | "remove" | null, searchSeq }
+
+  function aeImageSrc(key, size) { return `/api/image/${encodeURIComponent(key)}?size=${size || 300}`; }
+
+  function aeCoverStatus() {
+    const d = aeState.data, pick = aeState.pick;
+    ae.undo.classList.toggle("hidden", !pick);
+    ae.remove.classList.toggle("hidden", !(d.art.found && !pick));
+    if (pick === "remove") {
+      ae.img.src = aeImageSrc(d.image_key, 300);
+      ae.status.innerHTML = "The found cover will be removed when you save.";
+      return;
+    }
+    if (pick) {
+      ae.img.src = pick.thumb || pick.url;
+      ae.status.innerHTML = `<strong>New cover</strong> from ${escapeHtml(pick.source)} — save to use it.`;
+      return;
+    }
+    ae.img.src = aeImageSrc(d.image_key, 300);
+    if (d.art.found) ae.status.innerHTML = `<strong>Found cover</strong>${d.art.source && !/^https?:/.test(d.art.source) ? " from " + escapeHtml(d.art.source) : ""}.`;
+    else if (d.art.own) ae.status.textContent = "Cover from the album's files.";
+    else ae.status.innerHTML = "<strong>No cover.</strong> This album's folder and tracks have no artwork.";
+  }
+
+  function aeWas(field) {
+    const box = aeEl.querySelector(`[data-ae-was="${field}"]`);
+    const d = aeState.data;
+    const scanned = d.scanned[field] == null ? "" : String(d.scanned[field]);
+    const now = ae[field].value.trim();
+    box.innerHTML = "";
+    if (now === scanned) return;
+    box.appendChild(document.createTextNode(`From the files: ${scanned || "(none)"} · `));
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = "Put back";
+    b.addEventListener("click", () => { ae[field].value = scanned; aeWas(field); });
+    box.appendChild(b);
+  }
+
+  function aePick(c, el) {
+    aeState.pick = c;
+    ae.cands.querySelectorAll(".ae-cand").forEach(x => x.classList.toggle("is-picked", x === el));
+    aeCoverStatus();
+  }
+
+  function aeMatchLine(c) {
+    const m = c.match || {};
+    if (m.tracks != null) {
+      const n = c.tracks || 0;
+      return m.tracks >= 0.999 ? "All tracks match" : `${Math.round(m.tracks * 100)}% tracks match`;
+    }
+    return [c.year, c.tracks ? c.tracks + " tracks" : ""].filter(Boolean).join(" · ");
+  }
+
+  function aeRenderCandidates(list, sure) {
+    ae.cands.innerHTML = "";
+    for (const c of list) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "ae-cand";
+      b.title = `${c.title} — ${c.artist} (${c.source})`;
+      const box = document.createElement("div"); box.className = "ae-cand-img";
+      const im = document.createElement("img"); im.loading = "lazy"; im.alt = ""; im.src = c.thumb || c.url;
+      // A dead image (the archive sometimes has none after all) drops out.
+      im.addEventListener("error", () => b.remove());
+      box.appendChild(im);
+      if (sure && c === sure) { const t = document.createElement("span"); t.className = "ae-cand-best"; t.textContent = "Match"; box.appendChild(t); }
+      const t1 = document.createElement("div"); t1.className = "ae-cand-t"; t1.textContent = c.title || "—";
+      const t2 = document.createElement("div"); t2.className = "ae-cand-s"; t2.textContent = c.source;
+      const t3 = document.createElement("div"); t3.className = "ae-cand-s"; t3.textContent = aeMatchLine(c);
+      b.append(box, t1, t2, t3);
+      b.addEventListener("click", () => aePick(c, b));
+      ae.cands.appendChild(b);
+      if (sure && c === sure) aePick(c, b);
+    }
+  }
+
+  async function aeSearch(auto) {
+    const seq = aeState.searchSeq = (aeState.searchSeq || 0) + 1;
+    ae.search.classList.remove("hidden");
+    ae.cands.innerHTML = "";
+    ae.sStatus.textContent = "Searching Apple Music, Deezer and MusicBrainz…";
+    ae.find.disabled = true;
+    try {
+      const r = await fetch(`/api/album/art-search?offset=${aeState.album.offset}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      if (!aeState || seq !== aeState.searchSeq) return;
+      const list = j.candidates || [];
+      if (j.sure) {
+        ae.sStatus.innerHTML = `<strong>Found it</strong> on ${escapeHtml(j.sure.source)} — same tracks, artist and title. Save to use it, or pick another.`;
+      } else if (list.length) {
+        ae.sStatus.innerHTML = "<strong>Not sure which one is right.</strong> Pick the cover that matches, or paste an image address below.";
+      } else {
+        ae.sStatus.innerHTML = "<strong>Nothing found.</strong> Paste an image address below — from a record shop, Discogs or a search engine (copy image address).";
+      }
+      aeRenderCandidates(list, j.sure || null);
+    } catch (e) {
+      if (!aeState || seq !== aeState.searchSeq) return;
+      ae.sStatus.textContent = `The search didn't work (${e.message}). You can still paste an image address below.`;
+    } finally {
+      if (aeState && seq === aeState.searchSeq) ae.find.disabled = false;
+    }
+  }
+
+  function aeClose() {
+    if (!aeEl) return;
+    aeEl.classList.add("hidden");
+    aeState = null;
+  }
+
+  async function openAlbumEditor(album) {
+    if (!aeEl || !album) return;
+    aeState = { album, data: null, pick: null };
+    const mine = aeState;
+    ae.err.textContent = ""; ae.urlErr.textContent = ""; ae.url.value = "";
+    ae.search.classList.add("hidden"); ae.cands.innerHTML = "";
+    ae.title.value = album.title || ""; ae.artist.value = album.subtitle || ""; ae.year.value = "";
+    ae.status.textContent = "Loading…";
+    ae.img.removeAttribute("src");
+    ae.save.disabled = true;
+    aeEl.querySelectorAll(".ae-was").forEach(x => { x.innerHTML = ""; });
+    aeEl.classList.remove("hidden");
+    try {
+      const r = await fetch(`/api/album/edit?offset=${album.offset}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      if (aeState !== mine) return;
+      mine.data = d;
+      ae.title.value = d.title || ""; ae.artist.value = d.artist || ""; ae.year.value = d.year || "";
+      ["title", "artist", "year"].forEach(aeWas);
+      ae.reset.classList.toggle("hidden", !d.edited);
+      ae.save.disabled = false;
+      aeCoverStatus();
+      // Auto first: an album with no cover at all is searched for at once.
+      if (!d.art.own) aeSearch(true);
+    } catch (e) {
+      if (aeState === mine) ae.err.textContent = e.message;
+    }
+  }
+
+  function aeApplyToScreen(d) {
+    const album = aeState && aeState.album;
+    if (!album) return;
+    const oldKey = album.image_key;
+    album.title = d.title; album.subtitle = d.artist; album.image_key = d.image_key;
+    if (d.album && d.album.year) album.year = d.album.year;
+    // Tiles already on screen for this album take the new cover.
+    if (oldKey && oldKey !== d.image_key) {
+      document.querySelectorAll("img").forEach(im => {
+        const src = im.getAttribute("src") || "";
+        if (src.indexOf(encodeURIComponent(oldKey)) >= 0) im.src = src.replace(encodeURIComponent(oldKey), encodeURIComponent(d.image_key));
+      });
+    }
+    if (album === currentAlbum) {
+      modalTitle.textContent = d.title || "Untitled";
+      setModalArtist(d.artist);
+      modalImg.src = aeImageSrc(d.image_key, 800);
+      modalImg.style.display = "";
+      setModalAmbient(modalImg.src);
+      try {
+        sessionStorage.setItem("rra-modal", JSON.stringify({ album, source: currentSource, zoneId: currentSourceZoneId, filter: currentDetailFilter }));
+      } catch (e) { /* ignore */ }
+      fetchAlbumExtras(album).catch(() => {});
+    }
+  }
+
+  async function aePost(path, body, btn) {
+    ae.err.textContent = "";
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      aeApplyToScreen(j);
+      aeClose();
+      showToast("Album saved");
+    } catch (e) {
+      ae.err.textContent = e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  }
+
+  if (aeEl) {
+    aeEl.querySelectorAll("[data-ae-close]").forEach(b => b.addEventListener("click", aeClose));
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && aeState) aeClose(); });
+    ["title", "artist", "year"].forEach(f => ae[f].addEventListener("input", () => { if (aeState && aeState.data) aeWas(f); }));
+    ae.find.addEventListener("click", () => { if (aeState && aeState.data) aeSearch(false); });
+    ae.remove.addEventListener("click", () => { if (aeState) { aeState.pick = "remove"; aeCoverStatus(); } });
+    ae.undo.addEventListener("click", () => {
+      if (!aeState) return;
+      aeState.pick = null;
+      ae.cands.querySelectorAll(".ae-cand").forEach(x => x.classList.remove("is-picked"));
+      aeCoverStatus();
+    });
+    const useUrl = () => {
+      if (!aeState) return;
+      const u = ae.url.value.trim();
+      ae.urlErr.textContent = "";
+      if (!/^https?:\/\/\S+$/i.test(u)) { ae.urlErr.textContent = "That doesn't look like a web address (it should start with http)."; return; }
+      // Previewed in the page first; the server downloads and checks it on Save.
+      const probe = new Image();
+      probe.onload = () => { if (aeState) { ae.cands.querySelectorAll(".ae-cand").forEach(x => x.classList.remove("is-picked")); aeState.pick = { url: u, thumb: u, source: "a pasted address" }; aeCoverStatus(); } };
+      probe.onerror = () => { ae.urlErr.textContent = "No picture loaded from that address. Make sure it's the image itself (“Copy image address”), not the page it's on."; };
+      probe.src = u;
+    };
+    ae.urlUse.addEventListener("click", useUrl);
+    ae.url.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); useUrl(); } });
+    ae.save.addEventListener("click", () => {
+      if (!aeState || !aeState.data) return;
+      const y = ae.year.value.trim();
+      if (y && !/^\d{4}$/.test(y)) { ae.err.textContent = "The year should be four digits, like 2002."; return; }
+      const body = { offset: aeState.album.offset, title: ae.title.value, artist: ae.artist.value, year: y };
+      const pick = aeState.pick;
+      if (pick === "remove") body.art = "remove";
+      else if (pick) { body.art_url = pick.url; body.art_source = pick.source === "a pasted address" ? pick.url : pick.source; }
+      aePost("/api/album/edit", body, ae.save);
+    });
+    ae.reset.addEventListener("click", () => {
+      if (!aeState) return;
+      aePost("/api/album/edit/reset", { offset: aeState.album.offset }, ae.reset);
+    });
+  }
+
   async function fetchAlbumDetail(album) {
     // Send the album's identity so the server can detect a stale offset
     // (library changed since the tile rendered) and relocate — or 409 —
@@ -6210,8 +6461,9 @@
     const overflow = available.slice(ROW_ACTIONS);
     if (overflow.length) {
       modalActs.appendChild(buildOverflowMenu(
-        overflow.map(k => ({ label: labels[k], onClick: (b) => invoke(k, b) })),
-        { label: "More playback actions" }));
+        overflow.map(k => ({ label: labels[k], onClick: (b) => invoke(k, b) }))
+          .concat([{ label: "Edit album", onClick: () => openAlbumEditor(album) }]),
+        { label: "More actions" }));
     }
     if (!available.length) {
       // "No playback actions available" was true and useless — it described
