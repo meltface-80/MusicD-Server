@@ -187,6 +187,10 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(a.album.title, "Album One (Fixed)");
       assert.equal(a.album.year, 1999);
       assert.ok((await api("search?q=fixed")).results.some(r => r.offset === cd.offset));
+      // Found by its new names and by the ones in its files (a queue or play
+      // history from before the edit still carries those) — with the edited year.
+      assert.equal((await api("album/extras?fast=1&title=" + encodeURIComponent("Album One (Fixed)") + "&artist=Artist%20A")).year, "1999");
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).year, "1999");
       const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200");
       assert.equal(img.status, 200);
 

@@ -6411,13 +6411,33 @@
     // position instead of re-tripping the same relocation on every call.
     if (typeof j.offset === "number" && j.offset >= 0) album.offset = j.offset;
 
-    // Only accept server title if it matches what we expected — guards against
-    // stale index offsets returning a completely different album after a library change.
+    // The offset is the album's permanent id on this server, so what comes
+    // back IS this album — and its title, artist, year and cover are the
+    // current ones. The tile that opened the page may have been drawn before
+    // an edit (another row, a screen loaded earlier, a page restored after an
+    // update); take the server's word and bring the page up to date, rather
+    // than keeping the old names on screen.
     if (j.album && j.album.title) {
-      const expectedNorm = currentAlbum ? (currentAlbum.title || "").toLowerCase().trim() : "";
-      const returnedNorm = (j.album.title || "").toLowerCase().trim();
-      if (!expectedNorm || returnedNorm === expectedNorm) {
-        modalTitle.textContent = j.album.title;
+      modalTitle.textContent = j.album.title;
+      const stale = album.title !== j.album.title || album.subtitle !== j.album.subtitle ||
+                    (j.album.image_key && album.image_key !== j.album.image_key) ||
+                    (j.album.year && album.year !== j.album.year);
+      if (stale) {
+        album.title = j.album.title;
+        album.subtitle = j.album.subtitle;
+        if (j.album.year) album.year = j.album.year;
+        if (j.album.image_key && album.image_key !== j.album.image_key) {
+          album.image_key = j.album.image_key;
+          modalImg.src = `/api/image/${encodeURIComponent(album.image_key)}?size=800`;
+          modalImg.style.display = "";
+          setModalAmbient(modalImg.src);
+        }
+        if (!(Array.isArray(j.artists) && j.artists.length)) setModalArtist(album.subtitle);
+        try {
+          sessionStorage.setItem("rra-modal", JSON.stringify({ album, source: currentSource, zoneId: currentSourceZoneId, filter: currentDetailFilter }));
+        } catch (e) { /* ignore */ }
+        // The write-ups/year were asked for under the old names: ask again.
+        fetchAlbumExtras(album).catch(() => {});
       }
     }
     // Re-render the artist line with the server's library-validated split so
@@ -6731,15 +6751,23 @@
       title:  album.title    || "",
       artist: album.subtitle || ""
     });
+    const askedAs = (album.title || "") + "\u0001" + (album.subtitle || "");
     const r = await fetch(`/api/album/extras?${params}`);
     if (!r.ok) return;
     const j = await r.json();
     // Modal may have been closed/reopened while we waited; bail if so.
     if (album !== currentAlbum) return;
+    // Or renamed meanwhile (the page caught up with an edit): a newer ask
+    // under the new names is on its way, and this answer is for the old ones.
+    if ((album.title || "") + "\u0001" + (album.subtitle || "") !== askedAs) return;
     renderExtras(j, album);
   }
 
   function renderExtras(extras, album) {
+    // Asked again after an edit: the previous answer's year/score go first,
+    // so the line never reads "Artist · 1997 · 1999". The artist links are
+    // modalSub's first child and stay.
+    while (modalSub.childNodes.length > 1) modalSub.removeChild(modalSub.lastChild);
     // 1. Append year + label to subtitle line (artist button already present)
     const yearToShow = extras.year || (extras.album && extras.album.year ? String(extras.album.year) : "");
     if (yearToShow) {

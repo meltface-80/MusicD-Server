@@ -4,6 +4,16 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.1.5
+- Album edits always show. An album page opened from a tile drawn before the edit (another
+  row, an earlier screen, a page restored after an update) kept the old title and year,
+  because the page refused the server's title when it differed from the tile's. The page
+  now takes the server's current title, artist, year and cover, and asks for the write-up
+  and year again under the new names.
+- An edited album is found by its new names and by the ones in its files, so play history,
+  what a speaker is playing and the write-ups keep finding it (and its edited year).
+  A title of punctuation only, like Sigur Rós's `( )`, is found too.
+
 ## v0.1.4
 - **Updates never lose your library or edits, and never rescan it.** After a manual or
   in-app update the whole library is there the moment the server is back and plays
