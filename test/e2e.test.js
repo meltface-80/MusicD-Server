@@ -151,6 +151,21 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(img.status, 200);
       assert.equal(img.headers.get("content-type"), "image/jpeg");
     });
+    await t.test("labels are not part of this server", async () => {
+      // The fixture's Album One is tagged LABEL=Parlophone; none of it may surface.
+      const a = await api("album?offset=" + cd.offset);
+      assert.equal(a.album.label, undefined);
+      const f = await api("library/facets");
+      assert.ok(!f.facets.some(x => x.id === "label"));
+      assert.deepEqual((await api("search?q=parlophone")).labels, []);
+      assert.deepEqual((await api("filters/labels")).labels, []);
+      assert.equal((await api("home/label-of-the-week")).label, null);
+      assert.equal((await api("settings/labels")).enabled, false);
+      assert.equal((await api("settings/labels", { enabled: true })).status, 410);
+      assert.ok(!(await api("settings/home-rows")).rows.some(r => r.id === "lotw"));
+      const ex = await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A");
+      assert.ok(!ex.album || !ex.album.label);
+    });
   } finally {
     await srv.stop();
     await house.stop();

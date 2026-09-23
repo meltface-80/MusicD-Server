@@ -420,8 +420,6 @@
       load: () => { loadHomeRandom(); }, isFresh: () => rowsTtlFresh() },
     { id: "library",  title: "Library",
       load: () => { loadHomeLibrary(); }, isFresh: () => homeLibraryKey === libSortKey() },
-    { id: "lotw",     title: "Label of the week",
-      load: () => { loadHomeLabelOfWeek(); }, isFresh: () => homeLotwLoaded },
     { id: "genres",   title: "Browse by genre",
       load: () => { loadHomeGenres(); }, isFresh: () => homeSectionsLoaded },
   ];

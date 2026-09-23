@@ -436,7 +436,7 @@
           <h2 class="home-section-title home-section-link" id="home-library-title" role="button" tabindex="0">Library</h2>
           <div id="home-library" class="home-carousel"></div>
         </div>
-        <div class="home-section home-section-lotw" data-row="lotw">
+        <div class="home-section home-section-lotw hidden" data-row="lotw">
           <h2 class="home-section-title home-section-link" id="home-lotw-title" role="button" tabindex="0">Label of the week</h2>
           <div id="home-lotw" class="home-carousel home-carousel-1row"></div>
         </div>
@@ -938,7 +938,7 @@
             </span>
           </button>
 
-          <button class="settings-nav-item" type="button" data-pane="labels">
+          <button class="settings-nav-item hidden" type="button" data-pane="labels">
             <span class="settings-nav-ico" aria-hidden="true">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.59a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             </span>
@@ -1196,7 +1196,7 @@
         </div>
         <p class="settings-pane-desc">Discogs &amp; FanArt.tv keys</p>
 
-        <div class="settings-block">
+        <div class="settings-block hidden">
           <div class="settings-row">
             <span class="settings-label">Discogs token <button class="settings-info-btn" data-info="A personal access token from discogs.com/settings/developers. Enables logo fetching and searching for labels that the automatic scan can't find by name. Not required, but recommended." aria-label="Info">ⓘ</button></span>
           </div>
@@ -1207,11 +1207,11 @@
           <div id="discogs-token-status" class="settings-token-status"></div>
         </div>
 
-        <div class="settings-divider"></div>
+        <div class="settings-divider hidden"></div>
 
         <div class="settings-block">
           <div class="settings-row">
-            <span class="settings-label">FanArt.tv key <button class="settings-info-btn" data-info="A free API key from fanart.tv. Used to fetch label logo images. Get one at fanart.tv/get-an-api-key — free registration required." aria-label="Info">ⓘ</button></span>
+            <span class="settings-label">FanArt.tv key <button class="settings-info-btn" data-info="A free API key from fanart.tv. Used for artist photos on the wall display. Get one at fanart.tv/get-an-api-key — free registration required." aria-label="Info">ⓘ</button></span>
           </div>
           <div class="settings-token-row">
             <input id="fanart-key-input" type="text" class="settings-token-input" placeholder="Paste FanArt.tv API key…" autocomplete="off" spellcheck="false">

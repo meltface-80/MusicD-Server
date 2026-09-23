@@ -25,12 +25,12 @@ controlled from a browser, an iPhone home-screen app, or the native Android app.
 Everything MusicD Remote does that makes sense for a library of files:
 
 * **Home** — Not played in 6 months, Album of the day, Smart Picks, Random albums,
-  your Library, Label of the week, Browse by genre. Reorder or switch rows off in Settings
+  your Library, Browse by genre. Reorder or switch rows off in Settings
 * **The whole library** — sort by title, artist, year, date added, plays, last played or a
-  stable shuffle; focus by genre, decade, label, format, sample rate, bit depth, starts-with
+  stable shuffle; focus by genre, decade, format, sample rate, bit depth, starts-with
   and date added (tap again to exclude)
-* **Instant search** across albums, artists and labels — typo-tolerant, out of order
-* **Album pages** — tracks, year, label, write-ups from Wikipedia and Qobuz's editorial
+* **Instant search** across albums and artists — typo-tolerant, out of order
+* **Album pages** — tracks, year, write-ups from Wikipedia and Qobuz's editorial
   pages, the Pitchfork score and Best New Music badge with a link to the review
 * **Now playing** with the **waveform** seek bar, drawn from the audio itself
 * **Share card** — the card image, where to hear it (Qobuz, TIDAL, Spotify, Apple Music,
@@ -43,9 +43,6 @@ Everything MusicD Remote does that makes sense for a library of files:
   in MusicD Remote's own format
 * **Sonos rooms and groups** — play, queue, play next, shuffle, repeat, volume per speaker,
   group and ungroup rooms, move what's playing to another room
-
-Labels come straight from your tags (LABEL / ORGANIZATION / PUBLISHER), with an optional
-"label from folder depth" for libraries filed by label.
 
 ## Formats — the 24/48 rule
 
@@ -146,7 +143,7 @@ Everything is optional; pass any of it with `-e NAME=value`.
 | `MUSIC_DIR` | `/music` | Where the library is mounted inside the container. |
 | `DEBUG` | — | Log every API call. |
 
-Settings for Discogs/FanArt.tv keys, waveform, share-card services, Smart Picks, Discover,
+Settings for the FanArt.tv key (wall-display artist photos), waveform, share-card services, Smart Picks, Discover,
 the wall display and the Home rows are in the app's Settings and are saved in the data volume.
 
 ## iPhone and iPad
@@ -207,7 +204,7 @@ Random Remote.
 
 * Qobuz and TIDAL accounts — this plays your own files (Qobuz's public pages are still used
   for album write-ups and the share card's "open in Qobuz" link, with no login)
-* Label logos from Discogs/FanArt.tv — labels show as text tiles
+* Record labels — no label pages, Label of the week, label focus or label search
 * The Android dial and voice commands from Android Random Remote
 
 ## Development
