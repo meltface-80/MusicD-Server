@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page's own background, so the window never flashes a different
+         colour behind it while it loads. -->
+    <color name="app_background">#FF0E1012</color>
+    <color name="icon_background">#FF000000</color>
+    <color name="accent">#FF7AC8FF</color>
+</resources>

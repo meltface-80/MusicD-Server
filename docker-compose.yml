@@ -1,0 +1,30 @@
+# Run with:  docker compose up -d
+#
+# Set the music path on the left of the /music line to your own library, and
+# TZ to your zone (Album of the day and Smart Picks change over at local
+# midnight). Everything else is optional.
+services:
+  musicd-server:
+    image: ghcr.io/meltface-80/musicd-server:latest
+    container_name: musicd-server
+    restart: unless-stopped
+    # Required: SSDP finds the speakers by multicast, and the speakers fetch
+    # audio from this machine's own address.
+    network_mode: host
+    environment:
+      TZ: Europe/London
+      PORT: "3500"
+      # SONOS_HOSTS: "192.168.1.50"     # a speaker's IP, if discovery is unreliable
+      # SERVER_IP: "192.168.1.10"       # the address speakers should fetch from, on multi-homed hosts
+      # INCLUDE_ZONES: "Kitchen,Study"
+      # EXCLUDE_ZONES: "Bathroom"
+      # TRANSCODE_CACHE_GB: "4"
+    volumes:
+      # KEEP THIS VOLUME — library database, play history, settings and caches.
+      - musicd-server-data:/app/data
+      # Your music, read-only. More than one folder? Mount each under /music:
+      #   - /mnt/nas/Albums:/music/Albums:ro
+      - /your/path/to/Music:/music:ro
+
+volumes:
+  musicd-server-data:

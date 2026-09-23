@@ -1,0 +1,28 @@
+{
+  "name": "musicd-server",
+  "version": "0.1.0",
+  "description": "A music server for your local files that plays to Sonos. MusicD Remote's interface, Sonos UPnP underneath, hi-res brought down to 24/48 on the way.",
+  "license": "MIT",
+  "author": "Lewis Menzies (Music Duck / MusicD)",
+  "homepage": "https://github.com/meltface-80/MusicD-Server",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meltface-80/MusicD-Server.git"
+  },
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "compression": "^1.7.4",
+    "express": "^4.21.2",
+    "fast-xml-parser": "^5.11.1",
+    "music-metadata": "^11.13.0",
+    "sharp": "^0.34.3"
+  }
+}
