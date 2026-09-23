@@ -223,6 +223,28 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%;
   }
   .builder input:focus { outline: none; border-color: var(--copper); }
+  .folders { display: grid; gap: 8px; margin-bottom: 14px; }
+  .folders > .ftitle { font-size: 13px; color: var(--muted); }
+  .frow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; min-width: 0; }
+  .frow input {
+    font: 14px var(--mono); color: var(--text); background: var(--bg-deep);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0;
+  }
+  .frow input:focus { outline: none; border-color: var(--copper); }
+  .frow .to { grid-column: 1 / -1; font: 12px var(--mono); color: var(--muted); margin: -3px 0 2px 2px; }
+  .frow .to b { color: var(--copper-hi); font-weight: 500; }
+  .frow button.rm {
+    font: 600 18px/1 var(--sans); cursor: pointer; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    width: 40px; height: 40px;
+  }
+  .frow button.rm:hover { color: var(--copper-hi); border-color: var(--copper); }
+  .frow button.rm[hidden] { display: none; }
+  button.addf {
+    justify-self: start; font: 600 13px var(--sans); cursor: pointer; color: var(--copper-hi);
+    background: transparent; border: 1px dashed var(--copper-dim); border-radius: 8px; padding: 8px 14px;
+  }
+  button.addf:hover { border-style: solid; }
   .formats td:nth-child(2) { color: var(--text); }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .tabs button {
@@ -337,11 +359,16 @@
   <div class="wrap">
     <h2>Install with Docker</h2>
     <p class="lead">On an always-on Linux machine on the same network as your speakers &mdash; a NAS,
-       a Raspberry Pi 4/5 on a 64-bit OS, a home server. Fill in your music folder and time zone and
+       a Raspberry Pi 4/5 on a 64-bit OS, a home server. Fill in your music folders and time zone and
        copy the command.</p>
 
+    <div class="folders" id="b-folders">
+      <span class="ftitle">Music folders on this machine</span>
+      <div id="b-folder-list"></div>
+      <button type="button" class="addf" id="b-add">+ Add another folder</button>
+    </div>
+
     <div class="builder">
-      <label>Music folder on this machine<input id="b-music" value="/mnt/dietpi_userdata/Music" spellcheck="false"></label>
       <label>Time zone<input id="b-tz" value="Europe/London" spellcheck="false"></label>
       <label>Port<input id="b-port" value="3500" inputmode="numeric"></label>
       <label>A speaker's IP (optional)<input id="b-sonos" placeholder="only if rooms aren't found" spellcheck="false"></label>
@@ -369,8 +396,12 @@
         fresh start &mdash; re-run it to update.
       </div>
       <div class="note">
-        <b>More than one music folder?</b> Mount each under <code>/music</code>:
-        <code>-v /mnt/nas/Albums:/music/Albums:ro -v /mnt/usb/Vinyl:/music/Vinyl:ro</code>.
+        <b>More than one music folder?</b> Add each one above. A single folder is mounted as
+        <code>/music</code>; with several, each becomes its own folder inside it &mdash;
+        <code>/mnt/nas/Albums</code> as <code>/music/Albums</code>, <code>/mnt/usb/Vinyl</code> as
+        <code>/music/Vinyl</code> &mdash; and the scan reads them all as one library. All are
+        mounted read-only. Adding or removing a folder later is the same command re-run; albums
+        in a folder that is gone drop out at the next scan.
       </div>
     </div>
 
@@ -487,8 +518,70 @@
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
   function q(s) { return /^[A-Za-z0-9_\/.:+-]+$/.test(s) ? s : "'" + String(s).replace(/'/g, "'\\''") + "'"; }
 
+  // ---- music folders: one or more host paths, each mounted under /music ----
+  var DEFAULT_FOLDER = "/mnt/dietpi_userdata/Music";
+
+  function folderInputs() {
+    return Array.prototype.slice.call(document.querySelectorAll("#b-folder-list input"));
+  }
+
+  // Where each host folder appears inside the container. One folder IS
+  // /music; several each get a subfolder named after the last part of the
+  // host path, made safe for a path and numbered when two share a name.
+  function mounts() {
+    var paths = folderInputs().map(function (el) { return el.value.trim(); }).filter(Boolean);
+    if (!paths.length) paths = ["/your/path/to/Music"];
+    if (paths.length === 1) return [{ src: paths[0], dst: "/music" }];
+    var used = {};
+    return paths.map(function (p, i) {
+      var base = p.replace(/\/+$/, "").split("/").pop() || "";
+      base = base.replace(/\s+/g, "-").replace(/[^A-Za-z0-9._-]/g, "").replace(/^[.-]+/, "") || ("Music" + (i + 1));
+      var name = base, n = 2;
+      while (used[name.toLowerCase()]) name = base + "-" + n++;
+      used[name.toLowerCase()] = true;
+      return { src: p, dst: "/music/" + name };
+    });
+  }
+
+  function addFolder(value, focus) {
+    var row = document.createElement("div");
+    row.className = "frow";
+    var input = document.createElement("input");
+    input.spellcheck = false;
+    input.placeholder = "/mnt/…/Music";
+    input.value = value || "";
+    input.setAttribute("aria-label", "Music folder");
+    input.addEventListener("input", build);
+    var rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "rm";
+    rm.textContent = "\u00d7";
+    rm.setAttribute("aria-label", "Remove this folder");
+    rm.addEventListener("click", function () { row.remove(); build(); });
+    var to = document.createElement("div");
+    to.className = "to";
+    row.appendChild(input); row.appendChild(rm); row.appendChild(to);
+    $("b-folder-list").appendChild(row);
+    if (focus) input.focus();
+    build();
+  }
+
+  function paintFolders(ms) {
+    var rows = document.querySelectorAll("#b-folder-list .frow");
+    var only = rows.length === 1;
+    var k = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var input = rows[i].querySelector("input");
+      rows[i].querySelector("button.rm").hidden = only;
+      var to = rows[i].querySelector(".to");
+      if (input.value.trim() && ms[k]) { to.innerHTML = "in the container: <b>" + esc(ms[k].dst) + "</b>"; k++; }
+      else to.textContent = "";
+    }
+  }
+
   function build() {
-    var music = $("b-music").value.trim() || "/your/path/to/Music";
+    var ms = mounts();
+    paintFolders(ms);
     var tz = $("b-tz").value.trim() || "Europe/London";
     var port = ($("b-port").value.trim().match(/^\d{2,5}$/) || ["3500"])[0];
     var sonos = $("b-sonos").value.trim();
@@ -509,7 +602,7 @@
         (port !== "3500" ? "  " + K("-e") + " PORT=" + port + " \\\n" : "") +
         (sonos ? "  " + K("-e") + " SONOS_HOSTS=" + esc(q(sonos)) + " \\\n" : "") +
         "  " + K("-v") + " musicd-server-data:/app/data \\\n" +
-        "  " + K("-v") + " " + esc(q(music + ":/music:ro")) + " \\\n" +
+        ms.map(function (m) { return "  " + K("-v") + " " + esc(q(m.src + ":" + m.dst + ":ro")) + " \\\n"; }).join("") +
         "  ghcr.io/meltface-80/musicd-server:latest";
     } else {
       out = C("# docker-compose.yml — then: docker compose up -d") + "\n" +
@@ -518,13 +611,16 @@
         "    environment:\n      TZ: " + esc(tz) + "\n" +
         (port !== "3500" ? '      PORT: "' + port + '"\n' : "") +
         (sonos ? '      SONOS_HOSTS: "' + esc(sonos) + '"\n' : "") +
-        "    volumes:\n      - musicd-server-data:/app/data\n      - " + esc(music) + ":/music:ro\n\n" +
+        "    volumes:\n      - musicd-server-data:/app/data\n" +
+        ms.map(function (m) { return '      - "' + esc(m.src.replace(/"/g, '\\"')) + ":" + m.dst + ':ro"\n'; }).join("") + "\n" +
         "volumes:\n  musicd-server-data:";
     }
     $("cmd").innerHTML = out;
   }
 
-  ["b-music", "b-tz", "b-port", "b-sonos"].forEach(function (id) { $(id).addEventListener("input", build); });
+  ["b-tz", "b-port", "b-sonos"].forEach(function (id) { $(id).addEventListener("input", build); });
+  $("b-add").addEventListener("click", function () { addFolder("", true); });
+  addFolder(DEFAULT_FOLDER, false);
   var tabs = document.querySelectorAll(".tabs button");
   for (var i = 0; i < tabs.length; i++) tabs[i].addEventListener("click", function (e) {
     tab = e.currentTarget.getAttribute("data-tab");
