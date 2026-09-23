@@ -277,7 +277,7 @@
      room in the house plays from it &mdash; with MusicD Remote's interface in a browser, on an
      iPhone home screen, or in the Android app. No Roon, no Plex, no accounts.</p>
   <div class="badges">
-    <span class="badge">v0.1.3</span>
+    <span class="badge">v0.1.4</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT</span>
     <span class="badge plain">Sonos only</span>
@@ -613,7 +613,7 @@
         (sonos ? '      SONOS_HOSTS: "' + esc(sonos) + '"\n' : "") +
         "    volumes:\n      - musicd-server-data:/app/data\n" +
         ms.map(function (m) { return '      - "' + esc(m.src.replace(/"/g, '\\"')) + ":" + m.dst + ':ro"\n'; }).join("") + "\n" +
-        "volumes:\n  musicd-server-data:";
+        "volumes:\n  musicd-server-data:\n    name: musicd-server-data";
     }
     $("cmd").innerHTML = out;
   }

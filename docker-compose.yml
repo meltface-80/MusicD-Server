@@ -28,3 +28,7 @@ services:
 
 volumes:
   musicd-server-data:
+    # A fixed name: without it Compose calls the volume <folder>_musicd-server-data,
+    # a different volume from the one `docker run -v musicd-server-data:…` uses —
+    # switch between the two and the server starts with an empty library.
+    name: musicd-server-data

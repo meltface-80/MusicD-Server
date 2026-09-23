@@ -12,6 +12,7 @@ const os = require("os");
 const path = require("path");
 const http = require("http");
 const { spawn, execFileSync } = require("child_process");
+const { haveFfmpeg, makeLibrary } = require("./fixtures");
 
 const ROOT = path.join(__dirname, "..");
 const APP_FILES = ["index.js", "launcher.js", "package.json", "package-lock.json", "lib", "public"];
@@ -36,12 +37,14 @@ async function until(fn, ms = 20000) {
   }
 }
 
-test("Check for updates installs the newer release and restarts into it", { timeout: 60000 }, async () => {
+test("Check for updates installs the newer release and restarts into it, library and edits intact", {
+  timeout: 90000, skip: !haveFfmpeg() && "ffmpeg is not installed"
+}, async () => {
+  const lib = makeLibrary();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-upd-"));
   const app = path.join(tmp, "app");
   copyApp(app);
   fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(app, "node_modules"), "dir");
-  fs.mkdirSync(path.join(tmp, "music"));
   const data = path.join(tmp, "data");
   fs.mkdirSync(data);
   fs.writeFileSync(path.join(data, "keep.txt"), "mine");
@@ -69,7 +72,7 @@ test("Check for updates installs the newer release and restarts into it", { time
   const proc = spawn(process.execPath, ["launcher.js"], {
     cwd: app, stdio: "ignore",
     env: Object.assign({}, process.env, {
-      PORT: String(port), MUSIC_DIR: path.join(tmp, "music"), DATA_DIR: data, SERVER_IP: "127.0.0.1",
+      PORT: String(port), MUSIC_DIR: lib.music, DATA_DIR: data, SERVER_IP: "127.0.0.1",
       SONOS_HOSTS: "127.0.0.250", UPDATE_REPO: "me/musicd", UPDATE_API: `http://127.0.0.1:${gh.address().port}`,
       UPDATE_CHECK: "false"
     })
@@ -81,6 +84,12 @@ test("Check for updates installs the newer release and restarts into it", { time
   try {
     const cur = require("../package.json").version;
     assert.equal((await until(() => api("health"))).version, cur);
+    await until(async () => { const x = await api("status"); return x.index_count === 3 && !x.scan.running; });
+    const albums = (await api("library/albums?sort=album")).albums;
+    const one = albums.find(a => a.title === "Album One");
+    const edit = await fetch(`http://127.0.0.1:${port}/api/album/edit`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offset: one.offset, title: "Album One (fixed)", year: "1999" }) });
+    assert.equal(edit.status, 200);
     const st = await api("update/check", true);
     assert.equal(st.available, true);
     assert.equal(st.latest, "9.9.9");
@@ -91,6 +100,16 @@ test("Check for updates installs the newer release and restarts into it", { time
     assert.equal(applied.ok, true);
     const h = await until(async () => { const x = await api("health"); return x.version === "9.9.9" && x; });
     assert.equal(h.ok, true);
+    // Straight back with the whole library — no scan from scratch, nothing
+    // unplayable while it runs — and the edit where it was.
+    assert.equal(h.albums, 3, "albums are there the moment the server is back");
+    const again = await api("album?offset=" + one.offset);
+    assert.equal(again.album.title, "Album One (fixed)");
+    assert.equal(again.album.year, 1999);
+    const st2 = await until(async () => { const x = await api("status"); return !x.scan.running && x.scan.last && x; });
+    assert.equal(st2.scan.last.added, 0);
+    assert.equal(st2.scan.last.changed, 0);
+    assert.equal(st2.scan.last.status, "unchanged");
     assert.equal(JSON.parse(fs.readFileSync(path.join(app, "package.json"), "utf8")).version, "9.9.9");
     assert.equal(fs.readFileSync(path.join(data, "keep.txt"), "utf8"), "mine");
     assert.ok(!fs.existsSync(path.join(app, ".update")), "staging directory cleaned up");
