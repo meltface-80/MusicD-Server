@@ -13,6 +13,11 @@ move together — `npm test` fails if they don't.
 - An edited album is found by its new names and by the ones in its files, so play history,
   what a speaker is playing and the write-ups keep finding it (and its edited year).
   A title of punctuation only, like Sigur Rós's `( )`, is found too.
+- A found cover shows everywhere straight away. Anything still holding the album's old
+  picture address — a tile drawn before the save, a Sonos queue from before it — now gets
+  the current cover (uncached) instead of the old placeholder, and the album page swaps
+  every stale tile on screen to the new cover. Re-saving to make a cover appear is no
+  longer needed.
 
 ## v0.1.4
 - **Updates never lose your library or edits, and never rescan it.** After a manual or

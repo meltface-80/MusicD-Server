@@ -193,6 +193,11 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).year, "1999");
       const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200");
       assert.equal(img.status, 200);
+      assert.match(img.headers.get("cache-control"), /immutable/);
+      // The address from before the edit now shows the found cover, uncached.
+      const oldImg = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200");
+      assert.equal(oldImg.headers.get("cache-control"), "no-cache");
+      assert.ok(Buffer.from(await oldImg.arrayBuffer()).equals(Buffer.from(await img.arrayBuffer())), "old address draws the new cover");
 
       assert.equal((await api("album/edit", { offset: cd.offset, art_url: "not a url" })).status, 400);
       assert.equal((await api("album/edit", { offset: cd.offset, art_url: "http://127.0.0.1:3591/api/health" })).status, 422);

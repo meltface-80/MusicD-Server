@@ -6166,6 +6166,17 @@
   };
   let aeState = null;   // { album, data, pick: {url, source, label} | "remove" | null, searchSeq }
 
+  // Every picture on screen that still shows an album's old cover address
+  // takes the new one — tiles in other rows included.
+  function swapAlbumArt(oldKey, newKey) {
+    if (!oldKey || !newKey || oldKey === newKey) return;
+    const from = encodeURIComponent(oldKey), to = encodeURIComponent(newKey);
+    document.querySelectorAll("img").forEach(im => {
+      const src = im.getAttribute("src") || "";
+      if (src.indexOf(from) >= 0) im.src = src.replace(from, to);
+    });
+  }
+
   function aeImageSrc(key, size) { return `/api/image/${encodeURIComponent(key)}?size=${size || 300}`; }
 
   function aeCoverStatus() {
@@ -6310,12 +6321,7 @@
     album.title = d.title; album.subtitle = d.artist; album.image_key = d.image_key;
     if (d.album && d.album.year) album.year = d.album.year;
     // Tiles already on screen for this album take the new cover.
-    if (oldKey && oldKey !== d.image_key) {
-      document.querySelectorAll("img").forEach(im => {
-        const src = im.getAttribute("src") || "";
-        if (src.indexOf(encodeURIComponent(oldKey)) >= 0) im.src = src.replace(encodeURIComponent(oldKey), encodeURIComponent(d.image_key));
-      });
-    }
+    swapAlbumArt(oldKey, d.image_key);
     if (album === currentAlbum) {
       modalTitle.textContent = d.title || "Untitled";
       setModalArtist(d.artist);
@@ -6427,6 +6433,7 @@
         album.subtitle = j.album.subtitle;
         if (j.album.year) album.year = j.album.year;
         if (j.album.image_key && album.image_key !== j.album.image_key) {
+          swapAlbumArt(album.image_key, j.album.image_key);
           album.image_key = j.album.image_key;
           modalImg.src = `/api/image/${encodeURIComponent(album.image_key)}?size=800`;
           modalImg.style.display = "";
