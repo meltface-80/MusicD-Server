@@ -163,10 +163,13 @@ interface, and adds what a web page can't:
 * A **Quick Settings tile** — a random album without opening anything
 * A proper **share sheet** for the share card
 
-The APK is built by GitHub Actions on every push (see the *Android* workflow's artifacts).
-A signed build is published into `dist/` once the `MUSICD_KEYSTORE_BASE64` and
-`MUSICD_KEYSTORE_PASSWORD` secrets are set on this repository — use the same ones as Android
-Random Remote.
+**Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
+push to `main`. Sideload it on Android 8.0 or newer.
+
+Until this repository has the `MUSICD_KEYSTORE_BASE64` and `MUSICD_KEYSTORE_PASSWORD` secrets
+(use the same ones as Android Random Remote), the APK is **debug-signed**: it installs and works,
+but each build is signed by a different key, so installing a newer one means uninstalling the old
+one first. With the secrets set, every build after that updates in place.
 
 ## How it works
 
