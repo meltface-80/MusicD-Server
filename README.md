@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.1.2
+# MusicD Server — v0.1.3
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -123,6 +123,13 @@ docker build -t musicd-server:local .
 ```
 
 ### Updating
+
+**In the app:** Settings → **Check for updates** → **Update to vX.Y.Z**. The server
+downloads the new release from GitHub, swaps it in and restarts itself in a few seconds;
+the page reloads on its own. It also checks twice a day and shows a banner when a new
+version is out. (From v0.1.3 on — an older container needs one update the manual way.)
+
+**Manually** — also the way to pick up changes to the image itself (ffmpeg, Node):
 
 ```bash
 docker pull ghcr.io/meltface-80/musicd-server:latest

@@ -1,0 +1,70 @@
+# Every version merged to main becomes a GitHub release — that is what the
+# in-app updater (Settings → Check for updates) looks for. The release carries
+# musicd-server-<version>.tar.gz: just the server (index.js, launcher.js,
+# lib/, public/, package files), so an update downloads a few hundred KB
+# rather than the whole repository with its APK.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Test before releasing
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: Is this version released yet?
+        id: v
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "v$version is already released"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the update bundle and notes
+        if: steps.v.outputs.exists == 'false'
+        run: |
+          v=${{ steps.v.outputs.version }}
+          mkdir -p out/musicd-server
+          cp -r index.js launcher.js package.json package-lock.json lib public README.md CHANGELOG.md LICENSE out/musicd-server/
+          tar -C out -czf "musicd-server-$v.tar.gz" musicd-server
+          # This version's section of the changelog, without its heading.
+          awk -v h="## v$v" '$0==h{on=1;next} /^## v/{if(on)exit} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "MusicD Server v$v" > notes.md
+          cat notes.md
+
+      - name: Publish the release
+        if: steps.v.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v=${{ steps.v.outputs.version }}
+          gh release create "v$v" "musicd-server-$v.tar.gz" \
+            --target "$GITHUB_SHA" --title "MusicD Server v$v" --notes-file notes.md --latest

@@ -27,7 +27,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json package-lock.json index.js ./
+COPY package.json package-lock.json index.js launcher.js ./
 COPY lib ./lib
 COPY public ./public
 
@@ -49,5 +49,8 @@ EXPOSE 3500
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
     CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3500)+'/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
+# launcher.js runs the server and, when Settings → Check for updates installs
+# a new release, swaps the files in while the server is stopped and starts it
+# again — the container keeps running throughout.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "index.js"]
+CMD ["node", "launcher.js"]
