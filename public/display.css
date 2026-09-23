@@ -251,3 +251,6 @@ body.show-ui .controls { opacity: 1; pointer-events: auto; }
 }
 
 .hidden { display: none !important; }
+
+/* Same as the app: no pinch or double-tap zoom on a wall tablet. */
+*, *::before, *::after { touch-action: pan-x pan-y; }

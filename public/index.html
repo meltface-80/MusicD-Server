@@ -18,7 +18,7 @@
        Nothing is lost by removing them: double-tap-to-zoom is already off the
        correct way, with `touch-action: manipulation` on html/body. These were
        belt-and-braces over a rule that was already doing the job. -->
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#0e1012">
   <title>MusicD Server</title>
 
@@ -1335,7 +1335,19 @@
           </button>
           <h2>Share Card</h2>
         </div>
-        <p class="settings-pane-desc">The links under the card</p>
+        <p class="settings-pane-desc">What the card shows, and the links under it</p>
+
+        <div class="settings-block">
+          <h3 class="settings-block-title">On the card</h3>
+          <div class="settings-row">
+            <span class="settings-label">Review</span>
+            <label class="switch">
+              <input type="checkbox" id="share-card-review" aria-label="Show the review on the share card" checked>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+          </div>
+          <div class="settings-note" id="share-card-review-note">On. The card carries the write-up about the album under the cover.</div>
+        </div>
 
         <div class="settings-block">
           <h3 class="settings-block-title">Services</h3>

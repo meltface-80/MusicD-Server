@@ -151,6 +151,13 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(img.status, 200);
       assert.equal(img.headers.get("content-type"), "image/jpeg");
     });
+    await t.test("the share card's review can be switched off", async () => {
+      assert.equal((await api("settings/share-links")).card.review, true);
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).card.review, true);
+      assert.equal((await api("settings/share-links", { card_review: false })).card.review, false);
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).card.review, false);
+      assert.equal((await api("settings/share-links", { card_review: true })).card.review, true);
+    });
     await t.test("labels are not part of this server", async () => {
       // The fixture's Album One is tagged LABEL=Parlophone; none of it may surface.
       const a = await api("album?offset=" + cd.offset);
@@ -187,8 +194,17 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(a.album.title, "Album One (Fixed)");
       assert.equal(a.album.year, 1999);
       assert.ok((await api("search?q=fixed")).results.some(r => r.offset === cd.offset));
+      // Found by its new names and by the ones in its files (a queue or play
+      // history from before the edit still carries those) — with the edited year.
+      assert.equal((await api("album/extras?fast=1&title=" + encodeURIComponent("Album One (Fixed)") + "&artist=Artist%20A")).year, "1999");
+      assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).year, "1999");
       const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200");
       assert.equal(img.status, 200);
+      assert.match(img.headers.get("cache-control"), /immutable/);
+      // The address from before the edit now shows the found cover, uncached.
+      const oldImg = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200");
+      assert.equal(oldImg.headers.get("cache-control"), "no-cache");
+      assert.ok(Buffer.from(await oldImg.arrayBuffer()).equals(Buffer.from(await img.arrayBuffer())), "old address draws the new cover");
 
       assert.equal((await api("album/edit", { offset: cd.offset, art_url: "not a url" })).status, 400);
       assert.equal((await api("album/edit", { offset: cd.offset, art_url: "http://127.0.0.1:3591/api/health" })).status, 422);

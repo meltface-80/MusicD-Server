@@ -4,6 +4,26 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.1.5
+- Album edits always show. An album page opened from a tile drawn before the edit (another
+  row, an earlier screen, a page restored after an update) kept the old title and year,
+  because the page refused the server's title when it differed from the tile's. The page
+  now takes the server's current title, artist, year and cover, and asks for the write-up
+  and year again under the new names.
+- An edited album is found by its new names and by the ones in its files, so play history,
+  what a speaker is playing and the write-ups keep finding it (and its edited year).
+  A title of punctuation only, like Sigur Rós's `( )`, is found too.
+- A found cover shows everywhere straight away. Anything still holding the album's old
+  picture address — a tile drawn before the save, a Sonos queue from before it — now gets
+  the current cover (uncached) instead of the old placeholder, and the album page swaps
+  every stale tile on screen to the new cover. Re-saving to make a cover appear is no
+  longer needed.
+- No zooming in the browser or home-screen app: pinch and double-tap zoom are off
+  (viewport, `touch-action` on every element, and iOS pinch gestures cancelled). The page
+  puts itself back to 1:1 if it ever finds itself scaled, so it can't get stuck zoomed.
+- Settings → Share Card → **On the card: Review** switches the write-up on the share card
+  on or off (on by default).
+
 ## v0.1.4
 - **Updates never lose your library or edits, and never rescan it.** After a manual or
   in-app update the whole library is there the moment the server is back and plays

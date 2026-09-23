@@ -33,7 +33,36 @@
    * and between them they cost the user every way out of a bad frame.
    *
    * test/static/viewport-scale.test.js keeps them from coming back.
+   *
+   * MusicD Server DOES block zoom (asked for: no pinch, no double-tap), and
+   * does it without either trap above:
+   *   - the viewport meta says maximum-scale=1,user-scalable=no, and every
+   *     element has touch-action: pan-x pan-y (style.css) — that is all
+   *     Android and desktop browsers need, and it stops double-tap on iOS;
+   *   - iOS Safari ignores the meta for pinching, so gesturestart is
+   *     cancelled — and because that takes away the way out of a page left
+   *     at the wrong scale, the page puts ITSELF back to 1:1 whenever it
+   *     finds itself scaled (after a rotation, a keyboard, anything), by
+   *     re-applying the viewport meta. Nobody ever needs to pinch out.
+   *   - touchend is never cancelled, so no tap is ever lost.
    */
+  {
+    const vpMeta = document.querySelector('meta[name="viewport"]');
+    const vpContent = vpMeta ? vpMeta.getAttribute("content") : "";
+    const unscale = () => {
+      const vv = window.visualViewport;
+      if (!vpMeta || !vv || Math.abs(vv.scale - 1) < 0.01) return;
+      vpMeta.setAttribute("content", vpContent.replace("initial-scale=1", "initial-scale=1.0001"));
+      setTimeout(() => vpMeta.setAttribute("content", vpContent), 60);
+    };
+    const settle = () => { unscale(); setTimeout(unscale, 350); setTimeout(unscale, 1000); };
+    ["gesturestart", "gesturechange"].forEach(t =>
+      document.addEventListener(t, (e) => { e.preventDefault(); }, { passive: false }));
+    window.addEventListener("orientationchange", settle, { passive: true });
+    window.addEventListener("pageshow", settle, { passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", settle, { passive: true });
+    document.addEventListener("focusout", () => setTimeout(unscale, 300), { passive: true });
+  }
 
   /* ------------------------------------------------------------------
    * THE WINDOW MUST NEVER BE SCROLLED. Keep it pinned.
@@ -6166,6 +6195,17 @@
   };
   let aeState = null;   // { album, data, pick: {url, source, label} | "remove" | null, searchSeq }
 
+  // Every picture on screen that still shows an album's old cover address
+  // takes the new one — tiles in other rows included.
+  function swapAlbumArt(oldKey, newKey) {
+    if (!oldKey || !newKey || oldKey === newKey) return;
+    const from = encodeURIComponent(oldKey), to = encodeURIComponent(newKey);
+    document.querySelectorAll("img").forEach(im => {
+      const src = im.getAttribute("src") || "";
+      if (src.indexOf(from) >= 0) im.src = src.replace(from, to);
+    });
+  }
+
   function aeImageSrc(key, size) { return `/api/image/${encodeURIComponent(key)}?size=${size || 300}`; }
 
   function aeCoverStatus() {
@@ -6310,12 +6350,7 @@
     album.title = d.title; album.subtitle = d.artist; album.image_key = d.image_key;
     if (d.album && d.album.year) album.year = d.album.year;
     // Tiles already on screen for this album take the new cover.
-    if (oldKey && oldKey !== d.image_key) {
-      document.querySelectorAll("img").forEach(im => {
-        const src = im.getAttribute("src") || "";
-        if (src.indexOf(encodeURIComponent(oldKey)) >= 0) im.src = src.replace(encodeURIComponent(oldKey), encodeURIComponent(d.image_key));
-      });
-    }
+    swapAlbumArt(oldKey, d.image_key);
     if (album === currentAlbum) {
       modalTitle.textContent = d.title || "Untitled";
       setModalArtist(d.artist);
@@ -6411,13 +6446,34 @@
     // position instead of re-tripping the same relocation on every call.
     if (typeof j.offset === "number" && j.offset >= 0) album.offset = j.offset;
 
-    // Only accept server title if it matches what we expected — guards against
-    // stale index offsets returning a completely different album after a library change.
+    // The offset is the album's permanent id on this server, so what comes
+    // back IS this album — and its title, artist, year and cover are the
+    // current ones. The tile that opened the page may have been drawn before
+    // an edit (another row, a screen loaded earlier, a page restored after an
+    // update); take the server's word and bring the page up to date, rather
+    // than keeping the old names on screen.
     if (j.album && j.album.title) {
-      const expectedNorm = currentAlbum ? (currentAlbum.title || "").toLowerCase().trim() : "";
-      const returnedNorm = (j.album.title || "").toLowerCase().trim();
-      if (!expectedNorm || returnedNorm === expectedNorm) {
-        modalTitle.textContent = j.album.title;
+      modalTitle.textContent = j.album.title;
+      const stale = album.title !== j.album.title || album.subtitle !== j.album.subtitle ||
+                    (j.album.image_key && album.image_key !== j.album.image_key) ||
+                    (j.album.year && album.year !== j.album.year);
+      if (stale) {
+        album.title = j.album.title;
+        album.subtitle = j.album.subtitle;
+        if (j.album.year) album.year = j.album.year;
+        if (j.album.image_key && album.image_key !== j.album.image_key) {
+          swapAlbumArt(album.image_key, j.album.image_key);
+          album.image_key = j.album.image_key;
+          modalImg.src = `/api/image/${encodeURIComponent(album.image_key)}?size=800`;
+          modalImg.style.display = "";
+          setModalAmbient(modalImg.src);
+        }
+        if (!(Array.isArray(j.artists) && j.artists.length)) setModalArtist(album.subtitle);
+        try {
+          sessionStorage.setItem("rra-modal", JSON.stringify({ album, source: currentSource, zoneId: currentSourceZoneId, filter: currentDetailFilter }));
+        } catch (e) { /* ignore */ }
+        // The write-ups/year were asked for under the old names: ask again.
+        fetchAlbumExtras(album).catch(() => {});
       }
     }
     // Re-render the artist line with the server's library-validated split so
@@ -6731,15 +6787,23 @@
       title:  album.title    || "",
       artist: album.subtitle || ""
     });
+    const askedAs = (album.title || "") + "\u0001" + (album.subtitle || "");
     const r = await fetch(`/api/album/extras?${params}`);
     if (!r.ok) return;
     const j = await r.json();
     // Modal may have been closed/reopened while we waited; bail if so.
     if (album !== currentAlbum) return;
+    // Or renamed meanwhile (the page caught up with an edit): a newer ask
+    // under the new names is on its way, and this answer is for the old ones.
+    if ((album.title || "") + "\u0001" + (album.subtitle || "") !== askedAs) return;
     renderExtras(j, album);
   }
 
   function renderExtras(extras, album) {
+    // Asked again after an edit: the previous answer's year/score go first,
+    // so the line never reads "Artist · 1997 · 1999". The artist links are
+    // modalSub's first child and stay.
+    while (modalSub.childNodes.length > 1) modalSub.removeChild(modalSub.lastChild);
     // 1. Append year + label to subtitle line (artist button already present)
     const yearToShow = extras.year || (extras.album && extras.album.year ? String(extras.album.year) : "");
     if (yearToShow) {
@@ -9766,7 +9830,9 @@
           if (j.album && j.album.score != null) score = j.album.score;
           if (j.album && j.album.isBestNewMusic) bestNew = true;
           const desc = j.album && j.album.description;
-          if (desc) {
+          // Settings → Share Card → Review switched off: a card without it.
+          const wantReview = !(j.card && j.card.review === false);
+          if (desc && wantReview) {
             // Card height grows to fit, so show most of the review.
             // Cap generously (~10 sentences / 1400 chars) to avoid an
             // absurdly tall card from a very long Wikipedia article.
@@ -11340,7 +11406,26 @@
       renderShareToggles(shareReviewsList, shareLinkState.reviews,
         ids => saveShareLinks({ reviews: ids }));
       renderShareDefault(shareLinkState.services);
+      renderCardReview(!(shareLinkState.card && shareLinkState.card.review === false));
     } catch (e) { /* the panes stay empty; nothing else depends on them */ }
+  }
+
+  const cardReviewInput = document.getElementById("share-card-review");
+  const cardReviewNote  = document.getElementById("share-card-review-note");
+  function renderCardReview(on) {
+    if (!cardReviewInput) return;
+    cardReviewInput.checked = on;
+    if (cardReviewNote) {
+      cardReviewNote.textContent = on
+        ? "On. The card carries the write-up about the album under the cover."
+        : "Off. The card shows the cover, title, artist and year — no write-up.";
+    }
+  }
+  if (cardReviewInput) {
+    cardReviewInput.addEventListener("change", () => {
+      renderCardReview(cardReviewInput.checked);
+      saveShareLinks({ card_review: cardReviewInput.checked });
+    });
   }
   loadShareLinkSettings();
 

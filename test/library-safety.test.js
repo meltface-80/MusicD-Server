@@ -147,3 +147,21 @@ test("a database from a newer version is used, never moved aside", () => {
   db.close();
   assert.deepEqual(fs.readdirSync(dir).filter(f => f.includes("old")), []);
 });
+
+test("an album is found by its edited names, its scanned names, and a title of punctuation", () => {
+  const dir = fs.mkdtempSync(path.join(require("os").tmpdir(), "musicd-db-"));
+  const db = DB.open(dir, { log: quiet });
+  const ins = db.raw.prepare("INSERT INTO albums(key, title, artist, added_at, updated_at) VALUES(?, ?, ?, 1, 1)");
+  ins.run("sigur ros\u0001", "( )", "Sigur Rós");
+  ins.run("sigur ros\u0001takk", "Takk...", "Sigur Rós");
+  ins.run("x\u0001old", "Old Name", "X");
+  const library = new Library(db, { log: quiet });
+  library.reload();
+  assert.equal(library.relocate("( )", "Sigur Rós").title, "( )");
+  const x = library.albums.find(a => a.title === "Old Name");
+  library.saveEdit(x.id, { title: "New Name", artist: "Y", year: 2001 });
+  assert.equal(library.relocate("New Name", "Y").id, x.id);
+  assert.equal(library.relocate("Old Name", "X").id, x.id);
+  assert.equal(library.relocate("Old Name", "X").year, 2001);
+  db.close();
+});
