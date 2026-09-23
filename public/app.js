@@ -13377,3 +13377,77 @@ initServiceBrowser({
     });
   });
 })();
+
+/* ------------------------------------------------------------------ */
+/*  MusicD Server: say why the screen is empty                        */
+/*  A fresh install with no music found, or no Sonos rooms found,     */
+/*  otherwise just looks blank. This names the cause and the fix,     */
+/*  and goes away once there are albums and rooms.                    */
+/* ------------------------------------------------------------------ */
+(function serverNotice() {
+  const main = document.querySelector("main");
+  if (!main) return;
+  const el = document.createElement("div");
+  el.className = "status-banner server-notice hidden";
+  el.id = "server-notice";
+  el.setAttribute("role", "status");
+  main.insertBefore(el, main.firstChild);
+
+  function say(text, isError) {
+    el.textContent = text;
+    el.classList.toggle("error", !!isError);
+    el.classList.remove("hidden");
+  }
+
+  async function check() {
+    let j = null;
+    try {
+      const r = await fetch("/api/status", { cache: "no-store" });
+      j = await r.json();
+    } catch (e) {
+      say("Can't reach MusicD Server — check the container is running.", true);
+      setTimeout(check, 5000);
+      return;
+    }
+    const scan = j.scan || {};
+    const last = scan.last || {};
+    const albums = j.index_count || 0;
+    const rooms = (j.sonos && j.sonos.rooms) || 0;
+    const dir = j.music_dir || "/music";
+    // The first scan finished after the page drew an empty Home: reload once
+    // so every row fills, rather than leaving "No albums" on screen.
+    if (albums && el.dataset.wasEmpty === "1") { location.reload(); return; }
+    let msg = null, err = false;
+    if (!albums) {
+      if (j.music_dir_exists === false || last.status === "no-music") {
+        msg = "No music folder at " + dir + " inside the container. Add your library to the docker run command " +
+              "with  -v /path/to/your/Music:" + dir + ":ro  and start it again.";
+        err = true;
+      } else if (scan.running) {
+        msg = "Scanning your music folder… " + (scan.files_seen || 0).toLocaleString() +
+              " files so far. Albums appear when the first pass finishes.";
+      } else if (last.status) {
+        msg = "No audio files were found in " + dir + ". Check the -v …:" + dir + ":ro mount points at your " +
+              "music, and that the container can read it" +
+              (last.errors ? " (" + last.errors + " files couldn't be read)" : "") + ".";
+        err = true;
+      } else {
+        msg = "Starting up — reading your music folder…";
+      }
+    } else if (!rooms) {
+      msg = "No Sonos rooms found yet. The container needs --network host on the same network as your " +
+            "speakers — or set -e SONOS_HOSTS=<a speaker's IP>." +
+            (j.sonos && j.sonos.error ? " (" + j.sonos.error + ")" : "");
+      err = true;
+    }
+    if (msg) {
+      say(msg, err);
+      setTimeout(check, scan.running ? 3000 : 8000);
+    } else {
+      el.classList.add("hidden");
+      setTimeout(check, 60000);
+    }
+    if (!albums) el.dataset.wasEmpty = "1";
+  }
+  check();
+})();
