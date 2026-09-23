@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MusicD Server &mdash; install &amp; docs</title>
+<meta name="description" content="MusicD Server &mdash; your own music files, played to Sonos, with MusicD Remote's interface. Docker install, Android app and docs.">
+<style>
+  :root {
+    --bg:        #1b1d1f;   /* charcoal */
+    --bg-deep:   #141618;
+    --panel:     #232628;
+    --panel-2:   #2a2d30;
+    --line:      #35393d;
+    --text:      #e8e6e3;
+    --muted:     #a8a49e;
+    --copper:    #3aa0d8;   /* MusicD blue */
+    --copper-hi: #7ac8ff;
+    --copper-dim:#1f5f86;
+    --good:      #7fb47f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--copper-hi); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+
+  /* ---------- top nav ---------- */
+  nav.topnav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(20,22,24,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.topnav .wrap {
+    display: flex; align-items: center; gap: 18px;
+    height: 52px; overflow-x: auto; white-space: nowrap;
+  }
+  nav.topnav a {
+    color: var(--muted); font-size: 14px; font-weight: 500;
+  }
+  nav.topnav a:hover { color: var(--copper-hi); text-decoration: none; }
+  nav.topnav .brand { color: var(--text); font-weight: 700; letter-spacing: .02em; }
+  nav.topnav .brand span { color: var(--copper); }
+  nav.topnav .gh { margin-left: auto; }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    text-align: center;
+    padding: 48px 20px 40px;
+    background:
+      radial-gradient(ellipse 70% 55% at 50% -10%, rgba(58,160,216,.14), transparent 65%),
+      var(--bg-deep);
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero img.logo {
+    max-width: min(560px, 88vw);
+    width: 100%; height: auto;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  header.hero .wordmark { display: none; font-size: 44px; font-weight: 800; letter-spacing: .03em; }
+  header.hero .wordmark span { color: var(--copper); }
+  header.hero.noimg img.logo { display: none; }
+  header.hero.noimg .wordmark { display: block; }
+  header.hero h1 { font-size: 30px; margin-top: 26px; font-weight: 700; }
+  header.hero p.tag { color: var(--muted); max-width: 640px; margin: 10px auto 0; font-size: 16px; }
+  .badges { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; font-size: 12.5px; font-weight: 600;
+    padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--copper-dim); color: var(--copper-hi);
+    background: rgba(58,160,216,.08);
+  }
+  .badge.plain { border-color: var(--line); color: var(--muted); background: transparent; }
+
+  /* ---------- sections ---------- */
+  section { padding: 52px 0 8px; scroll-margin-top: 56px; }
+  section > .wrap > h2 {
+    font-size: 24px; font-weight: 700; margin-bottom: 6px;
+    padding-left: 14px; border-left: 3px solid var(--copper);
+  }
+  section > .wrap > p.lead { color: var(--muted); margin-bottom: 26px; max-width: 720px; }
+
+  /* ---------- signal path ---------- */
+  .flow {
+    display: grid; gap: 12px; margin-bottom: 22px;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center;
+  }
+  .flow .node {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 14px; text-align: center;
+  }
+  .flow .node b { display: block; font-size: 14.5px; font-weight: 650; }
+  .flow .node span { font-size: 12.5px; color: var(--muted); }
+  .flow .node.mid { border-color: var(--copper); background: rgba(58,160,216,.07); }
+  .flow .arrow { color: var(--copper); font-size: 18px; text-align: center; }
+  .flow-note { font-size: 13.5px; color: var(--muted); margin-bottom: 26px; }
+  @media (max-width: 700px) {
+    .flow { grid-template-columns: 1fr; }
+    .flow .arrow { transform: rotate(90deg); }
+  }
+
+  /* ---------- feature grid ---------- */
+  .grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 18px 16px;
+  }
+  .card h3 { font-size: 15.5px; font-weight: 650; margin-bottom: 6px; }
+  .card h3 .em { margin-right: 8px; }
+  .card p { font-size: 13.5px; color: var(--muted); }
+
+  /* ---------- code + notes ---------- */
+  .out { display: grid; gap: 12px; min-width: 0; }
+  .out > * { min-width: 0; }
+  .codebox { position: relative; }
+  .codebox pre {
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px; padding-top: 40px;
+    overflow-x: auto;
+    font: 13px/1.55 var(--mono);
+    color: #d8d4cf;
+    white-space: pre;
+  }
+  .codebox pre .k { color: var(--copper-hi); }     /* flags / keys */
+  .codebox pre .c { color: #77726c; }              /* comments */
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    font: 600 12px var(--sans); cursor: pointer;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 6px 12px;
+  }
+  .copy-btn:hover { border-color: var(--copper); color: var(--copper-hi); }
+  .copy-btn.done { color: var(--good); border-color: var(--good); }
+  .after-note { font-size: 13.5px; color: var(--muted); }
+  .after-note code, p code, li code, td code {
+    font: 12.5px var(--mono);
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: 5px; padding: 1.5px 6px;
+    color: var(--copper-hi);
+  }
+  .note {
+    font-size: 13px; color: var(--muted);
+    background: rgba(58,160,216,.06);
+    border: 1px solid var(--copper-dim);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .note b { color: var(--copper-hi); }
+
+  /* ---------- troubleshooting cards ---------- */
+  .info-cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .info-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 20px;
+  }
+  .info-card h3 { font-size: 17px; margin-bottom: 4px; }
+  .info-card .sym { font-size: 12px; font-weight: 700; color: var(--copper-hi); letter-spacing: .06em; text-transform: uppercase; }
+  .info-card p { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .info-card .fine { font-size: 12.5px; color: var(--muted); margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+
+  /* ---------- env table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel-2); color: var(--copper-hi); font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: var(--mono); white-space: nowrap; }
+  td { color: var(--muted); }
+  td:first-child { color: var(--text); }
+
+  /* ---------- first run ---------- */
+  .firstrun {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 20px;
+  }
+  .firstrun ol { padding-left: 20px; font-size: 14px; display: grid; gap: 9px; color: var(--muted); }
+  .firstrun ol li::marker { color: var(--copper); font-weight: 700; }
+  .firstrun ol li b { color: var(--text); }
+
+  /* ---------- small screens (phones, portrait) ---------- */
+  @media (max-width: 600px) {
+    header.hero { padding: 32px 16px 30px; }
+    header.hero h1 { font-size: 24px; margin-top: 20px; }
+    header.hero .wordmark { font-size: 34px; }
+    section { padding: 40px 0 6px; }
+    section > .wrap > h2 { font-size: 21px; }
+    .codebox pre { font-size: 12px; padding: 14px; padding-top: 40px; }
+    th, td { padding: 9px 10px; }
+  }
+
+  footer {
+    margin-top: 64px; padding: 28px 20px 40px;
+    border-top: 1px solid var(--line);
+    text-align: center; font-size: 13px; color: var(--muted);
+  }
+
+  /* ---------- builder ---------- */
+  .builder { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 16px; }
+  .builder label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+  .builder input {
+    font: 14px var(--mono); color: var(--text); background: var(--bg-deep);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%;
+  }
+  .builder input:focus { outline: none; border-color: var(--copper); }
+  .formats td:nth-child(2) { color: var(--text); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tabs button {
+    font: 600 13px var(--sans); cursor: pointer; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+  }
+  .tabs button.on { color: var(--copper-hi); border-color: var(--copper); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a class="brand" href="#top">MusicD <span>Server</span></a>
+    <a href="#how">How it works</a>
+    <a href="#formats">Formats</a>
+    <a href="#install">Install</a>
+    <a href="#apps">Phones</a>
+    <a href="#env">Environment</a>
+    <a href="#trouble">Troubleshooting</a>
+    <a class="gh" href="https://github.com/meltface-80/MusicD-Server">GitHub&nbsp;&rarr;</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <img class="logo" src="IMG_8974.jpeg" alt="MusicD" onerror="this.closest('header').classList.add('noimg')">
+  <div class="wordmark">MusicD <span>Server</span></div>
+  <h1>Your own music files, played to Sonos</h1>
+  <p class="tag">A small server on a machine you own scans your music folder, and every Sonos
+     room in the house plays from it &mdash; with MusicD Remote's interface in a browser, on an
+     iPhone home screen, or in the Android app. No Roon, no Plex, no accounts.</p>
+  <div class="badges">
+    <span class="badge">v0.1.0</span>
+    <span class="badge plain">Docker</span>
+    <span class="badge plain">MIT</span>
+    <span class="badge plain">Sonos only</span>
+    <span class="badge plain">Hi-res &rarr; 24/48</span>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lead">The interface is MusicD Remote's. Underneath, instead of a Roon Core, there is
+       your library and the Sonos control from Caldera Sonos Bridge.</p>
+
+    <div class="flow">
+      <div class="node"><b>Your phone or browser</b><span>MusicD Remote's interface</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="node mid"><b>MusicD Server</b><span>library, queue, conversion</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="node"><b>Sonos</b><span>every room and group</span></div>
+    </div>
+    <p class="flow-note">Tracks go into the speaker's own Sonos queue, so playback is gapless and a
+       skip is instant. Each speaker fetches the audio straight from the server &mdash; as the file
+       itself when it can play it, as FLAC 24/48 when it can't.</p>
+
+    <div class="grid">
+      <div class="card"><h3><span class="em">&#127968;</span>Home, the way MusicD does it</h3>
+        <p>Not played in six months, Album of the day, Smart Picks, random albums, your whole
+           library, Label of the week and genres &mdash; rows you can reorder or switch off.</p></div>
+      <div class="card"><h3><span class="em">&#128269;</span>Instant search &amp; focus</h3>
+        <p>Search albums, artists and labels as you type. Sort and focus the library by genre,
+           decade, label, format, sample rate, bit depth or date added.</p></div>
+      <div class="card"><h3><span class="em">&#128240;</span>Write-ups &amp; reviews</h3>
+        <p>Album and artist stories from Wikipedia and Qobuz's editorial pages, and the Pitchfork
+           score with a link to the review &mdash; no account needed.</p></div>
+      <div class="card"><h3><span class="em">&#12336;</span>Waveform</h3>
+        <p>The seek bar draws the shape of the track, measured from your file and kept, so it is
+           instant after the first play.</p></div>
+      <div class="card"><h3><span class="em">&#128228;</span>Share card</h3>
+        <p>The record as an image, where to hear it and where to read about it, and three acts
+           worth hearing next &mdash; the ones you own play straight away.</p></div>
+      <div class="card"><h3><span class="em">&#128251;</span>Random Album Radio</h3>
+        <p>When a room's queue runs out, another whole album you haven't played lately goes on.
+           Per room.</p></div>
+      <div class="card"><h3><span class="em">&#128266;</span>Rooms and groups</h3>
+        <p>Volume per speaker, group and ungroup rooms, shuffle and repeat, and move what's
+           playing to another room.</p></div>
+      <div class="card"><h3><span class="em">&#128250;</span>Wall display</h3>
+        <p>A full-screen now-playing page for a TV or tablet at <code>/display</code>, with
+           reviews, artist stories and more from your library.</p></div>
+      <div class="card"><h3><span class="em">&#127926;</span>Playlists</h3>
+        <p>Playlists you build, Dynamic Playlists that follow a saved focus, and sharing in
+           MusicD Remote's own format.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="formats">
+  <div class="wrap">
+    <h2>The 24/48 rule</h2>
+    <p class="lead">Sonos S2 plays up to 24-bit / 48 kHz. Everything within that goes to the speaker
+       untouched; everything above it is brought down to 24/48 and stays lossless.</p>
+    <div class="tablewrap formats">
+      <table>
+        <tr><th>Your file</th><th>What the speaker gets</th></tr>
+        <tr><td>FLAC, ALAC, MP3, AAC, Ogg, 16-bit WAV/AIFF &le; 24/48</td><td>The file itself, byte for byte &mdash; bit-perfect</td></tr>
+        <tr><td>Above 24/48 (88.2&ndash;384 kHz, 32-bit)</td><td>FLAC 24-bit / 48 kHz</td></tr>
+        <tr><td>DSD (DSF, DFF)</td><td>FLAC 24-bit / 48 kHz</td></tr>
+        <tr><td>APE, WavPack, WMA Lossless, Opus, 24-bit WAV</td><td>FLAC at the file's own rate and depth</td></tr>
+        <tr><td>More than two channels</td><td>Folded down to stereo</td></tr>
+      </table>
+    </div>
+    <p class="flow-note" style="margin-top:14px">Resampling is ffmpeg with the SoX resampler at high
+       precision and triangular dither. A converted track plays while it is still being written,
+       the next tracks are prepared ahead, and replays come from a cache (4&nbsp;GB by default).</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install with Docker</h2>
+    <p class="lead">On an always-on Linux machine on the same network as your speakers &mdash; a NAS,
+       a Raspberry Pi 4/5 on a 64-bit OS, a home server. Fill in your music folder and time zone and
+       copy the command.</p>
+
+    <div class="builder">
+      <label>Music folder on this machine<input id="b-music" value="/mnt/dietpi_userdata/Music" spellcheck="false"></label>
+      <label>Time zone<input id="b-tz" value="Europe/London" spellcheck="false"></label>
+      <label>Port<input id="b-port" value="3500" inputmode="numeric"></label>
+      <label>A speaker's IP (optional)<input id="b-sonos" placeholder="only if rooms aren't found" spellcheck="false"></label>
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="on" data-tab="run">docker run</button>
+      <button type="button" data-tab="compose">docker compose</button>
+    </div>
+
+    <div class="out">
+      <div class="codebox">
+        <button class="copy-btn" id="copy">Copy</button>
+<pre id="cmd"></pre>
+      </div>
+
+      <div class="note">
+        <b>--network host is required.</b> Speakers are found by multicast, which does not cross
+        Docker's default bridge network, and they fetch audio from this machine's own address.
+        Docker Desktop for macOS and Windows has no real host networking, so this needs a Linux host.
+      </div>
+      <div class="note">
+        <b>Keep the musicd-server-data volume.</b> It holds the library database, play history,
+        playlists, settings and the artwork and conversion caches. The command above is a swap, not a
+        fresh start &mdash; re-run it to update.
+      </div>
+      <div class="note">
+        <b>More than one music folder?</b> Mount each under <code>/music</code>:
+        <code>-v /mnt/nas/Albums:/music/Albums:ro -v /mnt/usb/Vinyl:/music/Vinyl:ro</code>.
+      </div>
+    </div>
+
+    <div class="firstrun" style="margin-top:22px">
+      <ol>
+        <li>Open <b>http://&lt;server-ip&gt;:<span class="port">3500</span></b>. The first scan starts
+            straight away; albums appear as it goes.</li>
+        <li>Pick a room under <b>Settings &rarr; Playback</b>, or from the speaker button on Now playing.</li>
+        <li>Tap an album and <b>Play Now</b>.</li>
+      </ol>
+      <p class="fine" style="font-size:12.5px;color:var(--muted);margin-top:12px">
+        If Docker isn't installed: <code>dietpi-software install 162</code> on DietPi, or
+        <code>curl -fsSL https://get.docker.com | sh</code> on Debian, Ubuntu and Raspberry Pi OS.</p>
+    </div>
+  </div>
+</section>
+
+<section id="apps">
+  <div class="wrap">
+    <h2>On your phone</h2>
+    <p class="lead">The same interface everywhere, because it comes from the server.</p>
+    <div class="info-cards">
+      <div class="info-card">
+        <span class="sym">iPhone &amp; iPad</span>
+        <h3>Add to Home Screen</h3>
+        <p>Open <code>http://&lt;server-ip&gt;:3500</code> in Safari, tap <b>Share &rarr; Add to Home
+           Screen</b>. It opens full screen like an app &mdash; the same arrangement as MusicD Remote.</p>
+      </div>
+      <div class="info-card">
+        <span class="sym">Android</span>
+        <h3>The MusicD app</h3>
+        <p>Enter the port and it finds the server on your Wi-Fi by itself &mdash; or type the address.
+           On top of the interface it adds lock-screen and notification controls, volume keys that
+           move the room's volume, a now-playing widget, a random-album Quick Settings tile and a
+           proper share sheet for the share card.</p>
+        <p class="fine">The APK is built by GitHub Actions on every push &mdash; download it from the
+           <a href="https://github.com/meltface-80/MusicD-Server/actions/workflows/android.yml">Android
+           workflow</a>'s artifacts, or from <code>dist/</code> once signed releases are published.
+           Sideload on Android 8.0 or newer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="env">
+  <div class="wrap">
+    <h2>Environment variables</h2>
+    <p class="lead">All optional; pass any with <code>-e NAME=value</code>. Everything else is in the
+       app's Settings and kept in the data volume.</p>
+    <div class="tablewrap">
+      <table>
+        <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+        <tr><td>PORT</td><td>3500</td><td>The interface, the API, and where speakers fetch audio.</td></tr>
+        <tr><td>TZ</td><td>UTC</td><td>Album of the day and Smart Picks change over at local midnight.</td></tr>
+        <tr><td>SONOS_HOSTS</td><td>&mdash;</td><td>A speaker's IP, for when multicast discovery is unreliable. One is enough.</td></tr>
+        <tr><td>SERVER_IP</td><td>auto</td><td>The address speakers fetch audio from, on hosts with several interfaces.</td></tr>
+        <tr><td>INCLUDE_ZONES</td><td>&mdash;</td><td>Offer only these rooms, e.g. <code>Kitchen,Study</code>.</td></tr>
+        <tr><td>EXCLUDE_ZONES</td><td>&mdash;</td><td>Offer every room except these.</td></tr>
+        <tr><td>SCAN_INTERVAL_HOURS</td><td>6</td><td>How often the music folder is re-checked. Only changed files are re-read.</td></tr>
+        <tr><td>TRANSCODE_CACHE_GB</td><td>4</td><td>Disk kept for converted hi-res tracks.</td></tr>
+        <tr><td>TRANSCODE_CONCURRENCY</td><td>2</td><td>Tracks converted at once.</td></tr>
+        <tr><td>DEBUG</td><td>&mdash;</td><td>Log every API call.</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="trouble">
+  <div class="wrap">
+    <h2>Troubleshooting</h2>
+    <p class="lead"><code>http://&lt;server-ip&gt;:3500/api/status</code> and <code>/api/health</code>
+       say what the server can see.</p>
+    <div class="info-cards">
+      <div class="info-card">
+        <span class="sym">No rooms</span>
+        <h3>"No Sonos rooms found yet"</h3>
+        <p>Check the container is on host networking and on the same subnet as the speakers, then
+           look at <code>sonos.error</code> in <code>/api/status</code>. Setting
+           <code>SONOS_HOSTS</code> to one speaker's IP skips discovery.</p>
+      </div>
+      <div class="info-card">
+        <span class="sym">Silence</span>
+        <h3>A room skips every track</h3>
+        <p>The speakers can't reach the server. On a machine with several network interfaces set
+           <code>SERVER_IP</code> to its LAN address, and check nothing blocks the port.</p>
+      </div>
+      <div class="info-card">
+        <span class="sym">No albums</span>
+        <h3>The library is empty</h3>
+        <p><code>/api/status</code> shows <code>music_dir</code> and <code>index_count</code>. Check
+           the <code>-v …:/music:ro</code> mount and that the folder is readable.</p>
+      </div>
+      <div class="info-card">
+        <span class="sym">Hi-res</span>
+        <h3>96 kHz files won't play</h3>
+        <p><code>/api/health</code> must say <code>"ffmpeg": true</code>. The Docker image includes it;
+           a hand-run server needs ffmpeg on the PATH.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>MusicD Server · MIT · © 2026 Lewis Menzies (Music Duck / MusicD) ·
+     <a href="https://github.com/meltface-80/MusicD-Server">github.com/meltface-80/MusicD-Server</a><br>
+     Sonos is a trademark of Sonos, Inc. This is an independent project, not affiliated with Sonos.</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var tab = "run";
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function q(s) { return /^[A-Za-z0-9_\/.:+-]+$/.test(s) ? s : "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+  function build() {
+    var music = $("b-music").value.trim() || "/your/path/to/Music";
+    var tz = $("b-tz").value.trim() || "Europe/London";
+    var port = ($("b-port").value.trim().match(/^\d{2,5}$/) || ["3500"])[0];
+    var sonos = $("b-sonos").value.trim();
+    var ports = document.querySelectorAll(".port");
+    for (var i = 0; i < ports.length; i++) ports[i].textContent = port;
+    var K = function (t) { return '<span class="k">' + t + "</span>"; };
+    var C = function (t) { return '<span class="c">' + t + "</span>"; };
+    var out;
+    if (tab === "run") {
+      out = C("# Replace any existing container (the data volume is kept)") + "\n" +
+        "docker stop musicd-server 2&gt;/dev/null\ndocker rm musicd-server 2&gt;/dev/null\n" +
+        "docker pull ghcr.io/meltface-80/musicd-server:latest\n\n" +
+        "docker run -d \\\n" +
+        "  " + K("--name") + " musicd-server \\\n" +
+        "  " + K("--network") + " host \\\n" +
+        "  " + K("--restart") + " unless-stopped \\\n" +
+        "  " + K("-e") + " TZ=" + esc(q(tz)) + " \\\n" +
+        (port !== "3500" ? "  " + K("-e") + " PORT=" + port + " \\\n" : "") +
+        (sonos ? "  " + K("-e") + " SONOS_HOSTS=" + esc(q(sonos)) + " \\\n" : "") +
+        "  " + K("-v") + " musicd-server-data:/app/data \\\n" +
+        "  " + K("-v") + " " + esc(q(music + ":/music:ro")) + " \\\n" +
+        "  ghcr.io/meltface-80/musicd-server:latest";
+    } else {
+      out = C("# docker-compose.yml — then: docker compose up -d") + "\n" +
+        "services:\n  musicd-server:\n    image: ghcr.io/meltface-80/musicd-server:latest\n" +
+        "    container_name: musicd-server\n    restart: unless-stopped\n    network_mode: host\n" +
+        "    environment:\n      TZ: " + esc(tz) + "\n" +
+        (port !== "3500" ? '      PORT: "' + port + '"\n' : "") +
+        (sonos ? '      SONOS_HOSTS: "' + esc(sonos) + '"\n' : "") +
+        "    volumes:\n      - musicd-server-data:/app/data\n      - " + esc(music) + ":/music:ro\n\n" +
+        "volumes:\n  musicd-server-data:";
+    }
+    $("cmd").innerHTML = out;
+  }
+
+  ["b-music", "b-tz", "b-port", "b-sonos"].forEach(function (id) { $(id).addEventListener("input", build); });
+  var tabs = document.querySelectorAll(".tabs button");
+  for (var i = 0; i < tabs.length; i++) tabs[i].addEventListener("click", function (e) {
+    tab = e.currentTarget.getAttribute("data-tab");
+    for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle("on", tabs[j] === e.currentTarget);
+    build();
+  });
+  build();
+
+  var btn = $("copy");
+  btn.addEventListener("click", function () {
+    var text = $("cmd").innerText;
+    function done() {
+      btn.textContent = "Copied \u2713"; btn.classList.add("done");
+      setTimeout(function () { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1600);
+    }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { /* no clipboard: the text can be selected by hand */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  });
+})();
+</script>
+</body>
+</html>
