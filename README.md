@@ -32,6 +32,11 @@ Everything MusicD Remote does that makes sense for a library of files:
 * **Instant search** across albums and artists — typo-tolerant, out of order
 * **Album pages** — tracks, year, write-ups from Wikipedia and Qobuz's editorial
   pages, the Pitchfork score and Best New Music badge with a link to the review
+* **Edit album** (album page → ⋯ → Edit album) — correct the title, artist or release year,
+  and find a cover for an album without one. The cover search (Apple Music, Deezer,
+  MusicBrainz) matches on title, artist and track names: a sure match is picked for you,
+  otherwise you choose from suggestions or paste an image address. Your music folders
+  stay read-only; edits live in the database and survive rescans
 * **Now playing** with the **waveform** seek bar, drawn from the audio itself
 * **Share card** — the card image, where to hear it (Qobuz, TIDAL, Spotify, Apple Music,
   Amazon, Deezer, Bandcamp), where to read about it, and "if you like this"

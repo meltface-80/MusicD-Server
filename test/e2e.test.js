@@ -166,6 +166,48 @@ test("MusicD Server end to end", { skip }, async (t) => {
       const ex = await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A");
       assert.ok(!ex.album || !ex.album.label);
     });
+
+    await t.test("album edits are kept in the database, laid over the scan, and survive a rescan", async () => {
+      const before = await api("album/edit?offset=" + cd.offset);
+      assert.equal(before.title, "Album One");
+      assert.equal(before.edited, false);
+
+      // A cover from an address: here, another album's picture on this server.
+      const artUrl = "http://127.0.0.1:3591/api/image/" + hires.image_key + "?size=300";
+      const saved = await api("album/edit", { offset: cd.offset, title: "Album One (Fixed)", artist: "Artist A", year: "1999", art_url: artUrl });
+      assert.equal(saved.status, 200);
+      assert.equal(saved.title, "Album One (Fixed)");
+      assert.equal(saved.year, 1999);
+      assert.equal(saved.edited, true);
+      assert.equal(saved.art.found, true);
+      assert.match(saved.image_key, /^al-\d+-e[0-9a-f]+$/);
+      assert.equal(saved.scanned.title, "Album One");
+
+      const a = await api("album?offset=" + cd.offset);
+      assert.equal(a.album.title, "Album One (Fixed)");
+      assert.equal(a.album.year, 1999);
+      assert.ok((await api("search?q=fixed")).results.some(r => r.offset === cd.offset));
+      const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200");
+      assert.equal(img.status, 200);
+
+      assert.equal((await api("album/edit", { offset: cd.offset, art_url: "not a url" })).status, 400);
+      assert.equal((await api("album/edit", { offset: cd.offset, art_url: "http://127.0.0.1:3591/api/health" })).status, 422);
+
+      await api("library/rescan", {});
+      await until(async () => !(await api("status")).scan?.running);
+      const after = await api("album/edit?offset=" + cd.offset);
+      assert.equal(after.title, "Album One (Fixed)");
+      assert.equal(after.image_key, saved.image_key);
+
+      // Blank puts back what was scanned; reset drops everything.
+      const blank = await api("album/edit", { offset: cd.offset, title: "" });
+      assert.equal(blank.title, "Album One");
+      assert.equal(blank.year, 1999);
+      const reset = await api("album/edit/reset", { offset: cd.offset });
+      assert.equal(reset.edited, false);
+      assert.equal(reset.image_key, cd.image_key);
+      assert.equal(reset.art.found, false);
+    });
   } finally {
     await srv.stop();
     await house.stop();

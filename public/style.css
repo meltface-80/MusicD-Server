@@ -4776,3 +4776,50 @@ body.show-quality .album-quality { display: block; }
 }
 .has-art .share-similar-rec { white-space: normal; }
 .discover-list .share-similar-act.has-art { align-items: center; padding: 10px; }
+
+/* ---- Edit album sheet ----------------------------------------------------
+   Above the album modal (z 50) like every sheet; inputs at 16px so iOS
+   doesn't zoom the page when one is focused. */
+.album-edit-overlay { z-index: 96; }
+.album-edit-sheet { max-height: 92vh; }
+.ae-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ae-cover-row { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; }
+.ae-cover { flex: 0 0 112px; width: 112px; height: 112px; border-radius: 8px; overflow: hidden; background: var(--bg-elev-2); }
+.ae-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ae-cover-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.ae-cover-status { font-size: 14px; color: var(--text-dim); line-height: 1.4; }
+.ae-cover-status strong { color: var(--text); font-weight: 600; }
+.ae-cover-btns { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.ae-cover-btns .action-btn { flex: 0 0 auto; padding-left: 18px; padding-right: 18px; }
+.ae-link { background: none; border: 0; padding: 4px 0; color: var(--accent-text); font: inherit; font-size: 14px; cursor: pointer; }
+.ae-link.hidden, .ae-search.hidden { display: none; }
+.ae-search { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0 14px; margin-bottom: 14px; }
+.ae-search-status { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.4; }
+.ae-search-status strong { color: var(--text); font-weight: 600; }
+.ae-candidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.ae-candidates:empty { display: none; }
+.ae-cand { background: none; border: 0; padding: 0; text-align: left; color: var(--text); font: inherit; cursor: pointer; min-width: 0; }
+.ae-cand-img { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--bg-elev-2); outline: 2px solid transparent; outline-offset: 2px; }
+.ae-cand-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ae-cand.is-picked .ae-cand-img { outline-color: var(--accent); }
+.ae-cand-best { position: absolute; left: 4px; top: 4px; background: var(--accent); color: #0d1418; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+.ae-cand-t { font-size: 12px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ae-cand-s { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ae-label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); margin: 12px 0 6px; }
+.ae-input {
+  width: 100%; box-sizing: border-box; background: var(--bg-elev-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 16px; font-family: inherit;
+}
+.ae-input:focus { outline: none; border-color: var(--accent); }
+.ae-year { max-width: 120px; }
+.ae-url-row { display: flex; gap: 8px; }
+.ae-url-row .ae-input { flex: 1; min-width: 0; }
+.ae-url-row .action-btn { flex: 0 0 auto; padding-left: 18px; padding-right: 18px; }
+.ae-was { font-size: 12px; color: var(--text-faint); margin-top: 5px; min-height: 0; }
+.ae-was:empty { display: none; }
+.ae-was button { background: none; border: 0; padding: 0; color: var(--accent-text); font: inherit; cursor: pointer; }
+.ae-err { font-size: 13px; color: #e06c6c; margin-top: 8px; }
+.ae-err:empty { display: none; }
+.ae-foot { display: flex; gap: 10px; margin-top: 20px; }
+.ae-foot .action-btn { flex: 1 1 0; }
+.ae-reset { display: block; margin: 14px auto 0; }

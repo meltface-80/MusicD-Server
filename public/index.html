@@ -917,6 +917,70 @@
     </div>
   </div>
 
+  <!-- Edit album: corrections kept in the server's database (the music is
+       read-only), and a cover found on the web for an album without one. -->
+  <div id="album-edit-overlay" class="settings-overlay album-edit-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ae-heading">
+    <div class="settings-backdrop" data-ae-close></div>
+    <div class="settings-sheet album-edit-sheet">
+      <div class="settings-grip"></div>
+      <div class="settings-head ae-head">
+        <h2 id="ae-heading">Edit album</h2>
+        <button class="icon-btn" type="button" aria-label="Close" data-ae-close>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="ae-cover-row">
+        <div class="ae-cover"><img id="ae-cover-img" alt=""></div>
+        <div class="ae-cover-side">
+          <div id="ae-cover-status" class="ae-cover-status"></div>
+          <div class="ae-cover-btns">
+            <button id="ae-find" class="action-btn" type="button">Find cover</button>
+            <button id="ae-art-remove" class="ae-link hidden" type="button">Remove found cover</button>
+            <button id="ae-art-undo" class="ae-link hidden" type="button">Keep current cover</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ae-search" class="ae-search hidden">
+        <div id="ae-search-status" class="ae-search-status" aria-live="polite"></div>
+        <div id="ae-candidates" class="ae-candidates"></div>
+        <label class="ae-label" for="ae-url">Or paste an image address</label>
+        <div class="ae-url-row">
+          <input id="ae-url" class="ae-input" type="url" inputmode="url" placeholder="https://…/cover.jpg"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <button id="ae-url-use" class="action-btn" type="button">Use</button>
+        </div>
+        <div id="ae-url-err" class="ae-err"></div>
+      </div>
+
+      <div class="ae-fields">
+        <label class="ae-label" for="ae-title">Title</label>
+        <input id="ae-title" class="ae-input" type="text" autocomplete="off" spellcheck="false">
+        <div class="ae-was" data-ae-was="title"></div>
+
+        <label class="ae-label" for="ae-artist">Artist</label>
+        <input id="ae-artist" class="ae-input" type="text" autocomplete="off" spellcheck="false">
+        <div class="ae-was" data-ae-was="artist"></div>
+
+        <label class="ae-label" for="ae-year">Release year</label>
+        <input id="ae-year" class="ae-input ae-year" type="text" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="off">
+        <div class="ae-was" data-ae-was="year"></div>
+      </div>
+
+      <div id="ae-err" class="ae-err"></div>
+      <div class="ae-foot">
+        <button id="ae-save" class="action-btn primary" type="button">Save</button>
+        <button class="action-btn" type="button" data-ae-close>Cancel</button>
+      </div>
+      <button id="ae-reset" class="ae-link ae-reset hidden" type="button">Undo all edits to this album</button>
+      <p class="settings-note">Your music folders aren't changed — edits are kept in MusicD Server's database and survive rescans.</p>
+    </div>
+  </div>
+
   <div id="settings-overlay" class="settings-overlay hidden" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-backdrop" data-settings-close></div>
     <div class="settings-sheet">
