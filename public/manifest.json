@@ -1,7 +1,7 @@
 {
-  "name": "MusicD Remote",
+  "name": "MusicD Server",
   "short_name": "MusicD",
-  "description": "A Roon remote for your whole library — random albums, search, playlists and Smart Picks.",
+  "description": "Your own music files on Sonos — random albums, search, playlists and Smart Picks.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

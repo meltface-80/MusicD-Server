@@ -769,7 +769,7 @@
     try {
       const r = await unplayedPromise;
       if (r.status === 503) {
-        if (!rowHasContent(homeUnplayed)) homeUnplayed.innerHTML = '<div class="home-carousel-empty">Waiting for Roon Core…</div>';
+        if (!rowHasContent(homeUnplayed)) homeUnplayed.innerHTML = '<div class="home-carousel-empty">Reading your music library…</div>';
         homeRowsLoadedAt = 0;   // retry on the next Home visit
         return;   // keep any cached tiles + cache untouched while the index builds
       }
@@ -812,7 +812,7 @@
     try {
       const r = await fetch("/api/random-albums?count=30");
       if (r.status === 503) {
-        if (!rowHasContent(homeRandom)) homeRandom.innerHTML = '<div class="home-carousel-empty">Waiting for Roon Core…</div>';
+        if (!rowHasContent(homeRandom)) homeRandom.innerHTML = '<div class="home-carousel-empty">Reading your music library…</div>';
         homeRowsLoadedAt = 0;   // retry on the next Home visit
         return;   // keep any cached tiles while the index builds
       }
@@ -846,7 +846,7 @@
       // returns zero albums, so blanking the row to "No albums." would only
       // ever be showing an error as an empty state.
       if (!r.ok) {
-        if (!rowHasContent(homeLibrary)) homeLibrary.innerHTML = '<div class="home-carousel-empty">Waiting for Roon Core…</div>';
+        if (!rowHasContent(homeLibrary)) homeLibrary.innerHTML = '<div class="home-carousel-empty">Reading your music library…</div>';
         return;   // retried on the next Home visit (homeLibraryKey stays unset)
       }
       const j = await r.json();
@@ -1541,7 +1541,7 @@
       if (r.status === 503) {
         const j = await r.json().catch(() => ({}));
         if (!unplayedWallActive) return;
-        setBanner(j.error || "Waiting for Roon Core. Enable this extension in Roon → Settings → Extensions.", true);
+        setBanner(j.error || "Reading your music library…", true);
         grid.innerHTML = ""; return;
       }
       const j = await r.json();
@@ -1801,13 +1801,13 @@
 
     if (!roonList.length && !myList.length) {
       setBanner(roon === null
-        ? "Couldn't read playlists from Roon."
+        ? "Couldn't read playlists from the server."
         : "No playlists yet — import one, or select tracks and use Add to playlist.",
         roon === null);
       return;
     }
     setBanner(roon === null
-      ? "Couldn't reach Roon — showing only the playlists stored here." : null, roon === null);
+      ? "Couldn't reach the server's playlists." : null, roon === null);
 
     const frag = document.createDocumentFragment();
     for (const p of myList) {
@@ -1951,8 +1951,8 @@
           body: JSON.stringify(Object.assign({ zone_or_output_id: zone }, body))
         });
         const jr = await r.json().catch(() => ({}));
-        if (!r.ok) showToast(jr.error || "Roon refused that", "error");
-        else showToast(jr.invoked ? jr.invoked : "Sent to Roon");
+        if (!r.ok) showToast(jr.error || "Sonos refused that", "error");
+        else showToast(jr.invoked ? jr.invoked : "Sent to Sonos");
       } catch (e) {
         showToast("Couldn't reach the extension", "error");
       } finally {
@@ -2000,7 +2000,7 @@
     if (!tracks.length) {
       const note = document.createElement("div");
       note.className = "playlist-empty";
-      note.textContent = "Roon returned no tracks for this playlist.";
+      note.textContent = "No tracks were found for this playlist.";
       wrap.appendChild(note);
     } else {
       const ol = document.createElement("ol");
@@ -2100,7 +2100,7 @@
       if (r.status === 503) {
         const j = await r.json().catch(() => ({}));
         if (!libraryWallActive || mySeq !== libWall.seq) return;
-        if (firstPage) { grid.innerHTML = ""; setBanner(j.error || "Waiting for Roon Core…", true); }
+        if (firstPage) { grid.innerHTML = ""; setBanner(j.error || "Reading your music library…", true); }
         libWall.done = true;   // don't hammer while the index builds; re-enter to retry
         return;
       }
@@ -2668,7 +2668,7 @@
     } finally {
       btn.disabled = false;
     }
-    if (!queued) { showToast(firstError || "Roon refused those tracks", "error", TOAST_REPORT_MS); return; }
+    if (!queued) { showToast(firstError || "Sonos refused those tracks", "error", TOAST_REPORT_MS); return; }
     const verb = kind === "queue" ? "Queued" : "Playing";
     let msg = `${verb} ${queued} track${queued === 1 ? "" : "s"}`;
     if (failed) msg += ` (${failed} couldn't be found: ${firstError})`;
@@ -3341,15 +3341,15 @@
       // comes from somewhere other than Roon — the browse API publishes none of
       // it — so the number is stated rather than left to be noticed.
       const COVERAGE_NOTE = {
-        decade: "Roon doesn't publish release years, so these come from your file tags " +
+        decade: "Release years come from your file tags (ORIGINALDATE, then DATE) " +
                 "and from Qobuz/TIDAL. Undated albums aren't in any decade.",
-        genre:  "Genres are read from Roon's own genre lists during a library sync. " +
-                "Anything Roon files under no genre won't appear here.",
+        genre:  "Genres are read from your files' GENRE tags. " +
+                "An album with no genre tag won't appear here.",
         label:  "Labels are collected during the label scan, which runs in the background " +
                 "and fills in over time.",
         format: "Read from your own files, and — for albums you have no file for — from " +
                 "the Qobuz or TIDAL account you've connected. Anything from neither has none.",
-        added:  "Roon publishes no date-added, so this is what MusicD Remote could work " +
+        added:  "Date added is when the files arrived in your music folder, as MusicD Server could work " +
                 "out for itself — file timestamps, and albums appearing between scans."
       };
       // Format, Sample rate, Bit depth and Channels all come from the same file
@@ -3388,7 +3388,7 @@
             }
             note(lim.section,
               "How many albums this playlist actually plays. A query can match your " +
-              "whole library, but every album costs Roon work to queue — 400 albums " +
+              "whole library, but a Sonos queue holds 1,000 tracks — 400 albums " +
               "is thousands of tracks and takes minutes.");
           }
         }
@@ -3455,8 +3455,7 @@
         foot.className = "lib-sheet-note";
         foot.textContent =
           "Tap a filter once to include it, again to exclude it, once more to clear it. " +
-          "Roon can also focus on star ratings, its own favourites and album types — " +
-          "those aren't in the API extensions can read.";
+          "Everything here is read from your files' own tags.";
         body.appendChild(foot);
       };
       renderFocusBody();
@@ -3678,8 +3677,8 @@
       note.className = "lib-sheet-note";
       note.textContent =
         "Either way the playlist follows the same focus, and re-runs it every time " +
-        "you open it — it isn't a fixed list. Roon's API only lets an extension " +
-        "filter at album level, so Tracks means the tracks OF the albums that match.";
+        "you open it — it isn't a fixed list. The focus works at album level, " +
+        "so Tracks means the tracks OF the albums that match.";
       body.appendChild(note);
     });
   }
@@ -3781,7 +3780,6 @@
     mkBtn("Play now", "action-btn primary", (b) => playSmartPlaylist(sp, "play_now", b));
     mkBtn("Queue",    "action-btn",         (b) => playSmartPlaylist(sp, "queue", b));
     actions.appendChild(buildOverflowMenu([
-      { label: "Send to Roon", onClick: (b) => sendSmartPlaylistToRoon(sp, b) },
       { label: "Share",        onClick: (b) => shareThis(b) },
       { label: "Edit",         onClick: () => editSmartPlaylist(sp) },
       { label: "Delete",       onClick: () => deleteSmartPlaylist(sp), danger: true },
@@ -3794,7 +3792,7 @@
 
     const status = document.createElement("div");
     status.className = "playlist-empty";
-    status.textContent = "Reading tracks from Roon…";
+    status.textContent = "Reading tracks…";
     wrap.appendChild(status);
 
     const more = document.createElement("button");
@@ -4050,7 +4048,7 @@
         })
       });
       const pj = await pr.json().catch(() => ({}));
-      if (!pr.ok) { showToast(pj.error || "Roon refused that", "error"); return; }
+      if (!pr.ok) { showToast(pj.error || "Sonos refused that", "error"); return; }
       // Say how many of how many. The cap used to be silent, so a 1,179-album
       // playlist queued 100 and looked like it had queued everything.
       //
@@ -4119,7 +4117,7 @@
         })
       });
       const pj = await pr.json().catch(() => ({}));
-      if (!pr.ok) { showToast(pj.error || "Roon refused that", "error"); return; }
+      if (!pr.ok) { showToast(pj.error || "Sonos refused that", "error"); return; }
       showToast(multiOutcome("Queued", pj, albums.length, smartMatched(j)) +
                 " — now save the queue as a playlist in Roon", null, TOAST_REPORT_MS);
     } catch (e) {
@@ -4233,7 +4231,7 @@
           note.className = "lib-sheet-note";
           note.textContent = list.length
             ? "Choose a zone first — grouping needs a zone to build the group around."
-            : "No outputs available. Check that the extension is paired with your Roon Core.";
+            : "No Sonos rooms found. The server must share a network with your speakers (host networking), or set SONOS_HOSTS to a speaker's IP.";
           body.appendChild(note);
           return;
         }
@@ -4287,7 +4285,7 @@
           const note = document.createElement("div");
           note.className = "lib-sheet-note";
           note.textContent = "Outputs your Core can't sync with " + primary.display_name +
-                             " aren't listed — Roon decides which devices can play together.";
+                             " aren't listed — Sonos decides which rooms can play together.";
           body.appendChild(note);
         }
       };
@@ -4429,7 +4427,7 @@
           });
           if (!r.ok) {
             const j = await r.json().catch(() => ({}));
-            showToast(j.error || "Roon refused that", "error");
+            showToast(j.error || "Sonos refused that", "error");
           }
         } catch (e) {
           showToast("Could not reach the extension", "error");
@@ -4450,7 +4448,7 @@
             ? "None of your outputs expose a source control, so Roon can't switch them " +
               "on or off. This works with devices that report power state to Roon — many " +
               "network streamers and AVRs do, plain audio endpoints don't."
-            : "No outputs available. Check that the extension is paired with your Roon Core.";
+            : "No Sonos rooms found. The server must share a network with your speakers (host networking), or set SONOS_HOSTS to a speaker's IP.";
           body.appendChild(note);
           return;
         }
@@ -4649,7 +4647,7 @@
         fetch("/api/home/genre-groups").catch(() => null)
       ]);
       if ((genresRes && genresRes.status === 503) || (groupsRes && groupsRes.status === 503)) {
-        if (!rowHasContent(homeGenres)) homeGenres.innerHTML = '<div class="home-carousel-empty">Waiting for Roon Core…</div>';
+        if (!rowHasContent(homeGenres)) homeGenres.innerHTML = '<div class="home-carousel-empty">Reading your music library…</div>';
         return;   // keep any cached cards while the index builds
       }
       const genresJ = genresRes ? await genresRes.json().catch(() => ({})) : {};
@@ -4780,7 +4778,7 @@
     if (capped) msg += ` of ${total}`;
     // Pluralise off whichever number the noun follows.
     msg += ` album${(capped ? total : queued) === 1 ? "" : "s"}`;
-    if (failed > 0) msg += ` (Roon refused ${failed})`;
+    if (failed > 0) msg += ` (Sonos refused ${failed})`;
     if (capped) msg += " — that's the limit per go";
     return msg;
   }
@@ -5206,7 +5204,7 @@
       const r = await fetch(`/api/random-albums?count=${albumCount}${filterQS()}`);
       if (r.status === 503) {
         const j = await r.json().catch(() => ({}));
-        setBanner(j.error || "Waiting for Roon Core. Enable this extension in Roon \u2192 Settings \u2192 Extensions.", true);
+        setBanner(j.error || "Reading your music library…", true);
         grid.innerHTML = ""; return;
       }
       if (!r.ok) {
@@ -5234,7 +5232,7 @@
       zoneSel.innerHTML = "";
       if (!zones.length) {
         const opt = document.createElement("option");
-        opt.textContent = "No zones available"; opt.value = "";
+        opt.textContent = "No Sonos rooms found yet"; opt.value = "";
         zoneSel.appendChild(opt);
         selectedZoneId = null;
         return;
@@ -5949,7 +5947,7 @@
       const missed = (j.unresolved || []).length;
       const failed = (j.failed || []).length;
       msg += named(j.unresolved, "not in your library");
-      msg += named(j.failed, "refused by Roon");
+      msg += named(j.failed, "refused by Sonos");
       showToast(msg, (missed || failed) ? "error" : null, TOAST_REPORT_MS);
       historySelectMode = false;
       historySelected = [];
@@ -6229,7 +6227,7 @@
       // sentence with no explanation at all — is the red line users actually
       // reported, and it was composed here in the client, so the server-side
       // builder never touched it.
-      err.textContent = "Roon offered no playback options for this album." +
+      err.textContent = "No playback options for this album." +
                         libraryChangingAdvice(!!j.library_moved);
       modalActs.appendChild(err);
     }
@@ -6247,8 +6245,8 @@
       const note = document.createElement("div");
       note.className = "modal-error";
       note.textContent = (j.declared_tracks
-        ? "Roon sent " + trackList.length + " of " + j.declared_tracks + " tracks."
-        : "Roon sent an incomplete track list.") +
+        ? "Only " + trackList.length + " of " + j.declared_tracks + " tracks were readable."
+        : "Some tracks couldn't be read.") +
         libraryChangingAdvice(!!j.library_moved);
       modalActs.appendChild(note);
     }
@@ -6256,7 +6254,7 @@
       if (!j.partial && j.library_moved) {
         const note = document.createElement("div");
         note.className = "modal-error";
-        note.textContent = "Roon returned no tracks for this album." +
+        note.textContent = "No playable tracks were found for this album." +
                            libraryChangingAdvice(!!j.library_moved);
         modalActs.appendChild(note);
       }
@@ -6403,7 +6401,7 @@
     }
 
     if (!queued) {
-      showToast(firstError || "Roon refused those tracks", "error", TOAST_REPORT_MS);
+      showToast(firstError || "Sonos refused those tracks", "error", TOAST_REPORT_MS);
       return;
     }
     const verb = kind === "queue" ? "Queued" : "Playing";
@@ -6713,7 +6711,7 @@
         // results would let this query's external sections append beneath them
         // (a mixed-query page). The banner/status explains what's missing, and
         // extAllowBannerClear stays false so arriving externals can't wipe it.
-        if (r.status === 503) { grid.innerHTML = ""; extReappend(mySeq); setBanner("Waiting for Roon Core…", true); return; }
+        if (r.status === 503) { grid.innerHTML = ""; extReappend(mySeq); setBanner("Reading your music library…", true); return; }
         if (!r.ok) { grid.innerHTML = ""; extReappend(mySeq); setStatus("search error"); return; }
         const j = await r.json();
         if (mySeq !== seq) return;
@@ -7880,7 +7878,7 @@
     await loadHomeLayout();
     applyFeatureMenuFromServer();
     const painted = !activeFilter && hydrateHomeFromCache();
-    if (!painted) setBanner("Connecting to Roon…");
+    if (!painted) setBanner("Connecting to MusicD Server…");
     for (let i = 0; i < 30; i++) {
       try {
         const r = await fetch("/api/status");
@@ -7914,10 +7912,10 @@
           return;
         }
       } catch (e) {} // /api/status fetch failed — server not ready yet, fall through to "Waiting" banner
-      setBanner("Waiting for Roon Core. Open Roon → Settings → Extensions and click Enable on “Random Albums”.");
+      setBanner("Waiting for MusicD Server to start…");
       await new Promise(r => setTimeout(r, 2000));
     }
-    setBanner("Still not paired with Roon. Check that this extension is enabled in Roon → Settings → Extensions.", true);
+    setBanner("MusicD Server isn't answering. Check the container is running.", true);
   }
   bootstrap();
 })();
@@ -10484,8 +10482,8 @@
         if (s && s.current) {
           const parts = (s.current || "").split(".");
           versionEl.textContent = parts.length >= 3
-            ? "MusicD Remote v" + parts[0] + "." + parts[1] + " (Build " + parts[2] + ")"
-            : "MusicD Remote v" + s.current;
+            ? "MusicD Server v" + parts[0] + "." + parts[1] + " (Build " + parts[2] + ")"
+            : "MusicD Server v" + s.current;
           versionLoaded = true;
         }
       }
@@ -11375,7 +11373,7 @@
         discNote.textContent = "Reads your play history for the " +
           (j.seed_count || 40) + " artists you return to most, and looks for " +
           "records they have released in the last " + (j.window_days || 60) +
-          " days. Nothing here touches your Roon Core.";
+          " days. Only the lookups leave your network.";
       }
     } catch (e) {
       // Settings show their last values; the pane is not the place to report a
@@ -11438,8 +11436,8 @@
       showQobuzSecretState(j);
       if (waveEnabledNote) {
         waveEnabledNote.textContent = j.enabled
-          ? "On. Local files only \u2014 Roon streams Qobuz and TIDAL to the endpoint, " +
-            "so those tracks keep the plain bar."
+          ? "On. Each track is analysed the first time it plays and kept, " +
+            "so it is instant after that."
           : "Off. The progress bar stays a plain line.";
       }
     } catch (e) { /* keep the last shown value */ }
@@ -13213,27 +13211,6 @@ initServiceBrowser({
 })();
 
 /* ------------------------------------------------------------------ */
-/*  Docker migration banner (shown to native installs only)           */
-/* ------------------------------------------------------------------ */
-(function initDockerMigration() {
-  const banner  = document.getElementById("docker-migration-banner");
-  const dismiss = document.getElementById("docker-migration-dismiss");
-  if (!banner) return;
-  const DISMISS_KEY = "rra-docker-migrated";
-  if (localStorage.getItem(DISMISS_KEY)) return;
-  fetch("/api/update/status", { cache: "no-store" })
-    .then((r) => r.json())
-    .then((s) => { if (!s.is_docker) banner.classList.remove("hidden"); })
-    .catch(() => { /* migration banner is non-critical; stays hidden on error */ });
-  if (dismiss) {
-    dismiss.addEventListener("click", () => {
-      localStorage.setItem(DISMISS_KEY, "1");
-      banner.classList.add("hidden");
-    });
-  }
-})();
-
-/* ------------------------------------------------------------------ */
 /*  Side menu (hamburger drawer)                                        */
 /*  Items with data-target trigger the hidden top-bar button of that   */
 /*  id; data-action items switch the main view (home / random wall).   */
@@ -13248,18 +13225,18 @@ initServiceBrowser({
   // press never fights an active import.
   async function rescanLibrary() {
     const toast = window.__showToast || (() => {});
-    toast("Checking Roon…");
+    toast("Scanning your music folder…");
     try {
       const r = await fetch("/api/library/rescan", { method: "POST" });
       const j = await r.json().catch(() => ({}));
       const msg =
         j.status === "rebuilt"   ? "Library rescanned — " + (j.count || 0) + " albums" :
-        j.status === "importing" ? "Roon is still adding albums — try again shortly" :
+        j.status === "scanning"  ? "Scanning in the background — new albums appear as it finishes" :
         j.status === "fresh"     ? "Library already up to date" :
         j.status === "busy"      ? "A scan is already running" :
-        j.status === "unpaired"  ? "Not connected to Roon" :
-                                   "Rescan failed";
-      toast(msg, j.status === "rebuilt" || j.status === "fresh" ? undefined : "error");
+        j.status === "no-music"  ? "The music folder isn't there — check the /music mount" :
+                                   (j.error || "Rescan failed");
+      toast(msg, ["rebuilt", "fresh", "scanning", "busy"].includes(j.status) ? undefined : "error");
       refreshRescanSub();   // the row's sub-line is now stale whatever happened
     } catch (e) {
       toast("Rescan failed", "error");
@@ -13321,10 +13298,10 @@ initServiceBrowser({
     try {
       const r = await fetch("/api/status");
       const j = await r.json();
-      if (!j.paired) { el.textContent = "Not connected to Roon"; return; }
+      if (!j.paired) { el.textContent = "Server not ready"; return; }
       const albums = (j.index_count || 0).toLocaleString() + " albums";
       if (j.library_importing) {
-        el.textContent = albums + " · Roon was importing at the last check — refresh paused";
+        el.textContent = albums + " · scanning the music folder now";
       } else if (j.library_recheck_pending) {
         el.textContent = albums + " · the library moved, checking again shortly";
       } else if (j.index_built_at) {
