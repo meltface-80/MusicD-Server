@@ -10499,6 +10499,7 @@
 
   function showProgress(phase) {
     applying = true;
+    window.__musicdUpdating = true;   // the empty-screen notice keeps quiet meanwhile
     actions.classList.add("busy");
     toast.classList.remove("is-error");
     if (notesEl) notesEl.classList.add("hidden");
@@ -13736,16 +13737,25 @@ initServiceBrowser({
     el.classList.remove("hidden");
   }
 
+  let unreachable = 0;
   async function check() {
     let j = null;
     try {
       const r = await fetch("/api/status", { cache: "no-store" });
       j = await r.json();
     } catch (e) {
-      say("Can't reach MusicD Server — check the container is running.", true);
+      // An update restarting the server, or a moment's blip: say nothing.
+      // Only a server that stays away for ~15 seconds outside an update is news.
+      unreachable++;
+      if (!window.__musicdUpdating && unreachable >= 3) {
+        say("Can't reach MusicD Server — check the container is running.", true);
+      } else {
+        el.classList.add("hidden");
+      }
       setTimeout(check, 5000);
       return;
     }
+    unreachable = 0;
     const scan = j.scan || {};
     const last = scan.last || {};
     const albums = j.index_count || 0;
@@ -13775,7 +13785,9 @@ initServiceBrowser({
       } else {
         msg = "Starting up — reading your music folder…";
       }
-    } else if (!rooms) {
+    } else if (!rooms && !(j.sonos && j.sonos.searching)) {
+      // Not while the server is still looking (the first minute after a start
+      // or an update): the rooms are usually back within seconds.
       msg = "No Sonos rooms found yet. The container needs --network host on the same network as your " +
             "speakers — or set -e SONOS_HOSTS=<a speaker's IP>." +
             (j.sonos && j.sonos.error ? " (" + j.sonos.error + ")" : "");

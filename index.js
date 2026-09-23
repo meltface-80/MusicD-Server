@@ -59,10 +59,17 @@ function createServer(overrides = {}) {
     log
   });
   const advertisedIp = () => config.serverIp || localIp();
+  // The speakers found last time are asked first, so after a restart or an
+  // update the rooms are back in a second or two instead of after discovery.
+  const knownHosts = (db.setting("sonosKnownHosts", []) || []).filter(h => !config.sonosHosts.includes(h));
   const zones = new ZoneManager({
-    seedHosts: config.sonosHosts, bindIp: config.serverIp || localIp(),
+    seedHosts: config.sonosHosts.concat(knownHosts), bindIp: config.serverIp || localIp(),
     include: config.include, exclude: config.exclude, log, trackIdFromUri
   });
+  zones.topology.onHosts = (ips) => {
+    const next = [...new Set(ips)].sort();
+    if (JSON.stringify(next) !== JSON.stringify(db.setting("sonosKnownHosts", []))) db.setSetting("sonosKnownHosts", next);
+  };
 
   const ctx = {
     config, db, library, scanner, artwork, transcoder, zones, log, version: pkg.version,
@@ -161,14 +168,22 @@ function createServer(overrides = {}) {
     scanner.onProgress = () => library.reload();
     const scan = () => scanner.scan().then(r => { if (r.status !== "running") ctx.afterScan(); })
       .catch(e => log("[scan] " + e.message));
-    setTimeout(scan, 500);
-    setInterval(scan, config.scanHours * 3600 * 1000).unref();
+    ctx.scanTimers = [setTimeout(scan, 500), setInterval(scan, config.scanHours * 3600 * 1000)];
+    ctx.scanTimers[1].unref();
     return ctx;
   }
 
   async function stop() {
     zones.stop();
-    if (ctx.httpServer) await new Promise(r => ctx.httpServer.close(r));
+    for (const t of ctx.scanTimers || []) clearTimeout(t);
+    scanner.onProgress = null;
+    if (ctx.httpServer) {
+      const closed = new Promise(r => ctx.httpServer.close(r));
+      // Kept-alive connections too, or a client (or the next server on this
+      // port, after an in-app update) talks to a socket that's going away.
+      if (ctx.httpServer.closeAllConnections) ctx.httpServer.closeAllConnections();
+      await closed;
+    }
     db.close();
   }
 
