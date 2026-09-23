@@ -4,6 +4,13 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.1.3
+- **In-app updates work.** Settings → Check for updates → Update installs the newest
+  release and restarts the server in place (the same updater as MusicD Remote: the
+  container runs `launcher.js`, which swaps the new files in while the server is stopped).
+  Every version merged to main is now published as a GitHub release for it to find.
+- The image is also tagged with its version (`:0.1.3`) as well as `:latest`.
+
 ## v0.1.2
 - Settings → Artwork & metadata: the saved FanArt.tv key shows as `••••` plus its
   last four characters instead of "Current: undefined"; the stale Discogs wording is gone.

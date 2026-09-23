@@ -10490,7 +10490,7 @@
     setTimeout(() => {
       if (pollTimer && applying) {
         clearInterval(pollTimer);
-        show("Update is taking a while \u2014 if the app doesn't come back on its own, restart the extension to finish.");
+        show("Update is taking a while \u2014 if the app doesn't come back on its own, restart the container (docker restart musicd-server).");
       }
     }, 180000);
   }
