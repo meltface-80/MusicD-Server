@@ -1,0 +1,135 @@
+name: Android
+
+# The APK is built here: GitHub's runners carry the Android SDK, so this is the
+# shortest path from a commit to something installable. Every push produces
+# an artifact; a signed build is also published into dist/ when versionName
+# changes.
+on:
+  push:
+    branches: ["**"]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  core:
+    name: Core tests (JVM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run the core test suite
+        run: ./gradlew :core:test --no-daemon --stacktrace
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: android/core/build/reports/tests/test
+
+  apk:
+    name: APK
+    runs-on: ubuntu-latest
+    needs: core
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Not `tools`: the legacy SDK Tools package is obsolete and fails to
+      # download often enough to take a build down with it.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The signing key comes from repository secrets — the same two as
+      # Android Random Remote (MUSICD_KEYSTORE_BASE64, MUSICD_KEYSTORE_PASSWORD).
+      # Without them the build still runs and produces a debug-signed APK as an
+      # artifact; nothing is published, because a key that changes between
+      # builds makes every update uninstallable.
+      - name: Restore the signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MUSICD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "have_key=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::MUSICD_KEYSTORE_BASE64 is not set: this build is debug-signed and is not published to dist/."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/musicd-release.jks"
+          echo "path=$RUNNER_TEMP/musicd-release.jks" >> "$GITHUB_OUTPUT"
+          echo "have_key=true" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble
+        env:
+          MUSICD_KEYSTORE: ${{ steps.signing.outputs.path }}
+          MUSICD_KEYSTORE_PASSWORD: ${{ secrets.MUSICD_KEYSTORE_PASSWORD }}
+          MUSICD_KEY_ALIAS: musicd
+          HAVE_KEY: ${{ steps.signing.outputs.have_key }}
+        run: |
+          if [ "$HAVE_KEY" = "true" ]; then
+            ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          else
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          fi
+
+      - name: Name the APK after the version
+        id: name
+        env:
+          HAVE_KEY: ${{ steps.signing.outputs.have_key }}
+        run: |
+          apk=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "$HAVE_KEY" = "true" ]; then out="musicd-server-android-${version}.apk"
+          else out="musicd-server-android-${version}-debug.apk"; fi
+          cp "$apk" "$out"
+          echo "apk=$out" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.apk }}
+          path: android/${{ steps.name.outputs.apk }}
+
+      # One APK in dist/, committed once per versionName, so the README and the
+      # Pages site can link straight at it. Pushed with GITHUB_TOKEN, which
+      # does not trigger workflows, so this cannot loop.
+      - name: Publish the APK into dist/
+        if: >-
+          github.event_name == 'push' && github.ref_type == 'branch'
+          && steps.signing.outputs.have_key == 'true'
+        working-directory: .
+        env:
+          APK: ${{ steps.name.outputs.apk }}
+        run: |
+          set -euo pipefail
+          if [ -f "dist/$APK" ]; then echo "dist/$APK already published"; exit 0; fi
+          git rm -q --ignore-unmatch 'dist/musicd-server-android-*.apk'
+          mkdir -p dist
+          cp "android/$APK" "dist/$APK"
+          version=$(grep -oP 'versionName = "\K[^"]+' android/app/build.gradle.kts)
+          sha=$(sha256sum "dist/$APK" | cut -d' ' -f1)
+          printf '{\n  "version": "%s",\n  "url": "https://github.com/%s/raw/main/dist/%s",\n  "sha256": "%s"\n}\n' \
+            "$version" "$GITHUB_REPOSITORY" "$APK" "$sha" > dist/latest.json
+          git add "dist/$APK" dist/latest.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publish $APK" -m "Built from ${GITHUB_SHA}."
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

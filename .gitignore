@@ -2,3 +2,9 @@ node_modules/
 data/
 *.log
 .DS_Store
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+*.apk
+!dist/*.apk
