@@ -93,4 +93,6 @@ dependencies {
     // and lock-screen controls that come with it.
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-session:1.8.0")
+    // Downloads: queued, retried and resumed, waiting for Wi-Fi if asked to.
+    implementation("androidx.work:work-runtime:2.10.3")
 }

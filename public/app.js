@@ -6444,6 +6444,20 @@
     });
   }
 
+  // Inside the Android app only (its MusicdDownloads bridge): keep this album
+  // on the phone, or take it off. Browsers and the iPhone app never see it.
+  function downloadMenuItem(album) {
+    const dl = window.MusicdDownloads;
+    if (!dl || !album || typeof album.offset !== "number") return [];
+    let st = {};
+    try { st = JSON.parse(dl.status(album.offset)) || {}; } catch (e) { /* treat as not downloaded */ }
+    if (st.state === "done") return [{ label: "Remove from this phone", onClick: () => dl.remove(album.offset) }];
+    if (st.state === "downloading" || st.state === "queued" || st.state === "waiting") {
+      return [{ label: `Downloading… ${st.done || 0}/${st.total || "?"}`, onClick: () => dl.open() }];
+    }
+    return [{ label: "Download to this phone", onClick: () => dl.download(album.offset, album.title || "", album.subtitle || "") }];
+  }
+
   async function fetchAlbumDetail(album) {
     // Send the album's identity so the server can detect a stale offset
     // (library changed since the tile rendered) and relocate — or 409 —
@@ -6539,7 +6553,8 @@
     if (overflow.length) {
       modalActs.appendChild(buildOverflowMenu(
         overflow.map(k => ({ label: labels[k], onClick: (b) => invoke(k, b) }))
-          .concat([{ label: "Edit album", onClick: () => openAlbumEditor(album) }]),
+          .concat([{ label: "Edit album", onClick: () => openAlbumEditor(album) }])
+          .concat(downloadMenuItem(album)),
         { label: "More actions" }));
     }
     if (!available.length) {
@@ -13909,4 +13924,20 @@ initServiceBrowser({
       btn.disabled = false;
     }
   });
+})();
+
+/* ------------------------------------------------------------------ */
+/*  Android app only: Settings gets a way to its Downloads screen.     */
+/* ------------------------------------------------------------------ */
+(function androidDownloadsEntry() {
+  const dl = window.MusicdDownloads;
+  const nav = document.querySelector(".settings-nav");
+  if (!dl || !nav) return;
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "settings-nav-item";
+  b.innerHTML = '<span class="settings-nav-ico" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg></span>' +
+    '<span class="settings-nav-txt"><span class="settings-nav-title">Downloads on this phone</span></span>';
+  b.addEventListener("click", () => dl.open());
+  nav.insertBefore(b, nav.children[1] || null);
 })();

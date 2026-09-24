@@ -89,6 +89,11 @@ function createServer(overrides = {}) {
       features.kickSmartPicks();
     }
   };
+  // Albums made ready for the Android app to keep (Original or Opus 256).
+  ctx.downloads = new (require("./lib/server/downloads").Downloads)({
+    cacheDir: path.join(config.dataDir, "download-cache"),
+    maxBytes: config.transcodeCacheGb * 1024 ** 3, log
+  });
   // One account and its signed-in devices; everything below sits behind it.
   const auth = ctx.auth = createAuth(ctx);
   ctx.playback = new Playback(ctx);
@@ -135,6 +140,7 @@ function createServer(overrides = {}) {
   require("./lib/server/api-playback")(app, ctx);
   require("./lib/server/api-playlists")(app, ctx);
   require("./lib/server/api-phone")(app, ctx);
+  require("./lib/server/downloads").mount(app, ctx);
 
   app.get("/api/health", (req, res) => res.json({
     ok: true, version: pkg.version, albums: library.count, rooms: zones.topology.rooms().length,
