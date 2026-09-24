@@ -5,6 +5,24 @@ Versioning: each set of changes is a development build and takes the next third 
 `package.json`, the README title, the GitHub Pages badge and the Android app's
 `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
+## v0.3.4
+- **The Android app updates itself** (phase 4). The server's in-app updater only ever updated the
+  server, so the phone kept running the old app — which is why downloads didn't play until the
+  app was reinstalled. The app now looks for a newer APK itself (GitHub's `dist/latest.json`,
+  when it opens, at most hourly, and from *Settings → System → Check for app update*), downloads
+  it, checks its SHA-256, and hands it to Android's installer, which installs over the top:
+  sign-in and downloads stay. Android asks once to allow installs from MusicD.
+- **Automatic downloads** (Downloads screen): keep today's Smart Picks, the Album of the day and
+  the newest 5–30 albums on the phone, in the chosen quality, under the same Wi-Fi rule and size
+  limit. Checked every six hours; albums that drop off the lists are removed again, but never
+  one you downloaded yourself. New `GET /api/download/auto`.
+- **Android Auto**: MusicD appears as a media app in the car — Downloaded albums (played from the
+  phone), and with the server in reach Smart Picks and Random albums (played on *This phone*
+  through the server, so queue and history stay the server's). A sideloaded app shows in Android
+  Auto only with its developer setting *Unknown sources* on.
+- Tailscale inside the app (the plan's other phase-4 item) is left out: the official Tailscale
+  app already does the job, and building it in would add 20–30 MB for no gain you'd notice.
+
 ## v0.3.3
 - **Settings fills the screen in the Android app**: the tiles share the screen's height, so the
   first level never scrolls; a close button replaces the backdrop, and the phone's Back button

@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.3.3
+# MusicD Server — v0.3.4
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -220,6 +220,13 @@ interface, and adds what a web page can't:
 
 * **Away from home** — off your Wi-Fi the app carries on over Tailscale, as a player for the
   phone only. See below.
+* **Automatic downloads** — today's Smart Picks, the Album of the day and the newest albums kept
+  on the phone by themselves (Downloads screen), and removed again when they drop off the list.
+* **Android Auto** — Downloaded albums, Smart Picks and Random albums in the car. Android Auto
+  lists a sideloaded app only with *Unknown sources* on in its developer settings (tap the
+  version number in Android Auto's settings ten times to reach them).
+* **Updates itself** — the app offers each new version when it opens (or *Settings → System →
+  Check for app update*) and installs it over the top; Android asks once to allow it.
 
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.

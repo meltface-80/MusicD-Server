@@ -122,16 +122,36 @@ class DownloadsActivity : Activity() {
             limits.indexOf(s.limitGb).coerceAtLeast(0)
         ) { i -> DownloadStore.setLimitGb(this, limits[i]) })
 
-        box.addView(Switch(this).apply {
-            text = "Download on Wi-Fi only"
-            setTextColor(WHITE); textSize = 16f
-            isChecked = s.wifiOnly
-            setPadding(0, px(14), 0, px(6))
-            setOnCheckedChangeListener { _, on -> DownloadStore.setWifiOnly(this@DownloadsActivity, on) }
-        })
+        box.addView(switch("Download on Wi-Fi only", s.wifiOnly) { DownloadStore.setWifiOnly(this, it) })
         box.addView(note("Downloads live in this app's storage: no permission needed, but uninstalling the app deletes them (updates don't)."))
+
+        // Automatic downloads.
+        box.addView(heading("Automatic downloads"))
+        box.addView(note("Kept on the phone by themselves, in the quality above, and removed again when they drop off " +
+            "the list. Albums you download yourself are never removed."))
+        box.addView(switch("Today's Smart Picks", s.autoPicks) { DownloadStore.setAutoPicks(this, it); AutoDownloads.runNow(this) })
+        box.addView(switch("Album of the day", s.autoAotd) { DownloadStore.setAutoAotd(this, it); AutoDownloads.runNow(this) })
+        val recent = listOf(0, 5, 10, 20, 30)
+        box.addView(label("Recently added albums"))
+        box.addView(spinner(
+            recent.map { if (it == 0) "Off" else "The newest $it" },
+            recent.indexOf(s.autoRecent).coerceAtLeast(0)
+        ) { i ->
+            if (recent[i] != DownloadStore.settings(this).autoRecent) {
+                DownloadStore.setAutoRecent(this, recent[i]); AutoDownloads.runNow(this)
+            }
+        })
         return box
     }
+
+    private fun switch(text: String, on: Boolean, onChange: (Boolean) -> Unit): Switch =
+        Switch(this).apply {
+            this.text = text
+            setTextColor(WHITE); textSize = 16f
+            isChecked = on
+            setPadding(0, px(14), 0, px(6))
+            setOnCheckedChangeListener { _, v -> onChange(v) }
+        }
 
     private fun spinner(items: List<String>, selected: Int, onPick: (Int) -> Unit): Spinner =
         Spinner(this).apply {
@@ -189,7 +209,7 @@ class DownloadsActivity : Activity() {
     }
 
     private fun stateLine(a: DownloadStore.Album): String {
-        val q = if (a.quality == DownloadStore.QUALITY_OPUS) "Opus 256" else "Original"
+        val q = (if (a.quality == DownloadStore.QUALITY_OPUS) "Opus 256" else "Original") + if (a.auto) " · automatic" else ""
         return when (a.state) {
             "done" -> "${a.tracks.size} tracks · ${gb(a.totalBytes)} · $q"
             "downloading" -> "Downloading ${a.doneCount} of ${a.tracks.size} · $q"
@@ -203,7 +223,7 @@ class DownloadsActivity : Activity() {
     private fun open(a: DownloadStore.Album) {
         if (a.state != "done") {
             AlertDialog.Builder(this).setTitle(a.title).setMessage(stateLine(a))
-                .setPositiveButton("Try again") { _, _ -> DownloadWorker.enqueue(this, a.id, a.quality, a.title, a.artist) }
+                .setPositiveButton("Try again") { _, _ -> DownloadWorker.enqueue(this, a.id, a.quality, a.title, a.artist, a.auto) }
                 .setNeutralButton("Remove") { _, _ -> confirmRemove(a) }
                 .setNegativeButton("Close", null).show()
             return
