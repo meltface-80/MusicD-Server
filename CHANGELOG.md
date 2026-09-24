@@ -1,8 +1,9 @@
 # Changelog
 
-Every change merged to main bumps the version: `package.json`, the README title,
-the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
-move together — `npm test` fails if they don't.
+The version changes only when the project owner says so (currently the 0.3.x line).
+When it does, `package.json`, the README title, the GitHub Pages badge and the Android
+app's `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
+Changes made between version bumps are listed under the current version.
 
 ## v0.3.0
 - **This phone** (Android): the phone running the app is now one of the zones. Choose *This
