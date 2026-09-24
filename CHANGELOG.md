@@ -5,6 +5,18 @@ Versioning: each set of changes is a development build and takes the next third 
 `package.json`, the README title, the GitHub Pages badge and the Android app's
 `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
+## v0.3.5
+- **Playback controls on the phone**: the phone player never handed its session to Media3's
+  notification manager, so music started in the app (a download, or *This phone* from the page)
+  played with no notification, no lock-screen controls — and nothing but a force-close to stop
+  it. It does now, and the player also stays properly in the foreground while it plays.
+- **The app's own screen offline**: when the server can't be reached the app opens the Downloads
+  screen by itself — what's on the phone first, the download settings below, a *Try the server
+  again* button — instead of an error page. A player bar at the bottom shows what's playing, with
+  a position slider and previous / play-pause / next.
+- **Crash details**: if the app stops, the next start says so and offers to share the details
+  (the stack trace, the app and Android versions), so a crash can be fixed rather than guessed at.
+
 ## v0.3.4
 - **The Android app updates itself** (phase 4). The server's in-app updater only ever updated the
   server, so the phone kept running the old app — which is why downloads didn't play until the

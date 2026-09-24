@@ -49,6 +49,10 @@ class MainActivity : Activity() {
     private lateinit var errorText: TextView
     private var loadedBase: String? = null
     private val onAway: (Boolean) -> Unit = { reloadIfMoved() }
+    /** The last load failed (set by the WebView client, cleared by each load). */
+    private var loadFailed = false
+    /** The offline screen has been opened for this outage — once, so Back returns here. */
+    private var offlineShown = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +94,7 @@ class MainActivity : Activity() {
         setContentView(root)
 
         registerBack()
+        CrashLog.offer(this)
         askForNotificationPermission()
         AutoDownloads.schedule(this)
         Away.listen(onAway)
@@ -105,8 +110,9 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (!::web.isInitialized) return
-        // The server may have been changed from the connect screen.
-        reloadIfMoved()
+        // The server may have been changed from the connect screen — or it
+        // couldn't be reached last time (back from the offline screen): try again.
+        if (errorPanel.visibility == View.VISIBLE) load() else reloadIfMoved()
         Away.recheck(this)
         AppUpdate.check(this)
         NowPlayingService.start(this)
@@ -124,6 +130,7 @@ class MainActivity : Activity() {
         val base = Store.active(this)?.baseUrl ?: return openConnect()
         val token = Store.token(this) ?: return signedOut()
         loadedBase = base
+        loadFailed = false
         // The page signs in with the same token the rest of the app uses.
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -169,7 +176,7 @@ class MainActivity : Activity() {
                 setOnClickListener { load() }
             })
             addView(Button(this@MainActivity).apply {
-                text = "Play downloads"
+                text = "On this phone"
                 setOnClickListener { startActivity(Intent(this@MainActivity, DownloadsActivity::class.java)) }
             })
             addView(Button(this@MainActivity).apply {
@@ -241,6 +248,7 @@ class MainActivity : Activity() {
         }
 
         override fun onPageFinished(view: WebView, url: String) {
+            if (!loadFailed) offlineShown = false
             ShareBridge.install(view)
         }
 
@@ -249,7 +257,14 @@ class MainActivity : Activity() {
             // Perhaps the phone has just left home (or come back): look again.
             Away.recheck(this@MainActivity)
             val where = Store.active(this@MainActivity)?.toString() ?: "the server"
+            loadFailed = true
             showError("Can't reach MusicD Server at $where.\n\n${error.description}\n")
+            // The app's own screen instead of an error: what's on the phone, and its player.
+            if (!offlineShown && DownloadStore.albums(this@MainActivity).any { it.first.state == "done" }) {
+                offlineShown = true
+                startActivity(Intent(this@MainActivity, DownloadsActivity::class.java)
+                    .putExtra(DownloadsActivity.EXTRA_OFFLINE, true))
+            }
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

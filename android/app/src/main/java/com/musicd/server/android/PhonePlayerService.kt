@@ -154,6 +154,12 @@ class PhonePlayerService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         session = MediaLibrarySession.Builder(this, player, Library()).setSessionActivity(open).build()
+        // Media3 shows the notification and lock-screen controls (and keeps the
+        // service in the foreground while it plays) only for sessions it has
+        // been given. It's given them when a controller connects — Bluetooth,
+        // Android Auto — but playback started in the app has none, so without
+        // this it played with no controls at all.
+        addSession(session!!)
 
         running = true
         worker = Thread({ loop() }, "phone-commands").apply { isDaemon = true; start() }
