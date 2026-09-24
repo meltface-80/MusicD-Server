@@ -15,8 +15,8 @@ android {
         targetSdk = 36
         // versionCode must rise with every published build or Android refuses
         // to install over the previous one.
-        versionCode = 10
-        versionName = "0.2.2"
+        versionCode = 11
+        versionName = "0.3.0"
     }
 
     buildFeatures {
@@ -89,4 +89,8 @@ dependencies {
     implementation(project(":core"))
     // FileProvider only: a share card leaves the app as a content:// URI.
     implementation("androidx.core:core:1.13.1")
+    // "This phone": playback (ExoPlayer) and the media session, notification
+    // and lock-screen controls that come with it.
+    implementation("androidx.media3:media3-exoplayer:1.8.0")
+    implementation("androidx.media3:media3-session:1.8.0")
 }

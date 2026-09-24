@@ -167,6 +167,8 @@ class NowPlayingService : Service() {
             try {
                 val zones = client.zones()
                 val chosen = zones.lastZone ?: Store.zone(this) ?: zones.zones.firstOrNull()?.id
+                // "This phone" has its own notification and lock screen (PhonePlayerService).
+                if (chosen?.startsWith("PHONE_") == true) { main.post { stopSelf() }; return }
                 if (chosen != zoneId) { zoneId = chosen; revision = null; Store.setZone(this, chosen) }
                 val id = zoneId
                 if (id == null) {

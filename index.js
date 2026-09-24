@@ -134,6 +134,7 @@ function createServer(overrides = {}) {
   require("./lib/server/api-library")(app, ctx);
   require("./lib/server/api-playback")(app, ctx);
   require("./lib/server/api-playlists")(app, ctx);
+  require("./lib/server/api-phone")(app, ctx);
 
   app.get("/api/health", (req, res) => res.json({
     ok: true, version: pkg.version, albums: library.count, rooms: zones.topology.rooms().length,

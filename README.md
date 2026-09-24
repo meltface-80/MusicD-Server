@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.2.2
+# MusicD Server — v0.3.0
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -202,6 +202,11 @@ interface, and adds what a web page can't:
 * A **home-screen widget** — now playing, transport, and a tap on the cover for a random album
 * A **Quick Settings tile** — a random album without opening anything
 * A proper **share sheet** for the share card
+* **This phone** — the phone itself is one of the rooms. Pick *This phone* in the room picker
+  and albums play through its speaker or headphones, with the queue, now playing, history and
+  Random Album Radio working as for any Sonos room, and *move what's playing* works between the
+  phone and any Sonos room. It's the Android app's own: only that phone sees it (the iPhone
+  home-screen app and browsers don't). It's there while the app is open or playing.
 
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.
