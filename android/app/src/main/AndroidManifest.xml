@@ -60,6 +60,13 @@
             android:label="@string/app_name"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Downloads: what's on this phone, playable with no server. -->
+        <activity
+            android:name=".DownloadsActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:label="Downloads" />
+
         <!-- Random album from the notification shade. -->
         <service
             android:name=".RandomAlbumTile"

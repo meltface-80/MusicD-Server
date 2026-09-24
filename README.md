@@ -207,6 +207,14 @@ interface, and adds what a web page can't:
   Random Album Radio working as for any Sonos room, and *move what's playing* works between the
   phone and any Sonos room. It's the Android app's own: only that phone sees it (the iPhone
   home-screen app and browsers don't). It's there while the app is open or playing.
+* **Downloads** — on an album's page, *⋯ → Download to this phone*, as **Original** (the files
+  as they are; formats a phone can't play become lossless FLAC) or **Opus 256** (about a tenth
+  of the size). Saved to phone storage or an SD card, Wi-Fi only by default, with an optional
+  size limit — all under *Settings → Downloads on this phone*. Downloaded albums play with no
+  server at all (the same screen, or *Play downloads* when the server can't be reached), a
+  downloaded track is used instead of streaming it, and plays made offline join your history
+  when the phone is back. Downloads live in the app's own storage, so uninstalling the app
+  removes them (updates don't).
 
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.

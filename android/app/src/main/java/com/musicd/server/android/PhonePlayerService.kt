@@ -26,6 +26,8 @@ import com.musicd.server.client.ServerClient
 import com.musicd.server.client.phoneCommands
 import com.musicd.server.client.phoneHello
 import com.musicd.server.client.phoneReport
+import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -41,7 +43,13 @@ import kotlin.math.roundToInt
  * headset buttons and Android Auto.
  *
  * Audio comes from the server's /stream addresses, the same ones Sonos is
- * given (FLAC up to 24-bit/48 kHz, anything higher converted on the server).
+ * given (FLAC up to 24-bit/48 kHz, anything higher converted on the server) —
+ * or, for a track that has been downloaded, from the phone itself.
+ *
+ * Downloaded albums also play with no server at all (ACTION_PLAY_LOCAL, from
+ * the Downloads screen). While it plays those, the server's commands that
+ * would rearrange a queue it doesn't know are ignored, and the plays are
+ * kept to send once the server is reachable again.
  *
  * Started while the app is open; it stays running while it plays. Closed and
  * idle, it stops, and the phone drops out of the zone list shortly after.
@@ -52,6 +60,9 @@ class PhonePlayerService : MediaSessionService() {
     companion object {
         private const val TAG = "PhonePlayer"
         private const val WAIT_MS = 25_000
+        const val ACTION_PLAY_LOCAL = "com.musicd.server.android.action.PLAY_LOCAL"
+        const val EXTRA_ALBUM = "album"
+        const val EXTRA_INDEX = "index"
 
         fun start(context: Context) {
             if (Store.token(context) == null) return
@@ -69,6 +80,9 @@ class PhonePlayerService : MediaSessionService() {
     private var worker: Thread? = null
     private var seq = 0L
     private var reportPending = false
+    /** Playing downloads from the Downloads screen rather than the server's queue. */
+    private var localMode = false
+    private var loggedKey: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -106,6 +120,36 @@ class PhonePlayerService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_PLAY_LOCAL) {
+            playLocal(intent.getIntExtra(EXTRA_ALBUM, 0), intent.getIntExtra(EXTRA_INDEX, 0))
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    /** A downloaded album, from the phone's own storage. */
+    private fun playLocal(albumId: Int, index: Int) {
+        val dir = DownloadStore.dirOf(this, albumId) ?: return
+        val a = DownloadStore.load(dir) ?: return
+        val cover = File(dir, "cover.jpg").takeIf { it.exists() }?.let { Uri.fromFile(it) }
+        val items = a.tracks.filter { it.done && File(dir, it.fileName()).exists() }.map { t ->
+            MediaItem.Builder()
+                .setUri(Uri.fromFile(File(dir, t.fileName())))
+                .setMediaId(t.id.toString())
+                .setMediaMetadata(MediaMetadata.Builder()
+                    .setTitle(t.title).setArtist(t.artist).setAlbumTitle(a.title)
+                    .apply { cover?.let { setArtworkUri(it) } }
+                    .build())
+                .build()
+        }
+        if (items.isEmpty()) return
+        localMode = true
+        loggedKey = null
+        player.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
+        player.prepare()
+        player.play()
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Swiped away while idle: stop, and the phone leaves the zone list.
         if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()
@@ -138,6 +182,7 @@ class PhonePlayerService : MediaSessionService() {
                     hello = true
                     reportSoon()
                 }
+                sendOfflinePlays(client)
                 val batch = client.phoneCommands(seq, WAIT_MS)
                 seq = batch.seq
                 failures = 0
@@ -164,6 +209,16 @@ class PhonePlayerService : MediaSessionService() {
         }
     }
 
+    /** Plays made with no server, once there is one. */
+    private fun sendOfflinePlays(client: ServerClient) {
+        val plays = DownloadStore.pendingPlays(this)
+        if (plays.length() == 0) return
+        runCatching {
+            client.post("/api/phone/plays", JSONObject().put("plays", plays))
+            DownloadStore.clearPlays(this, plays.length())
+        }
+    }
+
     private fun pause(ms: Long) {
         try { Thread.sleep(ms) } catch (e: InterruptedException) { running = false }
     }
@@ -175,8 +230,10 @@ class PhonePlayerService : MediaSessionService() {
             .setAlbumTitle(it.album)
             .apply { it.artUrl?.let { u -> setArtworkUri(Uri.parse(u)) } }
             .build()
+        // A downloaded copy plays in place of the stream.
+        val local = DownloadStore.trackFile(this, it.trackId)
         return MediaItem.Builder()
-            .setUri(it.url)
+            .setUri(if (local != null) Uri.fromFile(local) else Uri.parse(it.url))
             .setMediaId(it.trackId?.toString() ?: it.url)
             .setMediaMetadata(meta)
             .build()
@@ -188,6 +245,10 @@ class PhonePlayerService : MediaSessionService() {
 
     /** One command from the server, on the main thread. */
     private fun apply(c: Phone.Command) {
+        if (c.op == "load" || c.op == "sync") localMode = false
+        // Playing downloads: the server's queue isn't the one playing, so its
+        // queue edits don't apply (transport, volume and modes still do).
+        if (localMode && c.op in setOf("insert", "remove", "clear", "jump")) return
         when (c.op) {
             "load", "sync" -> {
                 val items = c.items.map(::mediaItem)
@@ -251,7 +312,10 @@ class PhonePlayerService : MediaSessionService() {
     private val heartbeat = object : Runnable {
         override fun run() {
             // While playing, the position and the volume keys' effect.
-            if (player.isPlaying) report()
+            if (player.isPlaying) {
+                if (localMode) logLocalPlay()
+                report()
+            }
             if (running) main.postDelayed(this, 10_000)
         }
     }
@@ -262,9 +326,22 @@ class PhonePlayerService : MediaSessionService() {
         main.postDelayed({ reportPending = false; report() }, 300)
     }
 
+    /** A downloaded track heard long enough to count, the same rule as the server's. */
+    private fun logLocalPlay() {
+        val item = player.currentMediaItem ?: return
+        val key = item.mediaId + "@" + player.currentMediaItemIndex
+        if (key == loggedKey) return
+        val dur = if (player.duration > 0) player.duration / 1000.0 else 60.0
+        if (player.currentPosition / 1000.0 >= minOf(30.0, maxOf(5.0, dur / 2))) {
+            loggedKey = key
+            item.mediaId.toLongOrNull()?.let { DownloadStore.addPlay(this, it) }
+        }
+    }
+
     /** Read the player (main thread), send it (background). */
     private fun report() {
-        val count = player.mediaItemCount
+        // Playing downloads the server doesn't know about: it sees the phone as idle.
+        val count = if (localMode) 0 else player.mediaItemCount
         val state = when {
             count == 0 -> "stopped"
             player.isPlaying -> "playing"

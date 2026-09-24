@@ -77,6 +77,7 @@ class MainActivity : Activity() {
             }
             webViewClient = Client()
             addJavascriptInterface(ShareBridge(this@MainActivity), ShareBridge.NAME)
+            addJavascriptInterface(DownloadsBridge(this@MainActivity), DownloadsBridge.NAME)
         }
         root.addView(web)
         root.addView(buildErrorPanel())
@@ -150,6 +151,10 @@ class MainActivity : Activity() {
             addView(Button(this@MainActivity).apply {
                 text = "Try again"
                 setOnClickListener { load() }
+            })
+            addView(Button(this@MainActivity).apply {
+                text = "Play downloads"
+                setOnClickListener { startActivity(Intent(this@MainActivity, DownloadsActivity::class.java)) }
             })
             addView(Button(this@MainActivity).apply {
                 text = "Change server"
