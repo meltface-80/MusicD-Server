@@ -42,10 +42,6 @@ import java.util.concurrent.Executors
  */
 class DownloadsActivity : Activity() {
 
-    companion object {
-        const val EXTRA_OFFLINE = "offline"
-    }
-
     private val main = Handler(Looper.getMainLooper())
     private val work = Executors.newSingleThreadExecutor()
     private lateinit var list: LinearLayout
@@ -433,11 +429,12 @@ class DownloadsActivity : Activity() {
         if (bytes >= 1L shl 30) String.format("%.1f GB", bytes / (1L shl 30).toDouble())
         else String.format("%d MB", bytes / (1L shl 20))
 
-    private companion object {
-        const val BG = 0xFF0E1012.toInt()
-        const val CARD = 0xFF252A2F.toInt()
-        const val WHITE = 0xFFFFFFFF.toInt()
-        const val DIM = 0xFFBFC7CE.toInt()
-        const val FAINT = 0xFF6B737A.toInt()
+    companion object {
+        const val EXTRA_OFFLINE = "offline"
+        private const val BG = 0xFF0E1012.toInt()
+        private const val CARD = 0xFF252A2F.toInt()
+        private const val WHITE = 0xFFFFFFFF.toInt()
+        private const val DIM = 0xFFBFC7CE.toInt()
+        private const val FAINT = 0xFF6B737A.toInt()
     }
 }
