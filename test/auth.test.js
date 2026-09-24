@@ -191,6 +191,11 @@ test("the Android app gets the page without viewport-fit=cover; browsers keep it
     assert.match(browser, /viewport-fit=cover/);
     assert.doesNotMatch(app, /content="[^"]*viewport-fit=cover/);
     assert.match(app, /maximum-scale=1,user-scalable=no"/);
+    const css = async (ua) => (await fetch(B + "/style.css", { headers: { Authorization: "Bearer " + token, "User-Agent": ua } })).text();
+    assert.match(await css("Mozilla/5.0 (iPhone) Safari/604.1"), /env\(safe-area-inset-top\)/);
+    const appCss = await css("Mozilla/5.0 (Linux; Android 15; wv) MusicDAndroid/0.2.2");
+    assert.doesNotMatch(appCss, /env\(safe-area-inset/);
+    assert.match(appCss, /--topbar-h: calc\(56px \+ 0px\)/);
   } finally {
     await srv.stop();
   }

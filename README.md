@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.2.1
+# MusicD Server — v0.2.2
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 

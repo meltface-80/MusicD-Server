@@ -150,6 +150,7 @@ function createServer(overrides = {}) {
   // same space twice (a gap over the top buttons, the mini player riding high).
   function sendApp(req, res) {
     const file = path.join(pub, "index.html");
+    res.set("Vary", "User-Agent");
     if (!/MusicDAndroid\//.test(req.headers["user-agent"] || "")) return res.sendFile(file);
     fs.readFile(file, "utf8", (err, html) => {
       if (err) return res.status(500).end();
@@ -158,6 +159,17 @@ function createServer(overrides = {}) {
     });
   }
   app.get(["/", "/index.html"], sendApp);
+  // And the stylesheet with every safe-area allowance at zero, for the same
+  // reason — whatever the WebView reports, the app has already made the room.
+  app.get("/style.css", (req, res, next) => {
+    if (!/MusicDAndroid\//.test(req.headers["user-agent"] || "")) return next();
+    fs.readFile(path.join(pub, "style.css"), "utf8", (err, css) => {
+      if (err) return next();
+      res.set("Cache-Control", "no-cache");
+      res.set("Vary", "User-Agent");
+      res.type("css").send(css.replace(/env\(safe-area-inset-(top|bottom|left|right)\)/g, "0px"));
+    });
+  });
   app.use(express.static(pub, {
     maxAge: "1h",
     index: false,
