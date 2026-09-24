@@ -196,6 +196,18 @@ test("the Android app gets the page without viewport-fit=cover; browsers keep it
     const appCss = await css("Mozilla/5.0 (Linux; Android 15; wv) MusicDAndroid/0.2.2");
     assert.doesNotMatch(appCss, /env\(safe-area-inset/);
     assert.match(appCss, /--topbar-h: calc\(56px \+ 0px\)/);
+
+    // Everything else — desktop browsers, Chrome on Android, the iPhone
+    // home-screen app — gets the files exactly as they are on disk.
+    const pub = path.join(__dirname, "..", "public");
+    for (const ua of [
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      "Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+    ]) {
+      assert.equal(await page(ua), fs.readFileSync(path.join(pub, "index.html"), "utf8"), "index.html unchanged for " + ua);
+      assert.equal(await css(ua), fs.readFileSync(path.join(pub, "style.css"), "utf8"), "style.css unchanged for " + ua);
+    }
   } finally {
     await srv.stop();
   }
