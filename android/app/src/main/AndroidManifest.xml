@@ -16,6 +16,8 @@
          and CPU awake while it streams. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The app installs its own updates (Android still asks you each time). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Away from home the app asks the Tailscale app to connect. -->
     <queries>
@@ -109,15 +111,22 @@
 
         <!-- "This phone": the phone as a zone, playing through its own speaker
              or headphones. Exported so the system media controls, Bluetooth
-             and Android Auto can reach its session. -->
+             and Android Auto can reach its session and browse its library. -->
         <service
             android:name=".PhonePlayerService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto: MusicD is a media app there. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <service
             android:name=".NowPlayingService"

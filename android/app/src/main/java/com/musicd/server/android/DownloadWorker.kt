@@ -36,18 +36,24 @@ class DownloadWorker(context: Context, params: WorkerParameters) : Worker(contex
 
         private fun workName(id: Int) = "album-$id"
 
-        /** Queue an album. [title]/[artist] show in the list until the details arrive. */
-        fun enqueue(c: Context, id: Int, quality: String, title: String, artist: String) {
+        /**
+         * Queue an album. [title]/[artist] show in the list until the details
+         * arrive. [auto]: for automatic downloads — an album you download
+         * yourself is yours to keep, even if automatic downloads had it first.
+         */
+        fun enqueue(c: Context, id: Int, quality: String, title: String, artist: String, auto: Boolean = false) {
             val dir = DownloadStore.dirOf(c, id) ?: File(DownloadStore.target(c).dir, id.toString())
             val existing = DownloadStore.load(dir)
             if (existing == null || existing.quality != quality) {
                 if (existing != null) dir.deleteRecursively()
                 DownloadStore.save(dir, DownloadStore.Album(
-                    id, title, artist, null, quality, null, "queued", null, emptyList(), System.currentTimeMillis()
+                    id, title, artist, null, quality, null, "queued", null, emptyList(), System.currentTimeMillis(), auto
                 ))
-            } else if (existing.state != "done") {
-                existing.state = "queued"; existing.error = null
+            } else {
+                if (!auto) existing.auto = false
+                if (existing.state != "done") { existing.state = "queued"; existing.error = null }
                 DownloadStore.save(dir, existing)
+                if (existing.state == "done") return
             }
             val s = DownloadStore.settings(c)
             val req = OneTimeWorkRequest.Builder(DownloadWorker::class.java)
@@ -138,7 +144,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : Worker(contex
                         t.optDouble("duration", 0.0), t.optString("ext", "flac"), t.optLong("size"), false
                     )
                 },
-                old.addedAt
+                old.addedAt,
+                old.auto
             )
             DownloadStore.save(dir, a)
             return a

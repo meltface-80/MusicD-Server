@@ -22,8 +22,16 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionError
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import com.musicd.server.client.Phone
 import com.musicd.server.client.ServerClient
 import com.musicd.server.client.phoneCommands
@@ -57,11 +65,16 @@ import kotlin.math.roundToInt
  * would rearrange a queue it doesn't know are ignored, and the plays are
  * kept to send once the server is reachable again.
  *
+ * In the car, Android Auto browses it (see [Library]): Downloaded albums, and
+ * with the server in reach Smart Picks and Random albums. A downloaded album
+ * plays from the phone; a server album is played on "This phone" through the
+ * server, like everywhere else, so the queue and history stay the server's.
+ *
  * Started while the app is open; it stays running while it plays. Closed and
  * idle, it stops, and the phone drops out of the zone list shortly after.
  */
 @OptIn(UnstableApi::class)
-class PhonePlayerService : MediaSessionService() {
+class PhonePlayerService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "PhonePlayer"
@@ -69,6 +82,14 @@ class PhonePlayerService : MediaSessionService() {
         const val ACTION_PLAY_LOCAL = "com.musicd.server.android.action.PLAY_LOCAL"
         const val EXTRA_ALBUM = "album"
         const val EXTRA_INDEX = "index"
+
+        // Android Auto's tree.
+        private const val ROOT = "root"
+        private const val DOWNLOADS = "downloads"
+        private const val PICKS = "picks"
+        private const val RANDOM = "random"
+        private const val LOCAL = "dl:"     // a downloaded album: dl:<album id>
+        private const val SERVER = "sv:"    // a library album: sv:<album id>
 
         fun start(context: Context) {
             if (Store.token(context) == null) return
@@ -79,7 +100,12 @@ class PhonePlayerService : MediaSessionService() {
 
     private val main = Handler(Looper.getMainLooper())
     private val reports = Executors.newSingleThreadExecutor()
-    private var session: MediaSession? = null
+    private var session: MediaLibrarySession? = null
+    private val browse = Executors.newFixedThreadPool(2)
+    /** This phone's zone, from the server's hello. */
+    @Volatile private var zoneId: String? = null
+    /** Android Auto asked for a server album: the server's "load" answers it. */
+    private var pendingLoad: SettableFuture<MediaSession.MediaItemsWithStartPosition>? = null
     private lateinit var player: ExoPlayer
     private lateinit var audio: AudioManager
     @Volatile private var running = false
@@ -127,14 +153,14 @@ class PhonePlayerService : MediaSessionService() {
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        session = MediaSession.Builder(this, player).setSessionActivity(open).build()
+        session = MediaLibrarySession.Builder(this, player, Library()).setSessionActivity(open).build()
 
         running = true
         worker = Thread({ loop() }, "phone-commands").apply { isDaemon = true; start() }
         main.postDelayed(heartbeat, 10_000)
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_PLAY_LOCAL) {
@@ -145,10 +171,21 @@ class PhonePlayerService : MediaSessionService() {
 
     /** A downloaded album, from the phone's own storage. */
     private fun playLocal(albumId: Int, index: Int) {
-        val dir = DownloadStore.dirOf(this, albumId) ?: return
-        val a = DownloadStore.load(dir) ?: return
+        val items = localItems(albumId)
+        if (items.isEmpty()) return
+        localMode = true
+        loggedKey = null
+        player.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
+        player.prepare()
+        player.play()
+    }
+
+    /** A downloaded album's tracks, as the player takes them. */
+    private fun localItems(albumId: Int): List<MediaItem> {
+        val dir = DownloadStore.dirOf(this, albumId) ?: return emptyList()
+        val a = DownloadStore.load(dir) ?: return emptyList()
         val cover = File(dir, "cover.jpg").takeIf { it.exists() }?.let { Uri.fromFile(it) }
-        val items = a.tracks.filter { it.done && File(dir, it.fileName()).exists() }.map { t ->
+        return a.tracks.filter { it.done && File(dir, it.fileName()).exists() }.map { t ->
             MediaItem.Builder()
                 .setUri(Uri.fromFile(File(dir, t.fileName())))
                 .setMediaId(t.id.toString())
@@ -158,12 +195,6 @@ class PhonePlayerService : MediaSessionService() {
                     .build())
                 .build()
         }
-        if (items.isEmpty()) return
-        localMode = true
-        loggedKey = null
-        player.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
-        player.prepare()
-        player.play()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -181,6 +212,7 @@ class PhonePlayerService : MediaSessionService() {
         }
         session = null
         reports.shutdown()
+        browse.shutdownNow()
         super.onDestroy()
     }
 
@@ -196,6 +228,7 @@ class PhonePlayerService : MediaSessionService() {
                 if (!hello) {
                     val h = client.phoneHello(deviceName())
                     seq = h.seq
+                    zoneId = h.zoneId
                     Store.setAwayLearned(this, h.awayAddress)
                     hello = true
                     reportSoon()
@@ -287,6 +320,14 @@ class PhonePlayerService : MediaSessionService() {
         when (c.op) {
             "load", "sync" -> {
                 val items = c.items.map(::mediaItem)
+                val waiting = pendingLoad
+                if (waiting != null && c.op == "load" && items.isNotEmpty()) {
+                    // Android Auto asked for this: it sets the items and plays.
+                    pendingLoad = null
+                    waiting.set(MediaSession.MediaItemsWithStartPosition(
+                        items, c.index.coerceIn(0, items.size - 1), (c.seconds * 1000).toLong()))
+                    return
+                }
                 if (items.isEmpty()) { player.clearMediaItems(); player.stop(); return }
                 val index = c.index.coerceIn(0, items.size - 1)
                 player.setMediaItems(items, index, (c.seconds * 1000).toLong())
@@ -410,4 +451,126 @@ class PhonePlayerService : MediaSessionService() {
         val model = Build.MODEL
         return if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
     }
+
+    // ------------------------------------------------------------ Android Auto
+
+    /** What Android Auto (and any other media browser) sees and plays. */
+    private inner class Library : MediaLibrarySession.Callback {
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(folder(ROOT, "MusicD"), params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String,
+            page: Int, pageSize: Int, params: LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val f = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            browse.execute {
+                f.set(runCatching { LibraryResult.ofItemList(ImmutableList.copyOf(children(parentId)), params) }
+                    .getOrElse { LibraryResult.ofError(SessionError.ERROR_IO) })
+            }
+            return f
+        }
+
+        override fun onSetMediaItems(
+            mediaSession: MediaSession, controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val id = mediaItems.firstOrNull()?.mediaId ?: ""
+            return when {
+                id.startsWith(LOCAL) -> {
+                    val items = localItems(id.removePrefix(LOCAL).toIntOrNull() ?: -1)
+                    if (items.isEmpty()) return Futures.immediateFailedFuture(IllegalStateException("not downloaded"))
+                    localMode = true
+                    loggedKey = null
+                    return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, 0, 0L))
+                }
+                id.startsWith(SERVER) -> {
+                    val album = id.removePrefix(SERVER).toIntOrNull()
+                    val zone = zoneId
+                    val client = Store.client(this@PhonePlayerService)
+                    if (album == null || zone == null || client == null) {
+                        return Futures.immediateFailedFuture(IllegalStateException("server not reachable"))
+                    }
+                    val f = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+                    pendingLoad?.cancel(false)
+                    pendingLoad = f
+                    browse.execute {
+                        runCatching {
+                            client.post("/api/play", JSONObject().put("offset", album)
+                                .put("zone_or_output_id", zone).put("kind", "play_now"), 20_000)
+                        }.onFailure { e -> main.post { if (pendingLoad === f) pendingLoad = null; f.setException(e) } }
+                    }
+                    // The server's answer comes as a "load" command; don't wait for ever.
+                    main.postDelayed({
+                        if (pendingLoad === f) { pendingLoad = null; f.setException(IllegalStateException("no answer")) }
+                    }, 15_000)
+                    return f
+                }
+                else -> return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+            }
+        }
+    }
+
+    /** One level of the tree. Runs off the main thread (it may ask the server). */
+    private fun children(parentId: String): List<MediaItem> = when (parentId) {
+        ROOT -> buildList {
+            add(folder(DOWNLOADS, "Downloaded albums"))
+            if (Store.client(this@PhonePlayerService) != null) {
+                add(folder(PICKS, "Smart Picks"))
+                add(folder(RANDOM, "Random albums"))
+            }
+        }
+        DOWNLOADS -> DownloadStore.albums(this).filter { it.first.state == "done" }.map { (a, dir) ->
+            album(LOCAL + a.id, a.title, a.artist, coverBytes(File(dir, "cover.jpg")))
+        }
+        PICKS -> serverAlbums("/api/smart-picks", "picks") { o ->
+            Triple(o.optInt("offset"), o.optString("album"), o.optString("artist")) to o.optString("image_key")
+        }
+        RANDOM -> serverAlbums("/api/random-albums?count=20", "albums") { o ->
+            Triple(o.optInt("offset"), o.optString("title"), o.optString("subtitle")) to o.optString("image_key")
+        }
+        else -> emptyList()
+    }
+
+    private fun serverAlbums(
+        path: String, key: String, read: (JSONObject) -> Pair<Triple<Int, String, String>, String>
+    ): List<MediaItem> {
+        val client = Store.client(this) ?: return emptyList()
+        val a = client.getJson(path, 10_000).optJSONArray(key) ?: return emptyList()
+        return (0 until a.length()).map { i ->
+            val (names, imageKey) = read(a.getJSONObject(i))
+            val art = if (imageKey.isNotEmpty()) runCatching { client.bytes(client.imageUrl(imageKey, 300)) }.getOrNull() else null
+            album(SERVER + names.first, names.second, names.third, art)
+        }
+    }
+
+    private fun folder(id: String, title: String): MediaItem = MediaItem.Builder()
+        .setMediaId(id)
+        .setMediaMetadata(MediaMetadata.Builder()
+            .setTitle(title).setIsBrowsable(true).setIsPlayable(false)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS).build())
+        .build()
+
+    /** Covers go as bytes: Android Auto can't open the phone's files or the server's signed addresses. */
+    private fun album(id: String, title: String, artist: String, art: ByteArray?): MediaItem = MediaItem.Builder()
+        .setMediaId(id)
+        .setMediaMetadata(MediaMetadata.Builder()
+            .setTitle(title).setArtist(artist).setAlbumTitle(title)
+            .setIsBrowsable(false).setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_ALBUM)
+            .apply { art?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) } }
+            .build())
+        .build()
+
+    private fun coverBytes(f: File): ByteArray? = runCatching {
+        if (!f.exists()) return null
+        val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }
+        val bmp = android.graphics.BitmapFactory.decodeFile(f.path, o) ?: return null
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+        out.toByteArray()
+    }.getOrNull()
 }

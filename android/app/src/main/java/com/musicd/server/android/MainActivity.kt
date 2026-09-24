@@ -82,6 +82,7 @@ class MainActivity : Activity() {
             webViewClient = Client()
             addJavascriptInterface(ShareBridge(this@MainActivity), ShareBridge.NAME)
             addJavascriptInterface(DownloadsBridge(this@MainActivity), DownloadsBridge.NAME)
+            addJavascriptInterface(AppBridge(this@MainActivity), AppBridge.NAME)
         }
         root.addView(web)
         root.addView(buildErrorPanel())
@@ -90,6 +91,7 @@ class MainActivity : Activity() {
 
         registerBack()
         askForNotificationPermission()
+        AutoDownloads.schedule(this)
         Away.listen(onAway)
         Away.watch(this)
         load()
@@ -106,6 +108,7 @@ class MainActivity : Activity() {
         // The server may have been changed from the connect screen.
         reloadIfMoved()
         Away.recheck(this)
+        AppUpdate.check(this)
         NowPlayingService.start(this)
         PhonePlayerService.start(this)
     }

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One scratch folder, holding exactly the share card being shared right now. -->
+<!-- Scratch folders: the share card being shared right now, and a
+     downloaded app update on its way to Android's installer. -->
 <paths>
     <cache-path name="shares" path="shared/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

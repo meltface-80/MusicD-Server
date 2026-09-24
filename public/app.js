@@ -14031,3 +14031,27 @@ initServiceBrowser({
   b.addEventListener("click", () => dl.open());
   nav.insertBefore(b, nav.children[1] || null);
 })();
+
+/* ------------------------------------------------------------------ */
+/*  Android app only: Settings → System shows the app's own version    */
+/*  and looks for a newer app (the server's updater doesn't touch it). */
+/* ------------------------------------------------------------------ */
+(function androidAppUpdateRow() {
+  const app = window.MusicdApp;
+  const pane = document.querySelector('.settings-pane[data-pane="system"] .settings-block');
+  if (!app || !pane) return;
+  const row = document.createElement("div");
+  row.className = "settings-row";
+  const label = document.createElement("span");
+  label.className = "settings-label";
+  let v = "";
+  try { v = app.version(); } catch (e) {}
+  label.textContent = "Android app" + (v ? " v" + v : "");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "settings-update-btn";
+  btn.textContent = "Check for app update";
+  btn.addEventListener("click", () => { try { app.checkUpdate(); } catch (e) {} });
+  row.appendChild(label); row.appendChild(btn);
+  pane.appendChild(row);
+})();

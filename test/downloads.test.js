@@ -90,6 +90,16 @@ test("albums download to the phone", { skip, timeout: 60000 }, async (t) => {
       assert.equal(r.albums[0].album.title, "Album One (fixed)");
     });
 
+    await t.test("automatic downloads: the albums the phone keeps by itself", async () => {
+      const none = await (await get("/api/download/auto")).json();
+      assert.deepEqual(none.albums, []);
+      const recent = await (await get("/api/download/auto?recent=2&aotd=1")).json();
+      assert.ok(recent.albums.length >= 2 && recent.albums.length <= 3, JSON.stringify(recent));
+      assert.equal(recent.albums.filter(a => a.sources.includes("recent")).length, 2);
+      assert.equal(recent.albums.filter(a => a.sources.includes("aotd")).length, 1);
+      for (const a of recent.albums) assert.ok(Number.isInteger(a.id) && a.title);
+    });
+
     await t.test("plays made offline join the history", async () => {
       const a = await (await get(`/api/download/album?offset=${cd.offset}`)).json();
       const r = await post("/api/phone/plays", { plays: [{ track_id: a.tracks[0].id, ts: Date.now() - 3600000 }, { track_id: 999999, ts: 1 }] });

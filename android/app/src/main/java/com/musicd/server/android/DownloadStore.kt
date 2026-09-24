@@ -23,7 +23,13 @@ object DownloadStore {
 
     // ------------------------------------------------------------ settings
 
-    class Settings(val quality: String, val location: String, val wifiOnly: Boolean, val limitGb: Int)
+    class Settings(
+        val quality: String, val location: String, val wifiOnly: Boolean, val limitGb: Int,
+        /** Automatic downloads: today's Smart Picks, the Album of the day, the newest [autoRecent] albums. */
+        val autoPicks: Boolean, val autoAotd: Boolean, val autoRecent: Int
+    ) {
+        val autoOn get() = autoPicks || autoAotd || autoRecent > 0
+    }
 
     fun settings(c: Context): Settings {
         val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -31,7 +37,10 @@ object DownloadStore {
             quality = p.getString("quality", QUALITY_ORIGINAL) ?: QUALITY_ORIGINAL,
             location = p.getString("location", "phone") ?: "phone",
             wifiOnly = p.getBoolean("wifi_only", true),
-            limitGb = p.getInt("limit_gb", 0)
+            limitGb = p.getInt("limit_gb", 0),
+            autoPicks = p.getBoolean("auto_picks", false),
+            autoAotd = p.getBoolean("auto_aotd", false),
+            autoRecent = p.getInt("auto_recent", 0)
         )
     }
 
@@ -39,6 +48,9 @@ object DownloadStore {
     fun setLocation(c: Context, l: String) = edit(c) { putString("location", l) }
     fun setWifiOnly(c: Context, on: Boolean) = edit(c) { putBoolean("wifi_only", on) }
     fun setLimitGb(c: Context, gb: Int) = edit(c) { putInt("limit_gb", gb) }
+    fun setAutoPicks(c: Context, on: Boolean) = edit(c) { putBoolean("auto_picks", on) }
+    fun setAutoAotd(c: Context, on: Boolean) = edit(c) { putBoolean("auto_aotd", on) }
+    fun setAutoRecent(c: Context, n: Int) = edit(c) { putInt("auto_recent", n) }
 
     private fun edit(c: Context, f: android.content.SharedPreferences.Editor.() -> Unit) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply(f).apply()
@@ -81,7 +93,9 @@ object DownloadStore {
 
     class Album(
         val id: Int, var title: String, var artist: String, var year: Int?, val quality: String,
-        var imageKey: String?, var state: String, var error: String?, val tracks: List<Track>, val addedAt: Long
+        var imageKey: String?, var state: String, var error: String?, val tracks: List<Track>, val addedAt: Long,
+        /** Downloaded by automatic downloads, and removed again when it drops off their lists. */
+        var auto: Boolean = false
     ) {
         val doneCount get() = tracks.count { it.done }
         val totalBytes get() = tracks.sumOf { it.size }
@@ -116,7 +130,8 @@ object DownloadStore {
                     t.optDouble("duration", 0.0), t.optString("ext", "flac"), t.optLong("size"), t.optBoolean("done")
                 )
             },
-            addedAt = j.optLong("added_at")
+            addedAt = j.optLong("added_at"),
+            auto = j.optBoolean("auto", false)
         )
     }.getOrNull()
 
@@ -130,6 +145,7 @@ object DownloadStore {
             .put("id", a.id).put("title", a.title).put("artist", a.artist).put("year", a.year ?: JSONObject.NULL)
             .put("quality", a.quality).put("image_key", a.imageKey ?: "").put("state", a.state)
             .put("error", a.error ?: "").put("tracks", tracks).put("added_at", a.addedAt)
+            .put("auto", a.auto)
         dir.mkdirs()
         val tmp = File(dir, "album.json.tmp")
         tmp.writeText(j.toString())
