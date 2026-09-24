@@ -11589,8 +11589,9 @@
   // their IDs are unchanged — they just live inside panes now — so all the
   // load*/save* wiring above still resolves against the same elements.
   const sheet = overlay.querySelector(".settings-sheet");
-  const views = sheet ? sheet.querySelectorAll(".settings-view") : [];
+  // Looked up each time: the Android app adds a pane of its own (Downloads).
   const showView = (name) => {
+    const views = sheet ? sheet.querySelectorAll(".settings-view") : [];
     let matched = false;
     views.forEach(v => {
       const isHome = v.getAttribute("data-view") === "home";
@@ -14074,19 +14075,152 @@ initServiceBrowser({
 })();
 
 /* ------------------------------------------------------------------ */
-/*  Android app only: Settings gets a way to its Downloads screen.     */
+/*  Android app only: Settings → Downloads on this phone.              */
+/*  A settings pane like the others — same header, back chevron, rows, */
+/*  switches and theme — with the app supplying the data and applying  */
+/*  the settings (MusicdDownloads). Browsers never get the tile.       */
 /* ------------------------------------------------------------------ */
-(function androidDownloadsEntry() {
+(function androidDownloadsPane() {
   const dl = window.MusicdDownloads;
   const nav = document.querySelector(".settings-nav");
-  if (!dl || !nav) return;
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = "settings-nav-item";
-  b.innerHTML = '<span class="settings-nav-ico" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg></span>' +
+  const sheet = document.querySelector("#settings-overlay .settings-sheet");
+  if (!dl || !nav || !sheet) return;
+
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const size = (b) => b >= 1 << 30 ? (b / (1 << 30)).toFixed(1) + " GB" : Math.round(b / (1 << 20)) + " MB";
+  const json = (f, fallback) => { try { return JSON.parse(f()) || fallback; } catch (e) { return fallback; } };
+  const has = (name) => typeof dl[name] === "function";
+
+  // The tile, second in the grid.
+  const tile = document.createElement("button");
+  tile.type = "button";
+  tile.className = "settings-nav-item";
+  tile.innerHTML = '<span class="settings-nav-ico" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg></span>' +
     '<span class="settings-nav-txt"><span class="settings-nav-title">Downloads on this phone</span></span>';
-  b.addEventListener("click", () => dl.open());
-  nav.insertBefore(b, nav.children[1] || null);
+  nav.insertBefore(tile, nav.children[1] || null);
+
+  // An app from before this pane existed: its own screen, as it was.
+  if (!has("settings")) { tile.addEventListener("click", () => dl.open()); return; }
+  tile.setAttribute("data-pane", "downloads");
+
+  const pane = document.createElement("div");
+  pane.className = "settings-view settings-pane hidden";
+  pane.setAttribute("data-view", "pane");
+  pane.setAttribute("data-pane", "downloads");
+  sheet.appendChild(pane);
+
+  const caret = '<svg class="settings-caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+  const select = (key, options, value) =>
+    '<div class="settings-select-wrap"><select class="settings-select" data-dl-set="' + key + '">' +
+    options.map(o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(value) ? " selected" : "") + ">" + esc(o[1]) + "</option>").join("") +
+    "</select>" + caret + "</div>";
+  const toggle = (key, on) =>
+    '<label class="switch"><input type="checkbox" data-dl-set="' + key + '"' + (on ? " checked" : "") + '>' +
+    '<span class="switch-track"><span class="switch-thumb"></span></span></label>';
+  const row = (label, control) => '<div class="settings-row"><span class="settings-label">' + label + "</span>" + control + "</div>";
+
+  const covers = new Map();   // album id → image key, from the server
+  async function fetchCovers(ids) {
+    const missing = ids.filter(id => !covers.has(id));
+    if (!missing.length) return;
+    try {
+      const r = await fetch("/api/download/albums", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: missing }) });
+      const j = await r.json();
+      for (const a of (j && j.albums) || []) covers.set(a.id, a.exists ? a.album : null);
+      render();
+    } catch (e) { /* covers are a nicety */ }
+  }
+
+  function stateLine(d) {
+    const q = d.quality === "opus" ? "Opus 256" : "Original";
+    const auto = d.auto ? " · automatic" : "";
+    if (d.state === "done") return d.total + " tracks · " + size(d.bytes || 0) + " · " + q + auto;
+    if (d.state === "downloading") return "Downloading " + (d.done || 0) + " of " + (d.total || "?") + " · " + q;
+    if (d.state === "waiting") return "Waiting for the network · " + (d.done || 0) + " of " + (d.total || "?");
+    if (d.state === "failed") return "Couldn’t download: " + (d.error || "unknown");
+    return "Waiting to start · " + q;
+  }
+
+  function render() {
+    const s = json(() => dl.settings(), {});
+    const list = json(() => dl.all(), []);
+    const done = list.filter(d => d.state === "done").length;
+    const places = s.places || [];
+    const albums = list.length ? list.map(d => {
+      const al = covers.get(d.id);
+      const art = al && al.image_key ? '<img src="/api/image/' + encodeURIComponent(al.image_key) + '?size=160" alt="" loading="lazy">' : "";
+      return '<div class="dl-row" data-id="' + d.id + '">' +
+        '<button type="button" class="dl-open" data-dl-open="' + d.id + '"><span class="dl-art">' + art + "</span>" +
+        '<span class="dl-text"><span class="dl-title">' + esc(d.title) + '</span><span class="dl-artist">' + esc(d.artist) + "</span>" +
+        '<span class="dl-state">' + esc(stateLine(d)) + "</span></span></button>" +
+        (d.state === "done" ? '<button type="button" class="dl-btn" data-dl-play="' + d.id + '" aria-label="Play on this phone">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>' : "") +
+        '<button type="button" class="dl-btn" data-dl-remove="' + d.id + '" aria-label="Remove from this phone">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>' +
+        "</div>";
+    }).join("") : '<div class="settings-note">Nothing here yet. On an album’s page, choose ⋯ → Download to this phone.</div>';
+
+    pane.innerHTML =
+      '<div class="settings-pane-head">' +
+        '<button class="settings-back" type="button" data-settings-back aria-label="Back to settings">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>' +
+        "</button><h2>Downloads on this phone</h2></div>" +
+      '<p class="settings-pane-desc">' + done + (done === 1 ? " album" : " albums") + " · " + size(s.used || 0) + " used</p>" +
+
+      '<div class="settings-block"><div class="settings-subhead">On this phone</div>' + albums + "</div>" +
+      '<div class="settings-divider"></div>' +
+
+      '<div class="settings-block"><div class="settings-subhead">Downloading</div>' +
+        row("Quality", select("quality", [["original", "Original"], ["opus", "Opus 256 kbps"]], s.quality)) +
+        '<div class="settings-note">Original is the files as they are (formats a phone can’t play become lossless FLAC). Opus 256 is about a tenth of the size. You can choose each time.</div>' +
+        row("Save to", select("location", places.map(p => [p.id, p.label + " · " + size(p.free || 0) + " free"]), s.location)) +
+        (places.length > 1 ? '<div class="settings-note">Albums already downloaded stay where they are.</div>' : "") +
+        row("Size limit", select("limitGb", [0, 8, 16, 32, 64, 128, 256].map(g => [g, g ? g + " GB" : "No limit"]), s.limitGb)) +
+        row("Wi-Fi only", toggle("wifiOnly", s.wifiOnly)) +
+        '<div class="settings-note">Downloads live in the app’s own storage: no permission needed, but uninstalling the app deletes them (updates don’t).</div>' +
+      "</div>" +
+      '<div class="settings-divider"></div>' +
+
+      '<div class="settings-block"><div class="settings-subhead">Automatic downloads</div>' +
+        row("Today’s Smart Picks", toggle("autoPicks", s.autoPicks)) +
+        row("Album of the day", toggle("autoAotd", s.autoAotd)) +
+        row("Recently added", select("autoRecent", [0, 5, 10, 20, 30].map(n => [n, n ? "The newest " + n : "Off"]), s.autoRecent)) +
+        '<div class="settings-note">Kept on the phone by themselves, in the quality above, and removed again when they drop off the list. Albums you download yourself are never removed.</div>' +
+      "</div>";
+
+    fetchCovers(list.map(d => d.id));
+  }
+
+  pane.addEventListener("change", (e) => {
+    const el = e.target.closest("[data-dl-set]");
+    if (!el) return;
+    const value = el.type === "checkbox" ? String(el.checked) : el.value;
+    try { dl.set(el.getAttribute("data-dl-set"), value); } catch (err) { /* old app */ }
+    render();
+  });
+  pane.addEventListener("click", (e) => {
+    const play = e.target.closest("[data-dl-play]");
+    if (play) { try { dl.play(Number(play.getAttribute("data-dl-play"))); } catch (err) {} return; }
+    const rm = e.target.closest("[data-dl-remove]");
+    if (rm) { dl.remove(Number(rm.getAttribute("data-dl-remove"))); return; }   // the app asks first
+    const open = e.target.closest("[data-dl-open]");
+    if (open) {
+      const al = covers.get(Number(open.getAttribute("data-dl-open")));
+      if (al && window.__openAlbum) {
+        const closer = document.querySelector("#settings-overlay [data-settings-close]");
+        if (closer) closer.click();
+        window.__openAlbum(al, { source: "home", filter: null });
+      }
+    }
+  });
+  tile.addEventListener("click", render);   // before the sheet shows the pane
+
+  // Downloads moving on (the app calls this) redraw the pane while it's open.
+  const previous = window.__musicdDownloadsChanged;
+  window.__musicdDownloadsChanged = () => {
+    if (previous) previous();
+    if (!pane.classList.contains("hidden")) render();
+  };
 })();
 
 /* ------------------------------------------------------------------ */

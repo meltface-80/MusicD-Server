@@ -54,3 +54,37 @@
   font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
   padding: 2px 8px; border-radius: 999px;
 }
+
+/* Settings → Downloads on this phone: section titles and the album rows,
+   in the theme's own colours. */
+.settings-subhead {
+  font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-faint); margin: 4px 0 10px;
+}
+.dl-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.dl-row:last-child { border-bottom: 0; }
+.dl-open {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px;
+  background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer;
+}
+.dl-art {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 8px; overflow: hidden;
+  background: var(--bg-elev-2);
+}
+.dl-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dl-text { display: flex; flex-direction: column; min-width: 0; }
+.dl-title, .dl-artist, .dl-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.dl-artist { font-size: 13px; color: var(--text-dim); }
+.dl-state { font-size: 12px; color: var(--text-faint); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.dl-btn {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); background: var(--bg-elev-2); color: var(--accent-text); cursor: pointer;
+}
+.dl-btn:active { transform: scale(.94); }
+.settings-pane[data-pane="downloads"] .settings-row { margin-top: 14px; }
+.settings-pane[data-pane="downloads"] .settings-subhead + .settings-row { margin-top: 0; }

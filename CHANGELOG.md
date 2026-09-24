@@ -5,6 +5,16 @@ Versioning: each set of changes is a development build and takes the next third 
 `package.json`, the README title, the GitHub Pages badge and the Android app's
 `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
+## v0.3.7
+- **Settings → Downloads on this phone is a settings page like the others** (Android app): the
+  same header with a back chevron to the Settings tiles, the same rows, drop-downs and switches,
+  and your chosen theme. It lists the albums on the phone (cover, progress, play on this phone,
+  remove — tap one to open its page), then Downloading (quality, where to save, size limit,
+  Wi-Fi only) and Automatic downloads. It follows downloads as they happen. The app supplies the
+  data and applies the settings; browsers and the iPhone home-screen app don't get the page.
+- The app's own offline screen keeps to playing what's on the phone, with a back chevron at the
+  top instead of a button at the bottom; its settings moved to the page above.
+
 ## v0.3.6
 - **Downloads show up as they happen** (Android app). The Home screen's *Downloaded albums* row
   was only drawn when Home was opened, so a finished download didn't appear until the app was
