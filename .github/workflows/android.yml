@@ -60,9 +60,9 @@ jobs:
 
       # The signing key comes from repository secrets — the same two as
       # Android Random Remote (MUSICD_KEYSTORE_BASE64, MUSICD_KEYSTORE_PASSWORD).
-      # Without them the build still runs and produces a debug-signed APK as an
-      # artifact; nothing is published, because a key that changes between
-      # builds makes every update uninstallable.
+      # Without them the APK is signed with the debug key committed in
+      # android/app (musicd-debug.keystore) — the same key every build, so each
+      # one updates the last in place.
       - name: Restore the signing key
         id: signing
         env:
@@ -70,7 +70,7 @@ jobs:
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "have_key=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::MUSICD_KEYSTORE_BASE64 is not set: this build is debug-signed. It installs, but updates need an uninstall first."
+            echo "::notice::MUSICD_KEYSTORE_BASE64 is not set: signed with the committed debug key (updates install in place)."
             exit 0
           fi
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/musicd-release.jks"
@@ -112,11 +112,8 @@ jobs:
       # link straight at it. From main only. Pushed with GITHUB_TOKEN, which
       # does not trigger workflows, so this cannot loop.
       #
-      # Without the signing secrets the published APK is DEBUG-signed: it
-      # installs fine, but each debug build is signed by a different runner's
-      # key, so an update means uninstalling first. Add MUSICD_KEYSTORE_BASE64
-      # and MUSICD_KEYSTORE_PASSWORD (the same as Android Random Remote's) and
-      # every build after that updates in place.
+      # Without the signing secrets the published APK is signed with the
+      # committed debug key: the same every build, so updates install in place.
       - name: Publish the APK into dist/
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: .

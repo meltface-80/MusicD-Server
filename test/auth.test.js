@@ -179,3 +179,19 @@ test("a queue made before the update keeps playing: speakers need no signature",
     await house.stop();
   }
 });
+
+test("the Android app gets the page without viewport-fit=cover; browsers keep it", { timeout: 30000 }, async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-ua-"));
+  const { srv } = await startServer(path.join(tmp, "data"));
+  try {
+    const token = await signIn(B);
+    const page = async (ua) => (await fetch(B + "/", { headers: { Authorization: "Bearer " + token, "User-Agent": ua } })).text();
+    const browser = await page("Mozilla/5.0 (iPhone) Safari/604.1");
+    const app = await page("Mozilla/5.0 (Linux; Android 15; wv) Chrome/130 Mobile Safari/537.36 MusicDAndroid/0.2.1");
+    assert.match(browser, /viewport-fit=cover/);
+    assert.doesNotMatch(app, /content="[^"]*viewport-fit=cover/);
+    assert.match(app, /maximum-scale=1,user-scalable=no"/);
+  } finally {
+    await srv.stop();
+  }
+});

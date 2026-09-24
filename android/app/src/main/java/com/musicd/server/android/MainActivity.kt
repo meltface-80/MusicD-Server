@@ -71,6 +71,9 @@ class MainActivity : Activity() {
                 cacheMode = WebSettings.LOAD_DEFAULT
                 builtInZoomControls = false
                 displayZoomControls = false
+                // Tells the page it's inside this app (see index.html: the app
+                // keeps it clear of the system bars, so the page mustn't too).
+                userAgentString = "$userAgentString MusicDAndroid/${BuildConfig.VERSION_NAME}"
             }
             webViewClient = Client()
             addJavascriptInterface(ShareBridge(this@MainActivity), ShareBridge.NAME)

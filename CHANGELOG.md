@@ -4,6 +4,17 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.2.1
+- **Android updates install over the top.** Every APK is now signed with the same key
+  (`android/app/musicd-debug.keystore`); before, each build had its own, so Android refused the
+  update ("package conflicts with an existing package"). Going from an older build to v0.2.1
+  needs one uninstall; every update after that installs in place.
+- **Android layout:** no more gap above the top buttons, the mini player sits at the bottom, and
+  Now playing has its full height back so the cover shows whole. Newer Android WebViews report
+  the status and navigation bars to the page, and the page left that space on top of the app's
+  own — twice. The app now identifies itself and the server sends it the page without
+  `viewport-fit=cover`, so the space is left once.
+
 ## v0.2.0
 - **An account.** MusicD Server now has one account, kept on the server. Until it's created —
   from a device on the home network — the server only shows "Create your account". Existing

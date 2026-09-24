@@ -144,12 +144,27 @@ function createServer(overrides = {}) {
   const pub = path.join(__dirname, "public");
   app.get(["/display", "/display/"], (req, res) => res.sendFile(path.join(pub, "display.html")));
   app.get("/login", (req, res) => res.sendFile(path.join(pub, "login.html")));
+  // The interface. The Android app keeps the page clear of the system bars
+  // itself, so it gets the page without viewport-fit=cover: otherwise newer
+  // WebViews report the bars as safe-area insets too and the page leaves the
+  // same space twice (a gap over the top buttons, the mini player riding high).
+  function sendApp(req, res) {
+    const file = path.join(pub, "index.html");
+    if (!/MusicDAndroid\//.test(req.headers["user-agent"] || "")) return res.sendFile(file);
+    fs.readFile(file, "utf8", (err, html) => {
+      if (err) return res.status(500).end();
+      res.set("Cache-Control", "no-cache");
+      res.type("html").send(html.replace(/,\s*viewport-fit=cover/, ""));
+    });
+  }
+  app.get(["/", "/index.html"], sendApp);
   app.use(express.static(pub, {
     maxAge: "1h",
+    index: false,
     setHeaders(res, file) { if (/\.(html|js|css|json)$/.test(file)) res.setHeader("Cache-Control", "no-cache"); }
   }));
   // Anything else is the single-page app, so a deep link still opens it.
-  app.get("*", (req, res) => res.sendFile(path.join(pub, "index.html")));
+  app.get("*", sendApp);
 
   async function start() {
     library.reload();

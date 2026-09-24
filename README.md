@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.2.0
+# MusicD Server — v0.2.1
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -206,10 +206,14 @@ interface, and adds what a web page can't:
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.
 
-Until this repository has the `MUSICD_KEYSTORE_BASE64` and `MUSICD_KEYSTORE_PASSWORD` secrets
-(use the same ones as Android Random Remote), the APK is **debug-signed**: it installs and works,
-but each build is signed by a different key, so installing a newer one means uninstalling the old
-one first. With the secrets set, every build after that updates in place.
+**Updates install over the top** from v0.2.1 on: every build is signed with the same key
+(`android/app/musicd-debug.keystore`). Builds before v0.2.1 were each signed with a different
+key, so going from one of those to v0.2.1 needs **one** uninstall first — after that, never again.
+
+That key is a debug key committed to this public repository, so it only keeps your own updates
+working. For a key nobody else holds, add the `MUSICD_KEYSTORE_BASE64` and
+`MUSICD_KEYSTORE_PASSWORD` secrets (the same ones as Android Random Remote); switching to it
+also needs one uninstall.
 
 ## How it works
 

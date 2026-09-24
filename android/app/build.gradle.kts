@@ -15,8 +15,8 @@ android {
         targetSdk = 36
         // versionCode must rise with every published build or Android refuses
         // to install over the previous one.
-        versionCode = 8
-        versionName = "0.2.0"
+        versionCode = 9
+        versionName = "0.2.1"
     }
 
     buildFeatures {
@@ -29,6 +29,21 @@ android {
      * Android refuses to install an APK over one signed with a different key,
      * so it must be the same key every time.
      */
+    /*
+     * Builds without the release secrets are signed with THIS key, committed
+     * beside this file, so every one of them can update the one before —
+     * a fresh debug key per CI run is what made updates fail ("an existing
+     * package conflicts"). It is a debug key and public by design, like
+     * Android's own: it only makes sideloaded builds update in place. For a
+     * key nobody else holds, set the release secrets (see the workflow).
+     */
+    signingConfigs.getByName("debug") {
+        storeFile = file("musicd-debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+    }
+
     val keystorePath = System.getenv("MUSICD_KEYSTORE")
     if (!keystorePath.isNullOrBlank()) {
         signingConfigs.create("release") {
