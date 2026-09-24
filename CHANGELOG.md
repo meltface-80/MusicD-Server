@@ -4,6 +4,13 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.2.2
+- **Android layout, second go.** v0.2.1's change (no `viewport-fit=cover` for the app) didn't
+  reach the cause. The app's window now uses up the system-bar insets itself instead of passing
+  them on to the WebView, and the server sends the app its stylesheet with every safe-area
+  allowance at zero — so the status and navigation bars are allowed for once, by the app, however
+  the WebView behaves. Browsers and the iPhone home-screen app are unchanged.
+
 ## v0.2.1
 - **Android updates install over the top.** Every APK is now signed with the same key
   (`android/app/musicd-debug.keystore`); before, each build had its own, so Android refused the
