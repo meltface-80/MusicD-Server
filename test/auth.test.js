@@ -155,3 +155,27 @@ test("MusicD Server behind its account", { timeout: 60000 }, async (t) => {
     await srv.stop();
   }
 });
+
+test("a queue made before the update keeps playing: speakers need no signature", { timeout: 30000 }, async () => {
+  const http = require("http");
+  const { FakeHousehold } = require("./fake-sonos");
+  const house = new FakeHousehold();
+  await house.start();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "musicd-auth-sonos-"));
+  fs.mkdirSync(path.join(tmp, "music"));
+  const { createServer } = require("../index.js");
+  const srv = createServer({ port: PORT + 1, musicDir: path.join(tmp, "music"), dataDir: path.join(tmp, "data"), serverIp: "127.0.0.1", sonosHosts: ["127.0.0.11"] });
+  const ctx = await srv.start();
+  const from = (ip) => new Promise((resolve) => {
+    const r = http.get({ host: "127.0.0.1", port: PORT + 1, path: "/api/image/al-1-0", localAddress: ip, agent: false }, (x) => { x.resume(); resolve(x.statusCode); });
+    r.on("error", (e) => resolve(e.message));
+  });
+  try {
+    for (let i = 0; i < 50 && !ctx.zones.topology.hosts.includes("127.0.0.12"); i++) await new Promise(r => setTimeout(r, 200));
+    assert.notEqual(await from("127.0.0.12"), 401, "a speaker gets through unsigned");
+    assert.equal(await from("127.0.0.99"), 401, "anything else needs to sign in");
+  } finally {
+    await srv.stop();
+    await house.stop();
+  }
+});
