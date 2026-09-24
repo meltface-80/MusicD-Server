@@ -85,6 +85,9 @@ test("albums download to the phone", { skip, timeout: 60000 }, async (t) => {
       const r = await post("/api/download/albums", { ids: [cd.offset, 999999] });
       assert.equal(r.albums[0].title, "Album One (fixed)");
       assert.equal(r.albums[1].exists, false);
+      // The album as the Home row draws it.
+      assert.equal(r.albums[0].album.offset, cd.offset);
+      assert.equal(r.albums[0].album.title, "Album One (fixed)");
     });
 
     await t.test("plays made offline join the history", async () => {

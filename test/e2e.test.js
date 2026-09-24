@@ -173,6 +173,12 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal((await api("settings/labels")).enabled, false);
       assert.equal((await api("settings/labels", { enabled: true })).status, 410);
       assert.ok(!(await api("settings/home-rows")).rows.some(r => r.id === "lotw"));
+      // The Android app's Downloaded albums row: first, off until something is downloaded.
+      const rows = (await api("settings/home-rows")).rows;
+      assert.deepEqual(rows[0], Object.assign({ id: "downloads", on: false }, { unavailable: rows[0].unavailable }));
+      const kept = await api("settings/home-rows", { rows: rows.map(r => ({ id: r.id, on: true })) });
+      assert.equal(kept.rows[0].id, "downloads");
+      assert.equal(kept.rows[0].on, true);
       const ex = await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A");
       assert.ok(!ex.album || !ex.album.label);
     });

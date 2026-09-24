@@ -459,6 +459,55 @@
   // A DISABLED row is never loaded, which is the whole point: hiding a row has
   // to stop the work behind it, not just the paint.
   // ---------------------------------------------------------------------------
+  // Downloaded albums: the Android app's own row — downloads live on the
+  // phone, so only the app (which has the bridge) has one. Browsers and the
+  // iPhone home-screen app never see it.
+  const DL = window.MusicdDownloads || null;
+  function downloadedIds() {
+    try { return DL ? JSON.parse(DL.ids()) || [] : []; } catch (e) { return []; }
+  }
+  let homeDownloads = null;
+  let homeDownloadsKey = null;
+  if (DL && homeSections) {
+    const sec = document.createElement("div");
+    sec.className = "home-section home-section-downloads hidden";
+    sec.dataset.row = "downloads";
+    sec.innerHTML = '<h2 class="home-section-title home-section-link" role="button" tabindex="0">Downloaded albums</h2>' +
+      '<div class="home-carousel"></div>';
+    // The header opens the phone's own Downloads screen.
+    sec.querySelector("h2").addEventListener("click", () => { try { DL.open(); } catch (e) {} });
+    homeSections.prepend(sec);
+    homeDownloads = sec.querySelector(".home-carousel");
+  }
+  async function loadHomeDownloads() {
+    if (!homeDownloads) return;
+    const ids = downloadedIds();
+    const key = ids.join(",");
+    if (!ids.length) {
+      homeDownloadsKey = key;
+      homeDownloads.innerHTML = '<div class="home-carousel-empty">Nothing downloaded yet — on an album, ⋯ → Download to this phone.</div>';
+      applyHomeLayout();
+      return;
+    }
+    if (!rowHasContent(homeDownloads)) homeDownloads.innerHTML = '<div class="home-carousel-empty">Loading…</div>';
+    try {
+      const r = await fetch("/api/download/albums", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids })
+      });
+      const j = await r.json();
+      const albums = ((j && j.albums) || []).filter(a => a.exists && a.album).map(a => a.album);
+      renderAlbumRow(homeDownloads, albums);
+      homeDownloadsKey = key;
+    } catch (e) {
+      if (!rowHasContent(homeDownloads)) homeDownloads.innerHTML = '<div class="home-carousel-empty">Couldn’t load.</div>';
+    }
+    applyHomeLayout();
+  }
+  // With albums on the phone the row is on, whatever the switch said: it can
+  // only be switched off once they're removed.
+  const rowIsOn = row => row.id === "downloads" ? (row.on || downloadedIds().length > 0) : row.on;
+
   const HOME_ROWS = [
     { id: "unplayed", title: "Not played in 6 months",
       load: () => { loadHomeUnplayed(); }, isFresh: () => rowsTtlFresh() },
@@ -473,6 +522,8 @@
     { id: "genres",   title: "Browse by genre",
       load: () => { loadHomeGenres(); }, isFresh: () => homeSectionsLoaded },
   ];
+  if (DL) HOME_ROWS.unshift({ id: "downloads", title: "Downloaded albums",
+    load: () => { loadHomeDownloads(); }, isFresh: () => homeDownloadsKey === downloadedIds().join(",") });
   function homeRowEl(id) {
     return homeSections ? homeSections.querySelector('[data-row="' + id + '"]') : null;
   }
@@ -519,7 +570,7 @@
       // changes nothing on its own. The gate that does the work is homeRowOn(),
       // which stops the row's loader running at all. This one states the intent
       // so a future unavailable row that does not hide-when-empty is covered.
-      const showable = row.on && !row.unavailable;
+      const showable = rowIsOn(row) && !row.unavailable;
       el.classList.toggle("hidden",
         !showable || (showable && rowHidesWhenEmpty(row.id) && !rowHasAnyContent(el)));
     }
@@ -530,6 +581,16 @@
       if (!r.ok) return;
       const j = await r.json();
       if (j && Array.isArray(j.rows) && j.rows.length) homeLayout = j.rows;
+      // An album downloaded while the row was off switches it on for good
+      // (until the downloads are removed and it's switched off again).
+      const dl = homeLayout.find(x => x.id === "downloads");
+      if (dl && !dl.on && downloadedIds().length) {
+        dl.on = true;
+        fetch("/api/settings/home-rows", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: homeLayout.map(x => ({ id: x.id, on: x.on })) })
+        }).catch(() => {});
+      }
     } catch (e) {
       // Offline or pre-upgrade server: keep the default order. A Home screen
       // in the wrong order is recoverable; one that never renders is not.
@@ -541,7 +602,7 @@
     // Gates the row's LOADER as well as its visibility — a row whose feature is
     // off must not fetch either, or Smart Picks keeps polling a route that is
     // now returning nothing.
-    return !r || (r.on && !r.unavailable);
+    return !r || (rowIsOn(r) && !r.unavailable);
   }
 
   // Topbar chrome per view: Back button (off Home), Refresh button (random /
@@ -8145,6 +8206,7 @@
   // The Home Screen settings page renders its list from these, so the row
   // vocabulary has exactly one definition (HOME_ROWS) and the settings list
   // cannot describe a row that does not exist.
+  window.__downloadedCount = () => downloadedIds().length;
   window.__homeRowTitles = () => {
     const out = {};
     for (const r of HOME_ROWS) out[r.id] = r.title;
@@ -11915,7 +11977,13 @@
     if (!homeRowsList) return;
     homeRowsList.innerHTML = "";
     const titles = window.__homeRowTitles ? window.__homeRowTitles() : {};
+    const downloaded = window.__downloadedCount ? window.__downloadedCount() : 0;
     for (const row of homeRowsDraft) {
+      // Rows this device doesn't have (Downloaded albums, outside the Android
+      // app) stay in the saved order but aren't listed.
+      if (!titles[row.id]) continue;
+      // Downloaded albums can't be switched off while there are any.
+      const held = row.id === "downloads" && downloaded > 0;
       const li = document.createElement("li");
       li.className = "home-row-item";
       li.dataset.row = row.id;
@@ -11932,14 +12000,15 @@
       // had rather than one this screen quietly rewrote.
       const off = row.unavailable || null;
       if (off) li.classList.add("is-unavailable");
+      if (held) li.classList.add("is-held");
 
       const name = document.createElement("span");
       name.className = "home-row-name";
       name.textContent = titles[row.id] || row.id;
-      if (off) {
+      if (off || held) {
         const why = document.createElement("span");
         why.className = "home-row-why";
-        why.textContent = off;
+        why.textContent = off || "On while albums are downloaded to this phone";
         name.appendChild(why);
       }
 
@@ -11947,8 +12016,8 @@
       sw.className = "switch";
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.checked = !off && row.on !== false;
-      cb.disabled = !!off;
+      cb.checked = held || (!off && row.on !== false);
+      cb.disabled = !!off || held;
       cb.setAttribute("aria-label", (titles[row.id] || row.id) + " row");
       cb.addEventListener("change", () => {
         row.on = cb.checked;
@@ -12063,6 +12132,26 @@
   overlay.addEventListener("click", (e) => {
     if (e.target.hasAttribute("data-settings-close")) close();
   });
+  // In the Android app Settings fills the screen (android.css), so there's
+  // no backdrop to tap: it gets a close button, and the phone's Back steps
+  // out of it — a pane to the tiles, the tiles to Home.
+  if (window.MusicdDownloads) {
+    const head = overlay.querySelector('.settings-view[data-view="home"] .settings-head');
+    if (head) {
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "settings-app-close";
+      x.setAttribute("aria-label", "Close settings");
+      x.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      x.addEventListener("click", close);
+      head.appendChild(x);
+    }
+    window.__musicdBack = () => {
+      if (overlay.classList.contains("hidden")) return false;
+      if (atHome()) close(); else showView("home");
+      return true;
+    };
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || overlay.classList.contains("hidden")) return;
     // Escape steps back one level: pane → home, home → closed.

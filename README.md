@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.3.2
+# MusicD Server — v0.3.3
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -215,7 +215,8 @@ interface, and adds what a web page can't:
   server at all (the same screen, or *Play downloads* when the server can't be reached), a
   downloaded track is used instead of streaming it, and plays made offline join your history
   when the phone is back. Downloads live in the app's own storage, so uninstalling the app
-  removes them (updates don't).
+  removes them (updates don't). A **Downloaded albums** row heads the Home screen once something is
+  downloaded (and stays while anything is).
 
 * **Away from home** — off your Wi-Fi the app carries on over Tailscale, as a player for the
   phone only. See below.

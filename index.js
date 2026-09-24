@@ -194,7 +194,10 @@ function createServer(overrides = {}) {
       if (err) return next();
       res.set("Cache-Control", "no-cache");
       res.set("Vary", "User-Agent");
-      res.type("css").send(css.replace(/env\(safe-area-inset-(top|bottom|left|right)\)/g, "0px"));
+      // Plus the app's own few rules (public/android.css): full-screen Settings.
+      let extra = "";
+      try { extra = "\n" + fs.readFileSync(path.join(pub, "android.css"), "utf8"); } catch (e) { /* none */ }
+      res.type("css").send(css.replace(/env\(safe-area-inset-(top|bottom|left|right)\)/g, "0px") + extra);
     });
   });
   app.use(express.static(pub, {

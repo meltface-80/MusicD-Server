@@ -196,8 +196,12 @@ class MainActivity : Activity() {
      * the override covers the versions before.
      */
     private fun back() {
-        if (::web.isInitialized && web.visibility == View.VISIBLE && web.canGoBack()) web.goBack()
-        else moveTaskToBack(true)
+        if (!::web.isInitialized || web.visibility != View.VISIBLE) { moveTaskToBack(true); return }
+        // The page first: full-screen Settings closes (or steps back a pane).
+        web.evaluateJavascript("(window.__musicdBack && window.__musicdBack()) ? 1 : 0") { handled ->
+            if (handled == "1") return@evaluateJavascript
+            if (web.canGoBack()) web.goBack() else moveTaskToBack(true)
+        }
     }
 
     private fun registerBack() {

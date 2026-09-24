@@ -1,0 +1,46 @@
+/*
+ * The Android app only: index.js adds this to the end of style.css for the
+ * app's WebView (User-Agent MusicDAndroid). Browsers and the iPhone
+ * home-screen app never receive it.
+ */
+
+/* Settings fills the screen, and its tiles share the height between them —
+   no scrolling on the first level. The panes behind the tiles scroll as before. */
+#settings-overlay { align-items: stretch; }
+#settings-overlay .settings-backdrop { display: none; }
+#settings-overlay > .settings-sheet {
+  max-width: none; max-height: none; height: 100%;
+  border-radius: 0; border-top: 0; box-shadow: none;
+  display: flex; flex-direction: column;
+  padding-top: 14px; padding-bottom: 16px;
+}
+#settings-overlay .settings-grip { display: none; }
+#settings-overlay .settings-view[data-view="home"] {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+#settings-overlay .settings-view[data-view="home"] .settings-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+}
+#settings-overlay .settings-view[data-view="home"] .settings-nav {
+  flex: 1 1 auto; min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+}
+#settings-overlay .settings-view[data-view="home"] .settings-nav-item {
+  min-height: 0; padding: 6px 8px; gap: 8px;
+}
+#settings-overlay .settings-view[data-view="home"] .settings-foot { margin-top: 14px; }
+#settings-overlay .settings-app-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; margin-right: -6px;
+  border: none; border-radius: 999px; background: none;
+  color: var(--text-dim); cursor: pointer;
+}
+#settings-overlay .settings-app-close:active { background: var(--bg-elev-2); }
+
+/* Home Screen settings: "Downloaded albums" held on while there are
+   downloads, with the reason on a second line. */
+.home-row-item.is-held .home-row-name {
+  display: flex; flex-direction: column; gap: 2px;
+  overflow: visible; white-space: normal; text-overflow: clip;
+}
