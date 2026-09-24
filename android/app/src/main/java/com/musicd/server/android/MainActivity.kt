@@ -53,6 +53,16 @@ class MainActivity : Activity() {
     private var loadFailed = false
     /** The offline screen has been opened for this outage — once, so Back returns here. */
     private var offlineShown = false
+    /** Downloads changed: tell the page (gathered, so a burst of progress is one call). */
+    private var downloadsPending = false
+    private val onDownloads: () -> Unit = {
+        runOnUiThread {
+            if (!downloadsPending) {
+                downloadsPending = true
+                web.postDelayed({ downloadsPending = false; tellPageDownloadsChanged() }, 400)
+            }
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,6 +107,7 @@ class MainActivity : Activity() {
         CrashLog.offer(this)
         askForNotificationPermission()
         AutoDownloads.schedule(this)
+        DownloadStore.listen(onDownloads)
         Away.listen(onAway)
         Away.watch(this)
         load()
@@ -115,6 +126,8 @@ class MainActivity : Activity() {
         if (errorPanel.visibility == View.VISIBLE) load() else reloadIfMoved()
         Away.recheck(this)
         AppUpdate.check(this)
+        // Back from the Downloads screen (or anywhere): the page catches up.
+        tellPageDownloadsChanged()
         NowPlayingService.start(this)
         PhonePlayerService.start(this)
     }
@@ -228,7 +241,13 @@ class MainActivity : Activity() {
         back()
     }
 
+    private fun tellPageDownloadsChanged() {
+        if (!::web.isInitialized || web.visibility != View.VISIBLE) return
+        web.evaluateJavascript("window.__musicdDownloadsChanged && window.__musicdDownloadsChanged()", null)
+    }
+
     override fun onDestroy() {
+        DownloadStore.unlisten(onDownloads)
         Away.unlisten(onAway)
         if (::web.isInitialized) {
             root.removeView(web)

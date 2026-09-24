@@ -17,6 +17,12 @@ import org.json.JSONArray
  *   MusicdDownloads.remove(albumId)   asks, then deletes it from the phone
  *   MusicdDownloads.open()            the Downloads screen
  *   MusicdDownloads.ids()             albums fully on the phone, as a JSON array
+ *   MusicdDownloads.all()             every album on the phone or on its way:
+ *                                     [{"id", "state", "done", "total"}, …], newest first
+ *
+ * And the other way: whenever a download starts, moves on, finishes or is
+ * removed, the app calls window.__musicdDownloadsChanged() on the page
+ * (MainActivity), so what it shows follows along without a reload.
  */
 class DownloadsBridge(private val activity: Activity) {
 
@@ -29,6 +35,16 @@ class DownloadsBridge(private val activity: Activity) {
     fun ids(): String {
         val a = JSONArray()
         for ((album, _) in DownloadStore.albums(activity)) if (album.state == "done") a.put(album.id)
+        return a.toString()
+    }
+
+    @JavascriptInterface
+    fun all(): String {
+        val a = JSONArray()
+        for ((album, _) in DownloadStore.albums(activity)) {
+            a.put(org.json.JSONObject().put("id", album.id).put("state", album.state)
+                .put("done", album.doneCount).put("total", album.tracks.size))
+        }
         return a.toString()
     }
 

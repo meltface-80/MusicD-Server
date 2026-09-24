@@ -466,6 +466,16 @@
   function downloadedIds() {
     try { return DL ? JSON.parse(DL.ids()) || [] : []; } catch (e) { return []; }
   }
+  // Every album on the phone or on its way, with progress (older apps: the
+  // finished ones only).
+  function downloadList() {
+    if (!DL) return [];
+    try {
+      if (typeof DL.all === "function") return JSON.parse(DL.all()) || [];
+    } catch (e) { /* fall through */ }
+    return downloadedIds().map(id => ({ id, state: "done" }));
+  }
+  const downloadAlbums = new Map();   // id → album, as the server listed it
   let homeDownloads = null;
   let homeDownloadsKey = null;
   if (DL && homeSections) {
@@ -479,34 +489,88 @@
     homeSections.prepend(sec);
     homeDownloads = sec.querySelector(".home-carousel");
   }
+  const downloadsKey = list => list.map(d => d.id + ":" + d.state + ":" + (d.done || 0)).join(",");
+  function downloadBadge(d) {
+    if (d.state === "done") return null;
+    if (d.state === "downloading") return "↓ " + (d.done || 0) + "/" + (d.total || "?");
+    if (d.state === "failed") return "Failed";
+    if (d.state === "waiting") return "Waiting";
+    return "Queued";
+  }
+  let loadingDownloads = null;
   async function loadHomeDownloads() {
     if (!homeDownloads) return;
-    const ids = downloadedIds();
-    const key = ids.join(",");
-    if (!ids.length) {
-      homeDownloadsKey = key;
-      homeDownloads.innerHTML = '<div class="home-carousel-empty">Nothing downloaded yet — on an album, ⋯ → Download to this phone.</div>';
-      applyHomeLayout();
-      return;
-    }
-    if (!rowHasContent(homeDownloads)) homeDownloads.innerHTML = '<div class="home-carousel-empty">Loading…</div>';
+    // One at a time; a change arriving meanwhile gets one more pass after.
+    if (loadingDownloads) { loadingDownloads.again = true; return; }
+    loadingDownloads = { again: false };
     try {
-      const r = await fetch("/api/download/albums", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids })
-      });
-      const j = await r.json();
-      const albums = ((j && j.albums) || []).filter(a => a.exists && a.album).map(a => a.album);
-      renderAlbumRow(homeDownloads, albums);
+      const list = downloadList();
+      const key = downloadsKey(list);
+      if (!list.length) {
+        homeDownloadsKey = key;
+        homeDownloads.innerHTML = '<div class="home-carousel-empty">Nothing downloaded yet — on an album, ⋯ → Download to this phone.</div>';
+        return;
+      }
+      if (!rowHasContent(homeDownloads)) homeDownloads.innerHTML = '<div class="home-carousel-empty">Loading…</div>';
+      // Only albums not seen yet are asked for; progress is the phone's own.
+      const missing = list.map(d => d.id).filter(id => !downloadAlbums.has(id));
+      if (missing.length) {
+        const r = await fetch("/api/download/albums", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: missing })
+        });
+        const j = await r.json();
+        for (const a of (j && j.albums) || []) if (a.exists && a.album) downloadAlbums.set(a.id, a.album);
+      }
+      const frag = document.createDocumentFragment();
+      for (const d of list) {
+        const al = downloadAlbums.get(d.id);
+        if (!al) continue;
+        const tile = homeTile(al);
+        const text = downloadBadge(d);
+        const wrap = tile.querySelector(".album-art-wrap");
+        if (text && wrap) {
+          tile.classList.add("is-downloading");
+          const b = document.createElement("span");
+          b.className = "dl-badge";
+          b.textContent = text;
+          wrap.appendChild(b);
+        }
+        frag.appendChild(tile);
+      }
+      homeDownloads.innerHTML = "";
+      homeDownloads.appendChild(frag);
       homeDownloadsKey = key;
     } catch (e) {
       if (!rowHasContent(homeDownloads)) homeDownloads.innerHTML = '<div class="home-carousel-empty">Couldn’t load.</div>';
+    } finally {
+      const again = loadingDownloads.again;
+      loadingDownloads = null;
+      applyHomeLayout();
+      if (again) loadHomeDownloads();
     }
-    applyHomeLayout();
   }
+  // An album downloaded (or started) while the row was off switches it on for
+  // good — until the downloads are removed and it's switched off again.
+  function downloadsRowOnIfNeeded() {
+    const dl = homeLayout.find(x => x.id === "downloads");
+    if (!dl || dl.on || !downloadList().length) return;
+    dl.on = true;
+    fetch("/api/settings/home-rows", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: homeLayout.map(x => ({ id: x.id, on: x.on })) })
+    }).catch(() => {});
+  }
+  // The app calls this whenever a download starts, moves on, finishes or is
+  // removed (MainActivity): the row, and the switch in Settings, follow live.
+  if (DL) window.__musicdDownloadsChanged = () => {
+    downloadsRowOnIfNeeded();
+    loadHomeDownloads();
+    if (window.__renderHomeRowsList) window.__renderHomeRowsList();
+  };
   // With albums on the phone the row is on, whatever the switch said: it can
   // only be switched off once they're removed.
-  const rowIsOn = row => row.id === "downloads" ? (row.on || downloadedIds().length > 0) : row.on;
+  const rowIsOn = row => row.id === "downloads" ? (row.on || downloadList().length > 0) : row.on;
 
   const HOME_ROWS = [
     { id: "unplayed", title: "Not played in 6 months",
@@ -523,7 +587,7 @@
       load: () => { loadHomeGenres(); }, isFresh: () => homeSectionsLoaded },
   ];
   if (DL) HOME_ROWS.unshift({ id: "downloads", title: "Downloaded albums",
-    load: () => { loadHomeDownloads(); }, isFresh: () => homeDownloadsKey === downloadedIds().join(",") });
+    load: () => { loadHomeDownloads(); }, isFresh: () => homeDownloadsKey === downloadsKey(downloadList()) });
   function homeRowEl(id) {
     return homeSections ? homeSections.querySelector('[data-row="' + id + '"]') : null;
   }
@@ -581,16 +645,7 @@
       if (!r.ok) return;
       const j = await r.json();
       if (j && Array.isArray(j.rows) && j.rows.length) homeLayout = j.rows;
-      // An album downloaded while the row was off switches it on for good
-      // (until the downloads are removed and it's switched off again).
-      const dl = homeLayout.find(x => x.id === "downloads");
-      if (dl && !dl.on && downloadedIds().length) {
-        dl.on = true;
-        fetch("/api/settings/home-rows", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: homeLayout.map(x => ({ id: x.id, on: x.on })) })
-        }).catch(() => {});
-      }
+      downloadsRowOnIfNeeded();
     } catch (e) {
       // Offline or pre-upgrade server: keep the default order. A Home screen
       // in the wrong order is recoverable; one that never renders is not.
@@ -8206,7 +8261,7 @@
   // The Home Screen settings page renders its list from these, so the row
   // vocabulary has exactly one definition (HOME_ROWS) and the settings list
   // cannot describe a row that does not exist.
-  window.__downloadedCount = () => downloadedIds().length;
+  window.__downloadedCount = () => downloadList().length;
   window.__homeRowTitles = () => {
     const out = {};
     for (const r of HOME_ROWS) out[r.id] = r.title;
@@ -12082,6 +12137,8 @@
     grip.addEventListener("pointerup", end);
     grip.addEventListener("pointercancel", end);
   }
+
+  window.__renderHomeRowsList = () => { if (homeRowsList && homeRowsList.offsetParent) renderHomeRowsList(); };
 
   async function saveHomeRows() {
     try {
