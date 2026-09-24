@@ -4,6 +4,16 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.3.0
+- **This phone** (Android): the phone running the app is now one of the zones. Choose *This
+  phone* in the room picker and albums play through the phone's speaker or headphones — Play Now,
+  Queue, Next, the queue tab, now playing, shuffle/repeat, volume, play history and Random Album
+  Radio all work as they do for a Sonos room, with the phone's own notification, lock screen,
+  headset buttons and Android Auto (Media3). Other devices see it by its name and can send music
+  to it; *move what's playing* works between the phone and any Sonos room. A phone can't be
+  grouped with Sonos rooms. It's listed while the app is open or playing.
+- Audio to the phone uses the same addresses Sonos gets (FLAC up to 24/48, higher converted).
+
 ## v0.2.2
 - **Android layout, second go.** v0.2.1's change (no `viewport-fit=cover` for the app) didn't
   reach the cause. The app's window now uses up the system-bar insets itself instead of passing

@@ -100,6 +100,7 @@ class MainActivity : Activity() {
         val base = Store.server(this)?.baseUrl
         if (base != null && base != loadedBase) load()
         NowPlayingService.start(this)
+        PhonePlayerService.start(this)
     }
 
     private fun load() {
