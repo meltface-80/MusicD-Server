@@ -2,6 +2,7 @@ package com.musicd.server.android
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
@@ -17,8 +18,13 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
 import com.musicd.server.client.ServerClient
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,17 +32,35 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * Downloads: what's on this phone, and the settings for it — the one screen
- * that works with no server at all. Tap an album to play it here (or pick a
- * track); press and hold to remove it.
+ * Downloads: what's on this phone, and the settings for it — the app's own
+ * screen, which works with no server at all. Tap an album to play it here
+ * (or pick a track); press and hold to remove it. The bar at the bottom is
+ * the player: what's playing, with its controls.
+ *
+ * With the server out of reach the app opens here by itself
+ * ([EXTRA_OFFLINE]), rather than on an error.
  */
 class DownloadsActivity : Activity() {
+
+    companion object {
+        const val EXTRA_OFFLINE = "offline"
+    }
 
     private val main = Handler(Looper.getMainLooper())
     private val work = Executors.newSingleThreadExecutor()
     private lateinit var list: LinearLayout
     private lateinit var summary: TextView
     private var lastShown = ""
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controller: MediaController? = null
+    private lateinit var bar: LinearLayout
+    private lateinit var barArt: ImageView
+    private lateinit var barTitle: TextView
+    private lateinit var barArtist: TextView
+    private lateinit var barPlay: Button
+    private lateinit var barSeek: SeekBar
+    private var barArtUri: String? = null
+    private var seeking = false
 
     private val dp get() = resources.displayMetrics.density
     private fun px(v: Int) = (v * dp).toInt()
@@ -53,23 +77,131 @@ class DownloadsActivity : Activity() {
         })
         summary = TextView(this).apply { setTextColor(DIM); textSize = 14f; setPadding(0, px(6), 0, px(8)) }
         col.addView(summary)
-        col.addView(settingsBlock())
+        if (intent?.getBooleanExtra(EXTRA_OFFLINE, false) == true) col.addView(offlineBanner())
         col.addView(heading("On this phone"))
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(list)
+        col.addView(heading("Download settings"))
+        col.addView(settingsBlock())
         col.addView(Button(this).apply {
             text = "Back to MusicD"
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(24) })
 
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(BG)
             isFillViewport = true
             addView(col)
         }
-        Insets.pad(scroll)
-        setContentView(scroll)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(BG)
+            addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(playerBar(), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        Insets.pad(root)
+        setContentView(root)
         refreshFromServer()
+    }
+
+    private fun offlineBanner(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(CARD)
+        setPadding(px(14), px(12), px(14), px(12))
+        addView(TextView(this@DownloadsActivity).apply {
+            text = "MusicD Server can't be reached — here's what's on this phone."
+            setTextColor(WHITE); textSize = 14f
+        })
+        addView(Button(this@DownloadsActivity).apply {
+            text = "Try the server again"
+            setOnClickListener { finish() }     // MainActivity tries again as it comes back
+        })
+    }
+
+    // ------------------------------------------------------------ player bar
+
+    private fun playerBar(): View {
+        bar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(CARD)
+            setPadding(px(12), px(6), px(12), px(8))
+            visibility = View.GONE
+        }
+        barSeek = SeekBar(this).apply {
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {}
+                override fun onStartTrackingTouch(sb: SeekBar?) { seeking = true }
+                override fun onStopTrackingTouch(sb: SeekBar?) {
+                    seeking = false
+                    controller?.seekTo((sb?.progress ?: 0).toLong() * 1000)
+                }
+            })
+        }
+        bar.addView(barSeek)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        barArt = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(BG) }
+        row.addView(barArt, LinearLayout.LayoutParams(px(48), px(48)))
+        val names = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(10), 0, px(6), 0) }
+        barTitle = TextView(this).apply { setTextColor(WHITE); textSize = 15f; maxLines = 1 }
+        barArtist = TextView(this).apply { setTextColor(DIM); textSize = 13f; maxLines = 1 }
+        names.addView(barTitle); names.addView(barArtist)
+        row.addView(names, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        fun control(label: String, action: () -> Unit) = Button(this).apply {
+            text = label; textSize = 18f; minWidth = 0; minimumWidth = 0
+            setOnClickListener { action() }
+        }
+        row.addView(control("⏮") { controller?.seekToPrevious() }, LinearLayout.LayoutParams(px(52), px(48)))
+        barPlay = control("▶") { controller?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_ENDED) it.seekTo(0, 0); it.play() } } }
+        row.addView(barPlay, LinearLayout.LayoutParams(px(52), px(48)))
+        row.addView(control("⏭") { controller?.seekToNext() }, LinearLayout.LayoutParams(px(52), px(48)))
+        bar.addView(row)
+        return bar
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // The phone player, controlled from here like from the lock screen.
+        val token = SessionToken(this, ComponentName(this, PhonePlayerService::class.java))
+        val f = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = f
+        f.addListener({
+            val c = runCatching { f.get() }.getOrNull() ?: return@addListener
+            if (isFinishing || isDestroyed) { c.release(); return@addListener }
+            controller = c
+            c.addListener(object : Player.Listener {
+                override fun onEvents(player: Player, events: Player.Events) = updateBar()
+            })
+            updateBar()
+        }, { r -> main.post(r) })
+    }
+
+    override fun onStop() {
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        controller = null
+        super.onStop()
+    }
+
+    private fun updateBar() {
+        val c = controller
+        if (c == null || c.mediaItemCount == 0) { bar.visibility = View.GONE; return }
+        bar.visibility = View.VISIBLE
+        val m = c.mediaMetadata
+        barTitle.text = m.title ?: ""
+        barArtist.text = listOfNotNull(m.artist, m.albumTitle).joinToString(" · ")
+        barPlay.text = if (c.isPlaying || (c.playWhenReady && c.playbackState == Player.STATE_BUFFERING)) "⏸" else "▶"
+        val art = m.artworkUri?.toString()
+        if (art != barArtUri) {
+            barArtUri = art
+            barArt.setImageDrawable(null)
+            // Downloaded covers are files; a streamed track's cover is left to the notification.
+            if (art != null && art.startsWith("file:")) {
+                val o = BitmapFactory.Options().apply { inSampleSize = 4 }
+                runCatching { BitmapFactory.decodeFile(android.net.Uri.parse(art).path, o) }.getOrNull()?.let { barArt.setImageBitmap(it) }
+            }
+        }
+        val dur = c.duration
+        barSeek.max = if (dur > 0) (dur / 1000).toInt() else 0
+        if (!seeking) barSeek.progress = (c.currentPosition / 1000).toInt()
     }
 
     override fun onResume() {
@@ -87,11 +219,12 @@ class DownloadsActivity : Activity() {
         super.onDestroy()
     }
 
-    // While downloads run, the list follows them.
+    // While downloads run, the list follows them (and the bar, the track).
     private val tick = object : Runnable {
         override fun run() {
             render()
-            main.postDelayed(this, 2000)
+            if (::bar.isInitialized) updateBar()
+            main.postDelayed(this, 1000)
         }
     }
 
