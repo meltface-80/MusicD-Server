@@ -1,11 +1,11 @@
 # Changelog
 
-The version changes only when the project owner says so (currently the 0.3.x line).
-When it does, `package.json`, the README title, the GitHub Pages badge and the Android
-app's `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
-Changes made between version bumps are listed under the current version.
+Versioning: each set of changes is a development build and takes the next third digit
+(0.3.0, 0.3.1, 0.3.2 …). The second digit moves only when the project owner says so.
+`package.json`, the README title, the GitHub Pages badge and the Android app's
+`versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
-## v0.3.0
+## v0.3.1
 - **Downloads** (Android, phase 2): *⋯ → Download to this phone* on an album page, as Original
   (files as they are; DSD, APE, WavPack, ALAC, AIFF and >2-channel files become lossless FLAC at
   their own rate) or Opus 256 kbps (made once with ffmpeg and cached on the server). Phone storage
@@ -14,6 +14,8 @@ Changes made between version bumps are listed under the current version.
   copy instead of streaming; titles, covers and edits of downloaded albums refresh from the
   server; plays made offline are sent to the history when the server is back. Browsers and the
   iPhone home-screen app are unchanged.
+
+## v0.3.0
 - **This phone** (Android): the phone running the app is now one of the zones. Choose *This
   phone* in the room picker and albums play through the phone's speaker or headphones — Play Now,
   Queue, Next, the queue tab, now playing, shuffle/repeat, volume, play history and Random Album
