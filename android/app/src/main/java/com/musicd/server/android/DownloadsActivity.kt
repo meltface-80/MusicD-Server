@@ -11,15 +11,11 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Spinner
 import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -32,7 +28,7 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * Downloads: what's on this phone, and the settings for it — the app's own
+ * What's on this phone, with its player — the app's own
  * screen, which works with no server at all. Tap an album to play it here
  * (or pick a track); press and hold to remove it. The bar at the bottom is
  * the player: what's playing, with its controls.
@@ -67,22 +63,28 @@ class DownloadsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(px(20), px(24), px(20), px(24))
         }
-        col.addView(TextView(this).apply {
-            text = "Downloads"
-            setTextColor(WHITE); textSize = 26f; typeface = Typeface.DEFAULT_BOLD
+        // Header: back chevron and title, like the settings pages.
+        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        head.addView(TextView(this).apply {
+            text = "‹"
+            setTextColor(DIM); textSize = 34f
+            setPadding(0, 0, px(14), px(4))
+            contentDescription = "Back"
+            setOnClickListener { finish() }
         })
+        head.addView(TextView(this).apply {
+            text = "On this phone"
+            setTextColor(WHITE); textSize = 24f; typeface = Typeface.DEFAULT_BOLD
+        })
+        col.addView(head)
         summary = TextView(this).apply { setTextColor(DIM); textSize = 14f; setPadding(0, px(6), 0, px(8)) }
         col.addView(summary)
         if (intent?.getBooleanExtra(EXTRA_OFFLINE, false) == true) col.addView(offlineBanner())
-        col.addView(heading("On this phone"))
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(list)
-        col.addView(heading("Download settings"))
-        col.addView(settingsBlock())
-        col.addView(Button(this).apply {
-            text = "Back to MusicD"
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(24) })
+        // The download settings are in Settings → Downloads on this phone (the
+        // app's own page, in its theme); this screen is for playing.
+        col.addView(note("Download settings: Settings → Downloads on this phone."))
 
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -224,74 +226,6 @@ class DownloadsActivity : Activity() {
         }
     }
 
-    // ------------------------------------------------------------ settings
-
-    private fun settingsBlock(): View {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val s = DownloadStore.settings(this)
-
-        box.addView(label("Quality (you can choose each time)"))
-        box.addView(spinner(
-            listOf("Original — the files as they are", "Opus 256 kbps — about a tenth of the size"),
-            if (s.quality == DownloadStore.QUALITY_OPUS) 1 else 0
-        ) { i -> DownloadStore.setQuality(this, if (i == 1) DownloadStore.QUALITY_OPUS else DownloadStore.QUALITY_ORIGINAL) })
-
-        val places = DownloadStore.places(this)
-        box.addView(label("Save to"))
-        box.addView(spinner(
-            places.map { "${it.label} — ${gb(it.freeBytes)} free" },
-            places.indexOfFirst { it.id == s.location }.coerceAtLeast(0)
-        ) { i -> DownloadStore.setLocation(this, places[i].id) })
-        if (places.size > 1) box.addView(note("Albums already downloaded stay where they are."))
-
-        val limits = listOf(0, 8, 16, 32, 64, 128, 256)
-        box.addView(label("Size limit"))
-        box.addView(spinner(
-            limits.map { if (it == 0) "No limit" else "$it GB" },
-            limits.indexOf(s.limitGb).coerceAtLeast(0)
-        ) { i -> DownloadStore.setLimitGb(this, limits[i]) })
-
-        box.addView(switch("Download on Wi-Fi only", s.wifiOnly) { DownloadStore.setWifiOnly(this, it) })
-        box.addView(note("Downloads live in this app's storage: no permission needed, but uninstalling the app deletes them (updates don't)."))
-
-        // Automatic downloads.
-        box.addView(heading("Automatic downloads"))
-        box.addView(note("Kept on the phone by themselves, in the quality above, and removed again when they drop off " +
-            "the list. Albums you download yourself are never removed."))
-        box.addView(switch("Today's Smart Picks", s.autoPicks) { DownloadStore.setAutoPicks(this, it); AutoDownloads.runNow(this) })
-        box.addView(switch("Album of the day", s.autoAotd) { DownloadStore.setAutoAotd(this, it); AutoDownloads.runNow(this) })
-        val recent = listOf(0, 5, 10, 20, 30)
-        box.addView(label("Recently added albums"))
-        box.addView(spinner(
-            recent.map { if (it == 0) "Off" else "The newest $it" },
-            recent.indexOf(s.autoRecent).coerceAtLeast(0)
-        ) { i ->
-            if (recent[i] != DownloadStore.settings(this).autoRecent) {
-                DownloadStore.setAutoRecent(this, recent[i]); AutoDownloads.runNow(this)
-            }
-        })
-        return box
-    }
-
-    private fun switch(text: String, on: Boolean, onChange: (Boolean) -> Unit): Switch =
-        Switch(this).apply {
-            this.text = text
-            setTextColor(WHITE); textSize = 16f
-            isChecked = on
-            setPadding(0, px(14), 0, px(6))
-            setOnCheckedChangeListener { _, v -> onChange(v) }
-        }
-
-    private fun spinner(items: List<String>, selected: Int, onPick: (Int) -> Unit): Spinner =
-        Spinner(this).apply {
-            adapter = ArrayAdapter(this@DownloadsActivity, android.R.layout.simple_spinner_dropdown_item, items)
-            setSelection(selected)
-            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(p: AdapterView<*>?, v: View?, position: Int, id: Long) = onPick(position)
-                override fun onNothingSelected(p: AdapterView<*>?) {}
-            }
-        }
-
     // ------------------------------------------------------------ list
 
     private fun render() {
@@ -419,11 +353,6 @@ class DownloadsActivity : Activity() {
 
     // ------------------------------------------------------------ bits
 
-    private fun heading(t: String) = TextView(this).apply {
-        text = t.uppercase(); setTextColor(FAINT); textSize = 12f; letterSpacing = 0.08f
-        setPadding(0, px(24), 0, px(8))
-    }
-    private fun label(t: String) = TextView(this).apply { text = t; setTextColor(DIM); textSize = 13f; setPadding(0, px(14), 0, px(4)) }
     private fun note(t: String) = TextView(this).apply { text = t; setTextColor(FAINT); textSize = 12f; setPadding(0, px(6), 0, 0) }
     private fun gb(bytes: Long): String =
         if (bytes >= 1L shl 30) String.format("%.1f GB", bytes / (1L shl 30).toDouble())

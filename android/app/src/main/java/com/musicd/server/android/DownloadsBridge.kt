@@ -6,6 +6,7 @@ import android.content.Intent
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * What the server's page can ask of the app about downloads — only inside
@@ -17,8 +18,13 @@ import org.json.JSONArray
  *   MusicdDownloads.remove(albumId)   asks, then deletes it from the phone
  *   MusicdDownloads.open()            the Downloads screen
  *   MusicdDownloads.ids()             albums fully on the phone, as a JSON array
- *   MusicdDownloads.all()             every album on the phone or on its way:
- *                                     [{"id", "state", "done", "total"}, …], newest first
+ *   MusicdDownloads.all()             every album on the phone or on its way, newest first:
+ *                                     [{"id", "state", "done", "total", "title", "artist",
+ *                                       "quality", "bytes", "auto", "error"}, …]
+ *   MusicdDownloads.settings()        the download settings, the places to save to, space used
+ *   MusicdDownloads.set(key, value)   change one setting (quality, location, wifiOnly, limitGb,
+ *                                     autoPicks, autoAotd, autoRecent)
+ *   MusicdDownloads.play(albumId)     play a downloaded album on this phone
  *
  * And the other way: whenever a download starts, moves on, finishes or is
  * removed, the app calls window.__musicdDownloadsChanged() on the page
@@ -42,10 +48,49 @@ class DownloadsBridge(private val activity: Activity) {
     fun all(): String {
         val a = JSONArray()
         for ((album, _) in DownloadStore.albums(activity)) {
-            a.put(org.json.JSONObject().put("id", album.id).put("state", album.state)
-                .put("done", album.doneCount).put("total", album.tracks.size))
+            a.put(JSONObject().put("id", album.id).put("state", album.state)
+                .put("done", album.doneCount).put("total", album.tracks.size)
+                .put("title", album.title).put("artist", album.artist).put("quality", album.quality)
+                .put("bytes", album.totalBytes).put("auto", album.auto).put("error", album.error ?: ""))
         }
         return a.toString()
+    }
+
+    @JavascriptInterface
+    fun settings(): String {
+        val s = DownloadStore.settings(activity)
+        val places = JSONArray()
+        for (p in DownloadStore.places(activity)) {
+            places.put(JSONObject().put("id", p.id).put("label", p.label).put("free", p.freeBytes))
+        }
+        return JSONObject()
+            .put("quality", s.quality).put("location", s.location).put("wifiOnly", s.wifiOnly)
+            .put("limitGb", s.limitGb).put("autoPicks", s.autoPicks).put("autoAotd", s.autoAotd)
+            .put("autoRecent", s.autoRecent).put("places", places)
+            .put("used", DownloadStore.usedBytes(activity))
+            .toString()
+    }
+
+    @JavascriptInterface
+    fun set(key: String, value: String) {
+        val c = activity
+        when (key) {
+            "quality" -> DownloadStore.setQuality(c, if (value == DownloadStore.QUALITY_OPUS) value else DownloadStore.QUALITY_ORIGINAL)
+            "location" -> DownloadStore.setLocation(c, value)
+            "wifiOnly" -> DownloadStore.setWifiOnly(c, value == "true")
+            "limitGb" -> DownloadStore.setLimitGb(c, value.toIntOrNull() ?: 0)
+            "autoPicks" -> { DownloadStore.setAutoPicks(c, value == "true"); AutoDownloads.runNow(c) }
+            "autoAotd" -> { DownloadStore.setAutoAotd(c, value == "true"); AutoDownloads.runNow(c) }
+            "autoRecent" -> { DownloadStore.setAutoRecent(c, value.toIntOrNull() ?: 0); AutoDownloads.runNow(c) }
+        }
+    }
+
+    @JavascriptInterface
+    fun play(albumId: Int) {
+        activity.startService(Intent(activity, PhonePlayerService::class.java)
+            .setAction(PhonePlayerService.ACTION_PLAY_LOCAL)
+            .putExtra(PhonePlayerService.EXTRA_ALBUM, albumId)
+            .putExtra(PhonePlayerService.EXTRA_INDEX, 0))
     }
 
     @JavascriptInterface
