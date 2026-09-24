@@ -204,9 +204,9 @@ interface, and adds what a web page can't:
 * A proper **share sheet** for the share card
 * **This phone** — the phone itself is one of the rooms. Pick *This phone* in the room picker
   and albums play through its speaker or headphones, with the queue, now playing, history and
-  Random Album Radio working as for any Sonos room. Other devices see it by name (e.g.
-  *Pixel 8*) and can send music to it, and *move what's playing* works between the phone and
-  any Sonos room. It's there while the app is open or playing.
+  Random Album Radio working as for any Sonos room, and *move what's playing* works between the
+  phone and any Sonos room. It's the Android app's own: only that phone sees it (the iPhone
+  home-screen app and browsers don't). It's there while the app is open or playing.
 
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.

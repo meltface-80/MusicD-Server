@@ -9,9 +9,10 @@ move together — `npm test` fails if they don't.
   phone* in the room picker and albums play through the phone's speaker or headphones — Play Now,
   Queue, Next, the queue tab, now playing, shuffle/repeat, volume, play history and Random Album
   Radio all work as they do for a Sonos room, with the phone's own notification, lock screen,
-  headset buttons and Android Auto (Media3). Other devices see it by its name and can send music
-  to it; *move what's playing* works between the phone and any Sonos room. A phone can't be
-  grouped with Sonos rooms. It's listed while the app is open or playing.
+  headset buttons and Android Auto (Media3). *Move what's playing* works between the phone and any
+  Sonos room. Phone playback is the Android app's own: the phone zone is visible to, and
+  controllable from, that phone only — never the iPhone home-screen app or a browser. A phone
+  can't be grouped with Sonos rooms. It's listed while the app is open or playing.
 - Audio to the phone uses the same addresses Sonos gets (FLAC up to 24/48, higher converted).
 
 ## v0.2.2

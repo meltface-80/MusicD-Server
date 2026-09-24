@@ -1,9 +1,10 @@
 "use strict";
 /*
  * The Android app as a player: it says hello, shows up as a zone ("This
- * phone" to itself), and everything the interface does to a room — play an
- * album, pause, skip, queue, volume, move what's playing — reaches it as
- * commands. What it reports back drives now playing and the play history.
+ * phone") to itself only, and everything its interface does to a room —
+ * play an album, pause, skip, queue, volume, move what's playing — reaches it
+ * as commands. What it reports back drives now playing and the play history.
+ * No other device (the iPhone home-screen app, a browser) sees it or reaches it.
  */
 const test = require("node:test");
 const assert = require("node:assert");
@@ -61,21 +62,25 @@ test("the phone is a zone", { skip, timeout: 60000 }, async (t) => {
       seq = h.seq;
     });
 
-    await t.test("it is 'This phone' to itself and 'Pixel 8' to everyone else", async () => {
+    await t.test("it is 'This phone' to itself, and invisible and unreachable to every other device", async () => {
       const mine = (await phone("GET", "/api/zones")).zones.find(z => z.zone_id === zoneId);
       assert.equal(mine.display_name, "This phone");
       assert.equal(mine.is_phone, true);
-      const theirs = (await other("GET", "/api/zones")).zones.find(z => z.zone_id === zoneId);
-      assert.equal(theirs.display_name, "Pixel 8");
-      assert.ok(!(await other("GET", "/api/outputs")).outputs.some(o => o.output_id === zoneId), "not offered for Sonos grouping");
+      assert.ok(!(await other("GET", "/api/zones")).zones.some(z => z.zone_id === zoneId), "hidden from other devices");
+      assert.ok(!(await other("GET", "/api/shortcut/zones")).zones.some(z => z.zone_id === zoneId));
+      assert.ok(!(await phone("GET", "/api/outputs")).outputs.some(o => o.output_id === zoneId), "not offered for Sonos grouping");
+      assert.equal((await other("GET", "/api/zone-state?zone=" + zoneId)).status, 403);
+      const cd0 = (await other("GET", "/api/library/albums?sort=album")).albums[0];
+      assert.equal((await other("POST", "/api/play", { offset: cd0.offset, zone_or_output_id: zoneId, kind: "play_now" })).status, 403);
+      assert.equal((await other("POST", "/api/control", { zone_or_output_id: zoneId, command: "pause" })).status, 403);
     });
 
     const albums = (await other("GET", "/api/library/albums?sort=album")).albums;
     const cd = albums.find(a => a.title === "Album One");
 
-    await t.test("Play Now from another device reaches the phone as a load", async () => {
+    await t.test("Play Now on the phone reaches its player as a load", async () => {
       const waiting = phone("GET", `/api/phone/commands?after=${seq}&wait=5000`);
-      const r = await other("POST", "/api/play", { offset: cd.offset, zone_or_output_id: zoneId, kind: "play_now" });
+      const r = await phone("POST", "/api/play", { offset: cd.offset, zone_or_output_id: zoneId, kind: "play_now" });
       assert.equal(r.status, 200);
       const got = await waiting;
       const load = got.commands.find(c => c.op === "load");
@@ -93,53 +98,54 @@ test("the phone is a zone", { skip, timeout: 60000 }, async (t) => {
 
     await t.test("what the phone reports is now playing, and becomes history", async () => {
       await phone("POST", "/api/phone/state", { index: 1, position: 31, duration: 60, state: "playing", volume: 40 });
-      const st = await other("GET", "/api/zone-state?zone=" + zoneId);
+      const st = await phone("GET", "/api/zone-state?zone=" + zoneId);
       assert.equal(st.zone.state, "playing");
       assert.equal(st.zone.now_playing.line1, "Song 2");
       assert.equal(st.zone.now_playing.line3, "Album One");
       assert.equal(st.zone.outputs[0].volume.value, 40);
       const played = ctx.db.raw.prepare("SELECT * FROM plays WHERE zone = ? OR title = 'Song 2'").all("Pixel 8");
       assert.ok(played.length >= 1, "the play was recorded");
-      const q = await other("GET", "/api/queue?zone=" + zoneId);
+      const q = await phone("GET", "/api/queue?zone=" + zoneId);
       assert.deepEqual(q.items.map(i => i.title), ["Song 2", "Song 3"]);
       assert.deepEqual(q.history.map(i => i.track), ["Song 1"]);
     });
 
     await t.test("transport, queue and volume become commands", async () => {
-      await other("POST", "/api/control", { zone_or_output_id: zoneId, command: "pause" });
-      await other("POST", "/api/seek", { zone_or_output_id: zoneId, how: "absolute", seconds: 1 });
-      await other("POST", "/api/volume", { output_id: zoneId, how: "absolute", value: 25 });
-      await other("POST", "/api/play", { offset: cd.offset, zone_or_output_id: zoneId, kind: "queue" });
+      await phone("POST", "/api/control", { zone_or_output_id: zoneId, command: "pause" });
+      await phone("POST", "/api/seek", { zone_or_output_id: zoneId, how: "absolute", seconds: 1 });
+      await phone("POST", "/api/volume", { output_id: zoneId, how: "absolute", value: 25 });
+      await phone("POST", "/api/play", { offset: cd.offset, zone_or_output_id: zoneId, kind: "queue" });
       const got = await phone("GET", `/api/phone/commands?after=${seq}`);
       const ops = got.commands.map(c => c.op);
       assert.deepEqual(ops, ["pause", "seek", "volume", "insert"]);
       assert.equal(got.commands[3].at, 3);
       assert.equal(got.commands[3].items.length, 3);
       seq = got.seq;
-      assert.equal((await other("GET", "/api/zone-state?zone=" + zoneId)).zone.state, "paused");
+      assert.equal((await phone("GET", "/api/zone-state?zone=" + zoneId)).zone.state, "paused");
     });
 
     await t.test("what's playing moves from the phone to a Sonos room and back", async () => {
-      const kitchen = (await other("GET", "/api/zones")).zones.find(z => z.display_name === "Kitchen");
+      const kitchen = (await phone("GET", "/api/zones")).zones.find(z => z.display_name === "Kitchen");
       await phone("POST", "/api/phone/state", { index: 1, position: 1, duration: 3, state: "playing" });
-      const r = await other("POST", "/api/transfer-zone", { from: zoneId, to: kitchen.zone_id });
+      const r = await phone("POST", "/api/transfer-zone", { from: zoneId, to: kitchen.zone_id });
       assert.equal(r.status, 200, JSON.stringify(r));
       const room = house.room("Kitchen");
       await until(async () => room.queue.length === 6);
       const got = await phone("GET", `/api/phone/commands?after=${seq}`);
       assert.ok(got.commands.some(c => c.op === "stop"));
       seq = got.seq;
-      const back = await other("POST", "/api/transfer-zone", { from: kitchen.zone_id, to: zoneId });
+      const back = await phone("POST", "/api/transfer-zone", { from: kitchen.zone_id, to: zoneId });
       assert.equal(back.status, 200, JSON.stringify(back));
       const load = (await phone("GET", `/api/phone/commands?after=${seq}`)).commands.find(c => c.op === "load");
       assert.equal(load.items.length, 6);
     });
 
     await t.test("a phone can't be grouped with Sonos rooms", async () => {
-      const kitchen = (await other("GET", "/api/zones")).zones.find(z => z.display_name === "Kitchen");
-      const r = await other("POST", "/api/group-outputs", { output_ids: [kitchen.zone_id, zoneId] });
+      const kitchen = (await phone("GET", "/api/zones")).zones.find(z => z.display_name === "Kitchen");
+      const r = await phone("POST", "/api/group-outputs", { output_ids: [kitchen.zone_id, zoneId] });
       assert.equal(r.status, 500);
       assert.match(r.error, /can't be grouped/);
+      assert.equal((await other("POST", "/api/transfer-zone", { from: kitchen.zone_id, to: zoneId })).status, 403, "another device can't move music to the phone");
     });
   } finally {
     await srv.stop();
