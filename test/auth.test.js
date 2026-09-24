@@ -196,6 +196,9 @@ test("the Android app gets the page without viewport-fit=cover; browsers keep it
     const appCss = await css("Mozilla/5.0 (Linux; Android 15; wv) MusicDAndroid/0.2.2");
     assert.doesNotMatch(appCss, /env\(safe-area-inset/);
     assert.match(appCss, /--topbar-h: calc\(56px \+ 0px\)/);
+    // The app's own rules (full-screen Settings) come after, for the app only.
+    assert.ok(appCss.trimEnd().endsWith(fs.readFileSync(path.join(__dirname, "..", "public", "android.css"), "utf8").trimEnd()));
+    assert.doesNotMatch(await css("Mozilla/5.0 (iPhone) Safari/604.1"), /settings-app-close/);
 
     // Everything else — desktop browsers, Chrome on Android, the iPhone
     // home-screen app — gets the files exactly as they are on disk.

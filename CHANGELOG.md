@@ -5,6 +5,31 @@ Versioning: each set of changes is a development build and takes the next third 
 `package.json`, the README title, the GitHub Pages badge and the Android app's
 `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
+## v0.3.3
+- **Settings fills the screen in the Android app**: the tiles share the screen's height, so the
+  first level never scrolls; a close button replaces the backdrop, and the phone's Back button
+  steps out of a pane, then out of Settings. Browsers and the iPhone home-screen app are
+  unchanged (the rules are in `public/android.css`, sent to the app only).
+- **Downloaded albums** Home row (Android app): the albums on this phone, first on Home; its
+  title opens the Downloads screen. It starts switched off and turns itself on the first time an
+  album is downloaded; while there are downloads it can't be switched off (Settings → Home Screen
+  says why). Other devices don't list it.
+
+## v0.3.2
+- **Away from home** (Android, phase 3): off the home Wi-Fi the app switches to the server's
+  Tailscale address — asking the Tailscale app to connect — and back again at home. The server
+  learns its own Tailscale address (or `TAILSCALE_ADDRESS`) and gives it to the app; it can also
+  be typed on the connect screen. A track cut off by the switch resumes where it stopped.
+- **Away, only the phone plays.** The server treats any request not from the home network as
+  away: it lists and reaches only the asking phone's own zone — no Sonos rooms, no pause-all,
+  mute-all, grouping or moving playback to a room, and no other phone. Browsers away have nothing
+  to play to. `X-Forwarded-For` is believed only from a proxy on the server itself.
+- **Opus over mobile data**: away, the phone streams Opus 256 kbps (`/stream/…?q=opus`, the same
+  cached files as Opus downloads), with the album's next tracks prepared ahead.
+- Fix: downloaded albums played from the Downloads screen go through a file-capable data source
+  (they were given to the HTTP source only).
+- No "No Sonos rooms found" warning away from home.
+
 ## v0.3.1
 - **Downloads** (Android, phase 2): *⋯ → Download to this phone* on an album page, as Original
   (files as they are; DSD, APE, WavPack, ALAC, AIFF and >2-channel files become lossless FLAC at
