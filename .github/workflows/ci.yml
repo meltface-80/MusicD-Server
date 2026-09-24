@@ -48,6 +48,9 @@ jobs:
           docker run -d --name smoke -p 3500:3500 -v /tmp/music:/music:ro musicd-server:ci
           for i in $(seq 1 30); do curl -fs localhost:3500/api/health && break; sleep 1; done
           curl -fs localhost:3500/api/health | tee /dev/stderr | grep -q '"ffmpeg":true'
-          curl -fs localhost:3500/ | grep -q "MusicD"
+          # A new install asks for its account first: the page is the sign-in page,
+          # and the API is closed until then.
+          curl -fsL localhost:3500/ | grep -q "Create your account"
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:3500/api/status)" = "401"
           docker logs smoke
           docker rm -f smoke

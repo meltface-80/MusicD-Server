@@ -15,9 +15,17 @@ import java.net.URLEncoder
  *
  * Plain HttpURLConnection, no library: seven GETs and POSTs of small JSON.
  */
-class ServerClient(val address: ServerAddress, private val timeoutMs: Int = 6000) {
+class ServerClient(
+    val address: ServerAddress,
+    private val timeoutMs: Int = 6000,
+    /** This phone's sign-in (see [Account]); sent with every request. */
+    val token: String? = null
+) {
 
-    class ServerException(val status: Int, message: String) : IOException(message)
+    class ServerException(val status: Int, message: String) : IOException(message) {
+        /** Signed out: the account was reset, or this phone was signed out in Settings. */
+        val signedOut get() = status == 401
+    }
 
     fun health(): Health = Health.parse(getJson("/api/health"))
 
@@ -78,6 +86,7 @@ class ServerClient(val address: ServerAddress, private val timeoutMs: Int = 6000
             readTimeout = timeout
             useCaches = false
             setRequestProperty("Accept", "application/json")
+            if (token != null) setRequestProperty("Authorization", "Bearer $token")
         }
 
     fun getJson(path: String, timeout: Int = timeoutMs): JSONObject {

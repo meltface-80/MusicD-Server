@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -53,6 +54,11 @@ class MainActivity : Activity() {
             finish()
             return
         }
+        if (Store.token(this) == null) {
+            openSignIn()
+            finish()
+            return
+        }
 
         root = FrameLayout(this).apply { setBackgroundColor(BACKGROUND) }
         web = WebView(this).apply {
@@ -65,6 +71,9 @@ class MainActivity : Activity() {
                 cacheMode = WebSettings.LOAD_DEFAULT
                 builtInZoomControls = false
                 displayZoomControls = false
+                // Tells the page it's inside this app (see index.html: the app
+                // keeps it clear of the system bars, so the page mustn't too).
+                userAgentString = "$userAgentString MusicDAndroid/${BuildConfig.VERSION_NAME}"
             }
             webViewClient = Client()
             addJavascriptInterface(ShareBridge(this@MainActivity), ShareBridge.NAME)
@@ -95,10 +104,28 @@ class MainActivity : Activity() {
 
     private fun load() {
         val base = Store.server(this)?.baseUrl ?: return openConnect()
+        val token = Store.token(this) ?: return signedOut()
         loadedBase = base
+        // The page signs in with the same token the rest of the app uses.
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setCookie(base, "musicd_session=$token; Path=/")
+            flush()
+        }
         errorPanel.visibility = View.GONE
         web.visibility = View.VISIBLE
         web.loadUrl("$base/")
+    }
+
+    /** This phone was signed out (from Settings, or the account was reset): sign in again. */
+    private fun signedOut() {
+        Store.setToken(this, null)
+        openSignIn()
+        finish()
+    }
+
+    private fun openSignIn() {
+        startActivity(Intent(this, SignInActivity::class.java))
     }
 
     private fun openConnect() {
@@ -177,6 +204,15 @@ class MainActivity : Activity() {
     }
 
     private inner class Client : WebViewClient() {
+        override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+            // The server sends a signed-out page to /login; the app signs in natively instead.
+            val base = loadedBase
+            if (base != null && url.startsWith("$base/login")) {
+                view.stopLoading()
+                signedOut()
+            }
+        }
+
         override fun onPageFinished(view: WebView, url: String) {
             ShareBridge.install(view)
         }

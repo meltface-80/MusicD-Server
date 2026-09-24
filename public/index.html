@@ -6,18 +6,9 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <!-- THE SCALE LIMITS ARE GONE (v1.8.42), and viewport-fit=cover is untouched.
-       `user-scalable=no` has been ignored by iOS Safari since iOS 10 on
-       accessibility grounds, so it never did anything here. `maximum-scale=1`
-       is the one that did: pinning the scale is the documented cause of iOS
-       leaving a page at the WRONG scale after an orientation change — the
-       layout viewport keeps one orientation's width while the visual viewport
-       has the other, so the page re-flows and looks right while every tap
-       lands somewhere else. Reported as "rotate to landscape and back and no
-       button works".
-       Nothing is lost by removing them: double-tap-to-zoom is already off the
-       correct way, with `touch-action: manipulation` on html/body. These were
-       belt-and-braces over a rule that was already doing the job. -->
+  <!-- Zoom is off on purpose (v0.1.5): maximum-scale/user-scalable here, touch-action
+       on every element in style.css, and iOS pinch cancelled in app.js — which also
+       puts the page back to 1:1 if it ever finds itself scaled after a rotation. -->
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#0e1012">
   <title>MusicD Server</title>
@@ -993,6 +984,15 @@
         </div>
 
         <nav class="settings-nav" aria-label="Settings categories">
+          <button class="settings-nav-item" type="button" data-pane="account">
+            <span class="settings-nav-ico" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            </span>
+            <span class="settings-nav-txt">
+              <span class="settings-nav-title">Account</span>
+            </span>
+          </button>
+
           <button class="settings-nav-item" type="button" data-pane="playback">
             <span class="settings-nav-ico" aria-hidden="true">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -1251,6 +1251,37 @@
       </div>
 
       <!-- Artwork & metadata -->
+      <!-- Account: who is signed in, on which devices, and the password -->
+      <div class="settings-view settings-pane hidden" data-view="pane" data-pane="account">
+        <div class="settings-pane-head">
+          <button class="settings-back" type="button" data-settings-back aria-label="Back to settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <h2>Account</h2>
+        </div>
+        <p class="settings-pane-desc" id="acct-who">Signed in</p>
+
+        <div class="settings-block">
+          <h3 class="settings-block-title">Signed-in devices</h3>
+          <div id="acct-devices" class="acct-devices"></div>
+          <p class="settings-note">Sign out a device you've lost or don't use. It will need the password to come back.</p>
+          <button id="acct-signout" class="settings-update-btn" type="button">Sign out of this device</button>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <div class="settings-block">
+          <h3 class="settings-block-title">Change password</h3>
+          <input id="acct-cur" type="password" class="settings-token-input acct-input" placeholder="Current password" autocomplete="current-password">
+          <input id="acct-new" type="password" class="settings-token-input acct-input" placeholder="New password (8 or more characters)" autocomplete="new-password">
+          <input id="acct-new2" type="password" class="settings-token-input acct-input" placeholder="New password again" autocomplete="new-password">
+          <button id="acct-pw" class="settings-update-btn" type="button">Change password</button>
+          <div id="acct-pw-status" class="settings-token-status"></div>
+          <p class="settings-note">Devices already signed in stay signed in. Forgot it? On the server run
+            <code>docker exec musicd-server node reset-password.js</code> and create the account again.</p>
+        </div>
+      </div>
+
       <div class="settings-view settings-pane hidden" data-view="pane" data-pane="metadata">
         <div class="settings-pane-head">
           <button class="settings-back" type="button" data-settings-back aria-label="Back to settings">
@@ -1638,6 +1669,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap">
 
   <script src="/sharecard.js"></script>
+  <script src="/srp.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

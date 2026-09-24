@@ -10,6 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { FakeHousehold } = require("./fake-sonos");
+const { signIn } = require("./auth-helper");
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms) {
@@ -31,13 +32,15 @@ test("rooms come back straight after a restart, and 'searching' covers the gap",
   fs.mkdirSync(music);
   const { createServer } = require("../index.js");
   const cfg = { port: 3596, musicDir: music, dataDir: path.join(tmp, "data"), serverIp: "127.0.0.1" };
-  const status = () => fetch("http://127.0.0.1:3596/api/status").then(r => r.json());
+  let auth = {};
+  const status = () => fetch("http://127.0.0.1:3596/api/status", { headers: auth }).then(r => r.json());
 
   let srv = null;
   try {
     // First run: told where one speaker is.
     srv = createServer(Object.assign({}, cfg, { sonosHosts: ["127.0.0.11"] }));
     await srv.start();
+    auth = { Authorization: "Bearer " + await signIn("http://127.0.0.1:3596") };
     const first = await status();
     assert.equal(first.sonos.searching, true, "looking, not 'no rooms', right after start");
     await until(async () => (await status()).sonos.rooms === 2, 10000);

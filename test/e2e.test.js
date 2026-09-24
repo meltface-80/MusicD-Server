@@ -8,6 +8,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 const { haveFfmpeg, makeLibrary, probe } = require("./fixtures");
 const { FakeHousehold } = require("./fake-sonos");
+const { signIn } = require("./auth-helper");
 
 const skip = !haveFfmpeg() && "ffmpeg is not installed";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -32,10 +33,12 @@ test("MusicD Server end to end", { skip }, async (t) => {
     sonosHosts: ["127.0.0.11"]
   });
   const ctx = await srv.start();
+  const token = await signIn("http://127.0.0.1:3591");
+  const auth = { Authorization: "Bearer " + token };
   const api = async (p, body) => {
     const r = await fetch("http://127.0.0.1:3591/api/" + p, body ? {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
-    } : undefined);
+      method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, auth), body: JSON.stringify(body)
+    } : { headers: auth });
     const j = await r.json().catch(() => ({}));
     return { status: r.status, ...j };
   };
@@ -147,7 +150,7 @@ test("MusicD Server end to end", { skip }, async (t) => {
       const a = await api("album?offset=" + cd.offset);
       assert.equal(a.tracks.length, 3);
       assert.ok(a.actions.some(x => x.kind === "play_now"));
-      const img = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200");
+      const img = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200", { headers: auth });
       assert.equal(img.status, 200);
       assert.equal(img.headers.get("content-type"), "image/jpeg");
     });
@@ -180,7 +183,7 @@ test("MusicD Server end to end", { skip }, async (t) => {
       assert.equal(before.edited, false);
 
       // A cover from an address: here, another album's picture on this server.
-      const artUrl = "http://127.0.0.1:3591/api/image/" + hires.image_key + "?size=300";
+      const artUrl = ctx.auth.signUrl("http://127.0.0.1:3591/api/image/" + hires.image_key + "?size=300");
       const saved = await api("album/edit", { offset: cd.offset, title: "Album One (Fixed)", artist: "Artist A", year: "1999", art_url: artUrl });
       assert.equal(saved.status, 200);
       assert.equal(saved.title, "Album One (Fixed)");
@@ -198,11 +201,11 @@ test("MusicD Server end to end", { skip }, async (t) => {
       // history from before the edit still carries those) — with the edited year.
       assert.equal((await api("album/extras?fast=1&title=" + encodeURIComponent("Album One (Fixed)") + "&artist=Artist%20A")).year, "1999");
       assert.equal((await api("album/extras?fast=1&title=Album%20One&artist=Artist%20A")).year, "1999");
-      const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200");
+      const img = await fetch("http://127.0.0.1:3591/api/image/" + saved.image_key + "?size=200", { headers: auth });
       assert.equal(img.status, 200);
       assert.match(img.headers.get("cache-control"), /immutable/);
       // The address from before the edit now shows the found cover, uncached.
-      const oldImg = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200");
+      const oldImg = await fetch("http://127.0.0.1:3591/api/image/" + cd.image_key + "?size=200", { headers: auth });
       assert.equal(oldImg.headers.get("cache-control"), "no-cache");
       assert.ok(Buffer.from(await oldImg.arrayBuffer()).equals(Buffer.from(await img.arrayBuffer())), "old address draws the new cover");
 

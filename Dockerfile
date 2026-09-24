@@ -27,7 +27,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json package-lock.json index.js launcher.js ./
+COPY package.json package-lock.json index.js launcher.js reset-password.js ./
 COPY lib ./lib
 COPY public ./public
 

@@ -14,6 +14,20 @@
  *    without touching the wall device).
  */
 
+// Signed out (or the account reset): back to sign-in, then straight back here.
+(function () {
+  const real = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const r = await real(input, init);
+    const url = new URL(typeof input === "string" ? input : (input && input.url) || "", location.href);
+    if (r.status === 401 && url.origin === location.origin && url.pathname.startsWith("/api/")) {
+      location.replace("/login?next=" + encodeURIComponent(location.pathname + location.search));
+    }
+    return r;
+  };
+})();
+
+
 (() => {
   "use strict";
 
