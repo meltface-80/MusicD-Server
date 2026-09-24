@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.3.1
+# MusicD Server — v0.3.2
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -153,6 +153,7 @@ Everything is optional; pass any of it with `-e NAME=value`.
 | `TRANSCODE_CACHE_GB` | `4` | Disk kept for converted hi-res tracks. |
 | `TRANSCODE_CONCURRENCY` | `2` | How many tracks are converted at once. |
 | `MUSIC_DIR` | `/music` | Where the library is mounted inside the container. |
+| `TAILSCALE_ADDRESS` | auto | The server's address away from home, if the one found on the host's `tailscale0` isn't the one to use — an IP, a MagicDNS name, or a full `https://` address. See [Away from home](#away-from-home-tailscale). |
 | `DEBUG` | — | Log every API call. |
 
 Settings for the FanArt.tv key (wall-display artist photos), waveform, share-card services, Smart Picks, Discover,
@@ -216,6 +217,9 @@ interface, and adds what a web page can't:
   when the phone is back. Downloads live in the app's own storage, so uninstalling the app
   removes them (updates don't).
 
+* **Away from home** — off your Wi-Fi the app carries on over Tailscale, as a player for the
+  phone only. See below.
+
 **Download: [dist/](dist/)** — the newest APK is committed there by GitHub Actions on every
 push to `main`. Sideload it on Android 8.0 or newer.
 
@@ -227,6 +231,39 @@ That key is a debug key committed to this public repository, so it only keeps yo
 working. For a key nobody else holds, add the `MUSICD_KEYSTORE_BASE64` and
 `MUSICD_KEYSTORE_PASSWORD` secrets (the same ones as Android Random Remote); switching to it
 also needs one uninstall.
+
+## Away from home (Tailscale)
+
+Leave the house and the Android app keeps working over mobile data, like Roon ARC: the phone is
+the only thing it plays to. No ports are opened on your router — the phone reaches the server
+over [Tailscale](https://tailscale.com), a private network between your own devices.
+
+**Away, only the phone plays.** Whatever reaches the server from outside your home network —
+Tailscale included — is offered one room: the phone asking, as *This phone*. The Sonos rooms
+aren't listed, and nothing away can play to them, pause, group or mute them, or reach another
+phone. The server decides this by where each request comes from, so it holds for any device:
+an iPhone or a laptop on Tailscale can browse the library but has nothing to play to. At home
+everything is as before. Away, tracks stream as **Opus 256 kbps** (a tenth of the data); albums
+you've downloaded play from the phone.
+
+**Set up once:**
+
+1. Install Tailscale on the machine running the server (on DietPi: `dietpi-software` → Tailscale,
+   or `curl -fsSL https://tailscale.com/install.sh | sh`), then `sudo tailscale up` and sign in.
+   The container shares the host's network, so the server finds its Tailscale address itself.
+2. Install the Tailscale app on the phone and sign in to the same account.
+3. Open MusicD once at home: the app learns the server's Tailscale address. (Or type it on the
+   connect screen under *Away from home*.)
+
+From then on the app follows the phone's network: on your Wi-Fi it uses the server's home
+address; on mobile data (or anyone else's Wi-Fi) it asks the Tailscale app to connect and
+switches to the Tailscale address, and a track cut off by the switch carries on from where it
+stopped. Back home it switches back, and turns Tailscale off again if it was the one that turned
+it on. If Tailscale doesn't connect by itself, set it as the phone's *Always-on VPN* (Android
+Settings → Network → VPN) — the app works the same with it on at home.
+
+Don't advertise your home subnet from the server's Tailscale (`--advertise-routes`): requests
+through a subnet router arrive from a home address, and the server can't tell they're away.
 
 ## How it works
 

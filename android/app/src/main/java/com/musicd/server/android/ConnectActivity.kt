@@ -35,6 +35,7 @@ class ConnectActivity : Activity() {
 
     private lateinit var portBox: EditText
     private lateinit var hostBox: EditText
+    private lateinit var awayBox: EditText
     private lateinit var status: TextView
     private lateinit var found: LinearLayout
     private lateinit var connect: Button
@@ -94,6 +95,23 @@ class ConnectActivity : Activity() {
         }
         col.addView(hostBox)
 
+        col.addView(label("Away from home (optional)"))
+        awayBox = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            hint = "found by itself when the server has Tailscale"
+            setHintTextColor(0xFF6B737A.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 16f
+            Store.awayTyped(this@ConnectActivity)?.let { setText(it) }
+        }
+        col.addView(awayBox)
+        col.addView(TextView(this).apply {
+            text = "The server's Tailscale address, e.g. 100.101.102.103 or musicd.tail1234.ts.net. " +
+                "Off your Wi-Fi the app uses it, and only this phone plays."
+            setTextColor(0xFF6B737A.toInt())
+            textSize = 12f
+        })
+
         connect = Button(this).apply {
             text = "Connect"
             setOnClickListener { go() }
@@ -138,6 +156,17 @@ class ConnectActivity : Activity() {
             status.text = e.message
             return
         }
+        val awayText = awayBox.text.toString().trim()
+        val awayUrl = if (awayText.isEmpty()) null else {
+            val u = if (awayText.contains("://")) awayText else {
+                val a = try { ServerAddress.parse(awayText, "") } catch (e: IllegalArgumentException) { status.text = e.message; return }
+                val typedPort = awayText.substringBefore('/').let { if (it.startsWith("[")) it.substringAfter(']').startsWith(":") else it.count { c -> c == ':' } == 1 }
+                ServerAddress(a.host, if (typedPort) a.port else port).baseUrl
+            }
+            if (ServerAddress.fromUrl(u) == null) { status.text = "That away address doesn't look right"; return }
+            u
+        }
+        Store.setAwayTyped(this, awayUrl)
         found.removeAllViews()
         val hostText = hostBox.text.toString().trim()
         if (hostText.isNotEmpty()) {

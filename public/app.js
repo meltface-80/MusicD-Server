@@ -5280,7 +5280,8 @@
       zoneSel.innerHTML = "";
       if (!zones.length) {
         const opt = document.createElement("option");
-        opt.textContent = "No Sonos rooms found yet"; opt.value = "";
+        // Away from home (over Tailscale) the rooms aren't offered at all.
+        opt.textContent = j.away ? "Away from home — no rooms" : "No Sonos rooms found yet"; opt.value = "";
         zoneSel.appendChild(opt);
         selectedZoneId = null;
         return;
@@ -13821,7 +13822,7 @@ initServiceBrowser({
       } else {
         msg = "Starting up — reading your music folder…";
       }
-    } else if (!rooms && !(j.sonos && j.sonos.searching)) {
+    } else if (!rooms && !(j.sonos && j.sonos.searching) && !j.away) {
       // Not while the server is still looking (the first minute after a start
       // or an update): the rooms are usually back within seconds.
       msg = "No Sonos rooms found yet. The container needs --network host on the same network as your " +

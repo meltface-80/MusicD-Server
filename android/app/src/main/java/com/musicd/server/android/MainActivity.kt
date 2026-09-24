@@ -31,6 +31,9 @@ import android.widget.TextView
  * app update. What the app adds is what a page cannot do: the lock screen and
  * notification controls, the widget, the Quick Settings tile, and a share sheet
  * for the share card.
+ *
+ * Away from home the page comes from the server's Tailscale address instead
+ * (see [Away]), and it is reloaded from the right one whenever that changes.
  */
 class MainActivity : Activity() {
 
@@ -45,6 +48,7 @@ class MainActivity : Activity() {
     private lateinit var errorPanel: LinearLayout
     private lateinit var errorText: TextView
     private var loadedBase: String? = null
+    private val onAway: (Boolean) -> Unit = { reloadIfMoved() }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,6 +90,8 @@ class MainActivity : Activity() {
 
         registerBack()
         askForNotificationPermission()
+        Away.listen(onAway)
+        Away.watch(this)
         load()
     }
 
@@ -98,14 +104,21 @@ class MainActivity : Activity() {
         super.onResume()
         if (!::web.isInitialized) return
         // The server may have been changed from the connect screen.
-        val base = Store.server(this)?.baseUrl
-        if (base != null && base != loadedBase) load()
+        reloadIfMoved()
+        Away.recheck(this)
         NowPlayingService.start(this)
         PhonePlayerService.start(this)
     }
 
+    private fun reloadIfMoved() {
+        if (!::web.isInitialized) return
+        val base = Store.active(this)?.baseUrl
+        if (base != null && base != loadedBase) load()
+    }
+
     private fun load() {
-        val base = Store.server(this)?.baseUrl ?: return openConnect()
+        if (Store.server(this) == null) return openConnect()
+        val base = Store.active(this)?.baseUrl ?: return openConnect()
         val token = Store.token(this) ?: return signedOut()
         loadedBase = base
         // The page signs in with the same token the rest of the app uses.
@@ -202,6 +215,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        Away.unlisten(onAway)
         if (::web.isInitialized) {
             root.removeView(web)
             web.destroy()
@@ -225,7 +239,9 @@ class MainActivity : Activity() {
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
-            val where = Store.server(this@MainActivity)?.toString() ?: "the server"
+            // Perhaps the phone has just left home (or come back): look again.
+            Away.recheck(this@MainActivity)
+            val where = Store.active(this@MainActivity)?.toString() ?: "the server"
             showError("Can't reach MusicD Server at $where.\n\n${error.description}\n")
         }
 

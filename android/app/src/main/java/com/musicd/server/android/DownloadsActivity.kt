@@ -260,7 +260,7 @@ class DownloadsActivity : Activity() {
                     a.imageKey = key
                     DownloadStore.save(dir, a)
                     if (newCover) runCatching {
-                        File(dir, "cover.jpg").writeBytes(client.bytes(r.getString("art_url")))
+                        File(dir, "cover.jpg").writeBytes(client.bytes(Store.localize(this, r.getString("art_url"))))
                     }
                 }
             }

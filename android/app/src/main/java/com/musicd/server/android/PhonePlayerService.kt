@@ -14,9 +14,12 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -44,7 +47,10 @@ import kotlin.math.roundToInt
  *
  * Audio comes from the server's /stream addresses, the same ones Sonos is
  * given (FLAC up to 24-bit/48 kHz, anything higher converted on the server) —
- * or, for a track that has been downloaded, from the phone itself.
+ * or, for a track that has been downloaded, from the phone itself. Away from
+ * home (see [Away]) the same addresses go to the server's Tailscale address
+ * and ask for Opus 256 kbps, and a track cut off by the switch picks up
+ * where it stopped.
  *
  * Downloaded albums also play with no server at all (ACTION_PLAY_LOCAL, from
  * the Downloads screen). While it plays those, the server's commands that
@@ -83,6 +89,7 @@ class PhonePlayerService : MediaSessionService() {
     /** Playing downloads from the Downloads screen rather than the server's queue. */
     private var localMode = false
     private var loggedKey: String? = null
+    private var retries = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -93,9 +100,15 @@ class PhonePlayerService : MediaSessionService() {
             .setConnectTimeoutMs(8_000)
             .setReadTimeoutMs(20_000)
         Store.token(this)?.let { http.setDefaultRequestProperties(mapOf("Authorization" to "Bearer $it")) }
+        // Each address is sent where the server is now — home or away — as
+        // it's opened; downloaded tracks are files and go straight through.
+        val routed = ResolvingDataSource.Factory(http) { spec ->
+            spec.withUri(Uri.parse(Store.localize(this, spec.uri.toString())))
+        }
+        val sources = DefaultDataSource.Factory(this, routed)
 
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(sources))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 /* handleAudioFocus = */ true
@@ -105,7 +118,10 @@ class PhonePlayerService : MediaSessionService() {
             .build()
         player.addListener(object : Player.Listener {
             override fun onEvents(p: Player, events: Player.Events) = reportSoon()
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) retries = 0 }
+            override fun onPlayerError(error: PlaybackException) = resumeAfterError(error)
         })
+        Away.watch(this)
 
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
@@ -178,7 +194,9 @@ class PhonePlayerService : MediaSessionService() {
             if (client == null) { pause(5_000); continue }
             try {
                 if (!hello) {
-                    seq = client.phoneHello(deviceName()).seq
+                    val h = client.phoneHello(deviceName())
+                    seq = h.seq
+                    Store.setAwayLearned(this, h.awayAddress)
                     hello = true
                     reportSoon()
                 }
@@ -228,7 +246,7 @@ class PhonePlayerService : MediaSessionService() {
             .setTitle(it.title)
             .setArtist(it.artist)
             .setAlbumTitle(it.album)
-            .apply { it.artUrl?.let { u -> setArtworkUri(Uri.parse(u)) } }
+            .apply { it.artUrl?.let { u -> setArtworkUri(Uri.parse(Store.localize(this@PhonePlayerService, u))) } }
             .build()
         // A downloaded copy plays in place of the stream.
         val local = DownloadStore.trackFile(this, it.trackId)
@@ -237,6 +255,23 @@ class PhonePlayerService : MediaSessionService() {
             .setMediaId(it.trackId?.toString() ?: it.url)
             .setMediaMetadata(meta)
             .build()
+    }
+
+    /**
+     * The network went (leaving the house, say): once the phone is on its
+     * new route, carry on from the same place — a few tries, then give up.
+     */
+    private fun resumeAfterError(error: PlaybackException) {
+        Log.i(TAG, "playback stopped: ${error.errorCodeName}")
+        if (localMode || retries >= 4 || player.mediaItemCount == 0) return
+        val wasPlaying = player.playWhenReady
+        retries++
+        Away.recheck(this)
+        main.postDelayed({
+            if (!running) return@postDelayed
+            player.prepare()
+            player.playWhenReady = wasPlaying
+        }, 3000L * retries)
     }
 
     private fun ensurePrepared() {

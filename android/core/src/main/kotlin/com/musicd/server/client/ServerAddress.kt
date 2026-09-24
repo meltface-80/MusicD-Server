@@ -9,12 +9,12 @@ package com.musicd.server.client
  * outside 1-65535 or an address with spaces in it is refused with a sentence
  * that says which.
  */
-data class ServerAddress(val host: String, val port: Int) {
+data class ServerAddress(val host: String, val port: Int, val secure: Boolean = false) {
 
     /** The host as it goes into a URL: IPv6 literals need their brackets. */
     val urlHost: String get() = if (host.contains(':')) "[$host]" else host
 
-    val baseUrl: String get() = "http://$urlHost:$port"
+    val baseUrl: String get() = (if (secure) "https" else "http") + "://$urlHost:$port"
 
     override fun toString(): String = "$urlHost:$port"
 
@@ -53,6 +53,23 @@ data class ServerAddress(val host: String, val port: Int) {
                 throw IllegalArgumentException("The address says port $embeddedPort but the port box says $typed")
             }
             return ServerAddress(h, typed ?: embeddedPort ?: DEFAULT_PORT)
+        }
+
+        /**
+         * A whole address as the server gives it ("http://100.101.102.103:3500",
+         * "https://musicd.tail1234.ts.net"), or null if it isn't one.
+         */
+        fun fromUrl(url: String): ServerAddress? {
+            val u = url.trim()
+            val secure = u.startsWith("https://", ignoreCase = true)
+            if (!secure && !u.startsWith("http://", ignoreCase = true)) return null
+            return runCatching {
+                val a = parse(u, "")
+                val typedPort = u.substringAfter("://").substringBefore('/').let { hp ->
+                    if (hp.startsWith("[")) hp.substringAfter(']').startsWith(":") else hp.count { it == ':' } == 1
+                }
+                ServerAddress(a.host, if (typedPort) a.port else if (secure) 443 else 80, secure)
+            }.getOrNull()
         }
 
         fun portOf(text: String): Int {

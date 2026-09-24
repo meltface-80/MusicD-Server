@@ -110,6 +110,10 @@ function createServer(overrides = {}) {
   app.get(/^\/stream\/t(\d+)\.([a-z0-9]+)$/i, (req, res) => {
     const t = library.track(Number(req.params[0]));
     if (!t) return res.status(404).end();
+    // ?q=opus: the phone away from home, on mobile data — Opus 256 kbps, the
+    // same files the Downloads screen makes, with the album's next tracks
+    // made ready behind it so each one starts promptly.
+    if (req.query.q === "opus") return streamOpus(t, req, res);
     const p = planFor(t);
     if (!p.transcode) {
       res.set("Content-Type", p.mime);
@@ -127,6 +131,22 @@ function createServer(overrides = {}) {
     if (job.done && job.failed) return res.status(500).end();
     STREAM.tailFollow(req, res, job, p.mime);
   });
+
+  function streamOpus(t, req, res) {
+    ctx.downloads.file(Object.assign({}, t), "opus").then(f => {
+      res.set("Content-Type", f.mime);
+      res.set("Cache-Control", "no-store");
+      res.sendFile(f.path, { dotfiles: "allow", acceptRanges: true, headers: { "Content-Type": f.mime } }, (err) => {
+        if (err && !res.headersSent) res.status(err.statusCode || 404).end();
+      });
+    }).catch(e => {
+      log("[stream] opus", t.id, e.message);
+      if (!res.headersSent) res.status(500).end();
+    });
+    const rest = library.tracks(t.album_id);
+    const i = rest.findIndex(x => x.id === t.id);
+    for (const n of rest.slice(i + 1, i + 3)) ctx.downloads.file(Object.assign({}, n), "opus").catch(() => {});
+  }
 
   app.use(compression());
   app.use((req, res, next) => {

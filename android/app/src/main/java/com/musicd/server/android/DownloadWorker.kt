@@ -72,7 +72,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : Worker(contex
         val id = inputData.getInt(KEY_ALBUM, 0)
         val quality = inputData.getString(KEY_QUALITY) ?: DownloadStore.QUALITY_ORIGINAL
         val dir = DownloadStore.dirOf(c, id) ?: return Result.success()     // removed meanwhile
-        val server = Store.server(c) ?: return Result.retry()
+        val server = Store.active(c) ?: return Result.retry()      // home, or Tailscale away
         val token = Store.token(c) ?: return Result.retry()
         var album = DownloadStore.load(dir) ?: return Result.success()
         return try {
@@ -115,7 +115,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : Worker(contex
     }
 
     private var artUrl: String? = null
-    private fun artPath(a: DownloadStore.Album) = artUrl ?: "/api/image/${a.imageKey}?size=1200"
+    private fun artPath(a: DownloadStore.Album) =
+        artUrl?.let { Store.localize(applicationContext, it) } ?: "/api/image/${a.imageKey}?size=1200"
 
     private fun fetchDetails(base: String, token: String, id: Int, quality: String, old: DownloadStore.Album, dir: File): DownloadStore.Album {
         val c = open("$base/api/download/album?offset=$id&quality=$quality", token)
