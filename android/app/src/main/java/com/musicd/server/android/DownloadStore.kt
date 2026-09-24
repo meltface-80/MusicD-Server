@@ -18,6 +18,15 @@ import java.io.File
 object DownloadStore {
     private const val PREFS = "downloads"
 
+    // ------------------------------------------------------------ changes
+
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
+    /** [l] is told whenever an album is added, progresses, finishes or is removed (any thread). */
+    fun listen(l: () -> Unit) { listeners += l }
+    fun unlisten(l: () -> Unit) { listeners -= l }
+    private fun changed() { for (l in listeners) runCatching { l() } }
+
     const val QUALITY_ORIGINAL = "original"
     const val QUALITY_OPUS = "opus"
 
@@ -151,12 +160,14 @@ object DownloadStore {
         tmp.writeText(j.toString())
         tmp.renameTo(File(dir, "album.json"))
         index = null
+        changed()
     }
 
     fun remove(c: Context, id: Int) {
         DownloadWorker.cancel(c, id)
         dirOf(c, id)?.deleteRecursively()
         index = null
+        changed()
     }
 
     fun usedBytes(c: Context): Long =

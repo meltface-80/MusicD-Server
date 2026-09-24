@@ -5,6 +5,14 @@ Versioning: each set of changes is a development build and takes the next third 
 `package.json`, the README title, the GitHub Pages badge and the Android app's
 `versionName` (plus `versionCode`) move together — `npm test` fails if they don't.
 
+## v0.3.6
+- **Downloads show up as they happen** (Android app). The Home screen's *Downloaded albums* row
+  was only drawn when Home was opened, so a finished download didn't appear until the app was
+  closed and opened again. The app now tells the page every time a download is queued, moves on a
+  track, finishes or is removed, and the row follows at once: an album appears the moment it's
+  queued, with *Queued*, *↓ 3/10*, *Waiting* or *Failed* on its cover until it's done. The row
+  switches itself on with the first download, and *Settings → Home Screen* follows too.
+
 ## v0.3.5
 - **Playback controls on the phone**: the phone player never handed its session to Media3's
   notification manager, so music started in the app (a download, or *This phone* from the page)
