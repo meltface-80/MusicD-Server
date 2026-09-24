@@ -277,7 +277,7 @@
      room in the house plays from it &mdash; with MusicD Remote's interface in a browser, on an
      iPhone home screen, or in the Android app. No Roon, no Plex, no accounts.</p>
   <div class="badges">
-    <span class="badge">v0.1.6</span>
+    <span class="badge">v0.2.0</span>
     <span class="badge plain">Docker</span>
     <span class="badge plain">MIT</span>
     <span class="badge plain">Sonos only</span>
@@ -407,8 +407,9 @@
 
     <div class="firstrun" style="margin-top:22px">
       <ol>
-        <li>Open <b>http://&lt;server-ip&gt;:<span class="port">3500</span></b>. The first scan starts
-            straight away; albums appear as it goes.</li>
+        <li>Open <b>http://&lt;server-ip&gt;:<span class="port">3500</span></b> on a device at home and
+            <b>create your account</b> — one username and password, kept on the server. The first scan
+            starts straight away; albums appear as it goes.</li>
         <li>Pick a room under <b>Settings &rarr; Playback</b>, or from the speaker button on Now playing.</li>
         <li>Tap an album and <b>Play Now</b>.</li>
       </ol>
@@ -472,8 +473,9 @@
 <section id="trouble">
   <div class="wrap">
     <h2>Troubleshooting</h2>
-    <p class="lead"><code>http://&lt;server-ip&gt;:3500/api/status</code> and <code>/api/health</code>
-       say what the server can see.</p>
+    <p class="lead"><code>http://&lt;server-ip&gt;:3500/api/health</code> answers without signing in;
+       <code>/api/status</code> (signed in) says what the server can see. Forgot the password?
+       <code>docker exec musicd-server node reset-password.js</code>, then create the account again.</p>
     <div class="info-cards">
       <div class="info-card">
         <span class="sym">No rooms</span>

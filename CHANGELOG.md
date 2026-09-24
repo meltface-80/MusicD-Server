@@ -4,6 +4,24 @@ Every change merged to main bumps the version: `package.json`, the README title,
 the GitHub Pages badge and the Android app's `versionName` (plus `versionCode`)
 move together — `npm test` fails if they don't.
 
+## v0.2.0
+- **An account.** MusicD Server now has one account, kept on the server. Until it's created —
+  from a device on the home network — the server only shows "Create your account". Existing
+  installs ask for it straight after this update. Every device then signs in once and is
+  remembered.
+- **The password never crosses the network**, even over plain http: sign-in uses SRP, so the
+  device proves it knows the password and the server proves it knows the account. The server
+  stores only a salt and SRP verifier (the password is stretched with PBKDF2 first).
+- **Settings → Account**: every signed-in device with a *Sign out* button, sign out of this
+  device, and change password. Five wrong passwords from one address lock it out for 15 minutes.
+- **Forgot the password:** `docker exec musicd-server node reset-password.js` removes the
+  account and signs every device out; library, edits, playlists and history stay.
+- **Android app** signs in (or creates the account) itself — no other device or QR code needed —
+  and checks the server's proof before trusting it. If the phone is signed out from Settings, the
+  app asks to sign in again.
+- **Sonos keeps playing**: the audio and cover addresses speakers are given are signed, and the
+  speakers' own addresses are let through, so queues made before the update still play.
+
 ## v0.1.6
 - No more "No Sonos rooms found yet" while an update (or any restart) is under way. The
   speakers found last time are remembered and asked first, so rooms are back within a

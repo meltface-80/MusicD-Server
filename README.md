@@ -4,7 +4,7 @@
 
 </div>
 
-# MusicD Server — v0.1.6
+# MusicD Server — v0.2.0
 
 **Your own music files, played to Sonos, with MusicD Remote's interface.**
 
@@ -158,6 +158,33 @@ Everything is optional; pass any of it with `-e NAME=value`.
 Settings for the FanArt.tv key (wall-display artist photos), waveform, share-card services, Smart Picks, Discover,
 the wall display and the Home rows are in the app's Settings and are saved in the data volume.
 
+## Your account
+
+MusicD Server has **one account**, kept on the server itself — nothing online. Until it
+exists the server does nothing but ask for it:
+
+1. Open `http://<server-ip>:3500` on a device **on your home network** (a browser, the iPhone
+   home-screen app, or the Android app) and choose a username and password.
+2. Every other device signs in with them once and is remembered.
+3. **Settings → Account** lists every signed-in device, with a *Sign out* button for each, and
+   changes the password.
+
+The password never crosses the network, even on plain http: devices prove they know it with
+SRP (the scheme Apple uses for HomeKit pairing), and the server proves it knows the account
+back. The server stores only an SRP verifier, never the password.
+
+**Forgot the password?** On the server run
+
+```bash
+docker exec musicd-server node reset-password.js
+```
+
+It removes the account and signs every device out; your library, edits, playlists and history
+stay. Then create the account again from a device at home.
+
+Sonos speakers can't sign in: the addresses they're given carry a signature, and the speakers'
+own addresses are let through, so playback is unaffected.
+
 ## iPhone and iPad
 
 Open `http://<server-ip>:3500` in Safari, tap **Share → Add to Home Screen**. It opens full
@@ -166,7 +193,8 @@ screen like an app — the same PWA arrangement as MusicD Remote.
 ## Android
 
 A native app: **[android/](android/)**. Enter the port (3500 unless you changed it) and it
-finds the server on your Wi-Fi by itself — or type the address. It shows the server's own
+finds the server on your Wi-Fi by itself — or type the address — then signs in (or creates the
+account on a new server) right in the app, no other device needed. It shows the server's own
 interface, and adds what a web page can't:
 
 * **Lock screen and notification controls**, which headset and Bluetooth buttons also reach

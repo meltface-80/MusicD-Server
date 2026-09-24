@@ -13,6 +13,7 @@ const path = require("path");
 const http = require("http");
 const { spawn, execFileSync } = require("child_process");
 const { haveFfmpeg, makeLibrary } = require("./fixtures");
+const { signIn } = require("./auth-helper");
 
 const ROOT = path.join(__dirname, "..");
 const APP_FILES = ["index.js", "launcher.js", "package.json", "package-lock.json", "lib", "public"];
@@ -77,17 +78,19 @@ test("Check for updates installs the newer release and restarts into it, library
       UPDATE_CHECK: "false"
     })
   });
+  let auth = {};
   const api = async (p, post) => {
-    const r = await fetch(`http://127.0.0.1:${port}/api/${p}`, post ? { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" } : undefined);
+    const r = await fetch(`http://127.0.0.1:${port}/api/${p}`, post ? { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, auth), body: "{}" } : { headers: auth });
     return r.json();
   };
   try {
     const cur = require("../package.json").version;
     assert.equal((await until(() => api("health"))).version, cur);
+    auth = { Authorization: "Bearer " + await signIn(`http://127.0.0.1:${port}`) };
     await until(async () => { const x = await api("status"); return x.index_count === 3 && !x.scan.running; });
     const albums = (await api("library/albums?sort=album")).albums;
     const one = albums.find(a => a.title === "Album One");
-    const edit = await fetch(`http://127.0.0.1:${port}/api/album/edit`, { method: "POST", headers: { "Content-Type": "application/json" },
+    const edit = await fetch(`http://127.0.0.1:${port}/api/album/edit`, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, auth),
       body: JSON.stringify({ offset: one.offset, title: "Album One (fixed)", year: "1999" }) });
     assert.equal(edit.status, 200);
     const st = await api("update/check", true);

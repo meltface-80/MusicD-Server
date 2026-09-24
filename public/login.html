@@ -1,0 +1,96 @@
+<!doctype html>
+<!--
+  MusicD Server — sign in, or create the account on first run.
+  The password never leaves this page: public/srp.js proves it to the server.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#1d2125">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" href="/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <title>MusicD Server — sign in</title>
+  <script>
+    // The app's own light/dark choice, if this device has made one.
+    try { if (/light/.test(localStorage.getItem("rra-theme-v2") || "")) document.documentElement.dataset.theme = "light"; } catch (e) {}
+  </script>
+  <style>
+    :root { --bg: #1d2125; --card: #252a2f; --field: #2c3238; --border: #353b42; --text: #e9eaec; --dim: #959aa1;
+            --accent: #4cb7e6; --on-accent: #0d1418; --err: #e06c6c; color-scheme: dark; }
+    :root[data-theme="light"] { --bg: #f4f3ef; --card: #ffffff; --field: #f4f3ef; --border: #dedbd3; --text: #1b1d1f;
+            --dim: #6b6f74; --accent: #1f8fc4; --on-accent: #ffffff; --err: #b3261e; color-scheme: light; }
+    * { box-sizing: border-box; touch-action: pan-x pan-y; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+      font-family: "Helvetica Neue", Helvetica, Arial, system-ui, -apple-system, sans-serif; -webkit-text-size-adjust: 100%; }
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh;
+      padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+    main { width: 100%; max-width: 380px; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .brand img { width: 44px; height: 44px; border-radius: 10px; }
+    .brand h1 { font-size: 22px; margin: 0; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px 20px; }
+    h2 { margin: 0 0 6px; font-size: 20px; }
+    p { margin: 0 0 16px; color: var(--dim); font-size: 14px; line-height: 1.45; }
+    label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--dim); margin: 14px 0 6px; }
+    input[type=text], input[type=password] { width: 100%; background: var(--field); border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 12px; color: var(--text); font-size: 16px; font-family: inherit; }
+    input:focus { outline: none; border-color: var(--accent); }
+    .check { display: flex; align-items: center; gap: 10px; margin-top: 16px; font-size: 14px; color: var(--text);
+      text-transform: none; letter-spacing: 0; font-weight: 400; }
+    .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+    button { width: 100%; margin-top: 20px; border: 0; border-radius: 999px; padding: 13px; font-size: 16px; font-weight: 600;
+      background: var(--accent); color: var(--on-accent); font-family: inherit; cursor: pointer; }
+    button[disabled] { opacity: .6; cursor: default; }
+    .err { color: var(--err); font-size: 14px; margin-top: 14px; min-height: 1em; }
+    .err:empty { display: none; }
+    .foot { margin-top: 16px; font-size: 12px; color: var(--dim); text-align: center; line-height: 1.5; }
+    .hidden { display: none; }
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><img src="/icons/icon-192.png" alt=""><h1>MusicD Server</h1></div>
+
+  <div class="card hidden" id="loading"><p>Checking…</p></div>
+
+  <form class="card hidden" id="setup" autocomplete="on">
+    <h2>Create your account</h2>
+    <p>MusicD Server needs an account before it can be used. Choose a username and password — you'll use them to sign
+      in on every device. The password never leaves this device.</p>
+    <label for="su-user">Username</label>
+    <input id="su-user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label for="su-pass">Password</label>
+    <input id="su-pass" type="password" autocomplete="new-password" required minlength="8">
+    <label for="su-pass2">Password again</label>
+    <input id="su-pass2" type="password" autocomplete="new-password" required minlength="8">
+    <button type="submit" id="su-go">Create account</button>
+    <div class="err" id="su-err"></div>
+  </form>
+
+  <div class="card hidden" id="notlocal">
+    <h2>Create the account at home</h2>
+    <p>MusicD Server has no account yet. For safety it can only be created from a device on the same network as the
+      server — open this page on your home Wi-Fi.</p>
+  </div>
+
+  <form class="card hidden" id="signin" autocomplete="on">
+    <h2>Sign in</h2>
+    <label for="si-user">Username</label>
+    <input id="si-user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label for="si-pass">Password</label>
+    <input id="si-pass" type="password" autocomplete="current-password" required>
+    <label class="check"><input type="checkbox" id="si-remember" checked> Remember this device</label>
+    <button type="submit" id="si-go">Sign in</button>
+    <div class="err" id="si-err"></div>
+  </form>
+
+  <div class="foot">Forgot the password? On the server run<br><code>docker exec musicd-server node reset-password.js</code><br>then create the account again.</div>
+</main>
+<script src="/srp.js"></script>
+<script src="/login.js"></script>
+</body>
+</html>

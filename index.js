@@ -18,6 +18,7 @@ const express = require("express");
 const compression = require("compression");
 
 const pkg = require("./package.json");
+const { createAuth } = require("./lib/server/auth");
 const DB = require("./lib/library/db");
 const { Scanner } = require("./lib/library/scanner");
 const { Library } = require("./lib/library/index");
@@ -88,12 +89,16 @@ function createServer(overrides = {}) {
       features.kickSmartPicks();
     }
   };
+  // One account and its signed-in devices; everything below sits behind it.
+  const auth = ctx.auth = createAuth(ctx);
   ctx.playback = new Playback(ctx);
   const features = ctx.features = new Features(ctx);
 
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2mb" }));
+  app.use(auth.gate);
+  auth.mount(app);
 
   // ---------------------------------------------------------------- stream
   // Before compression: audio must go out byte for byte, with ranges.
@@ -138,6 +143,7 @@ function createServer(overrides = {}) {
 
   const pub = path.join(__dirname, "public");
   app.get(["/display", "/display/"], (req, res) => res.sendFile(path.join(pub, "display.html")));
+  app.get("/login", (req, res) => res.sendFile(path.join(pub, "login.html")));
   app.use(express.static(pub, {
     maxAge: "1h",
     setHeaders(res, file) { if (/\.(html|js|css|json)$/.test(file)) res.setHeader("Cache-Control", "no-cache"); }

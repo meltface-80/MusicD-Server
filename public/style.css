@@ -4830,3 +4830,11 @@ body.show-quality .album-quality { display: block; }
    drops both pinch and double-tap zoom. Controls that own their gesture
    (drag handles: touch-action: none) have more specific rules and win. */
 *, *::before, *::after { touch-action: pan-x pan-y; }
+
+/* ---- Settings → Account ---- */
+.acct-devices .acct-device { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.acct-devices .acct-device:last-child { border-bottom: 0; }
+.acct-name { display: block; }
+.acct-sub { display: block; font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.acct-input { display: block; width: 100%; margin: 0 0 8px; font-size: 16px; padding: 10px 12px; }
+#acct-signout, #acct-pw { margin-top: 8px; }

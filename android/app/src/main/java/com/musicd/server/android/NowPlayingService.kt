@@ -188,6 +188,8 @@ class NowPlayingService : Service() {
             } catch (e: InterruptedException) {
                 return
             } catch (e: Exception) {
+                // Signed out: nothing to follow until the app signs in again.
+                if (e is ServerClient.ServerException && e.signedOut) { main.post { stopSelf() }; return }
                 failures++
                 reachable = false
                 if (failures == 1) Log.i(TAG, "server unreachable: ${e.message}")

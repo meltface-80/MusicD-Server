@@ -53,7 +53,7 @@ jobs:
         run: |
           v=${{ steps.v.outputs.version }}
           mkdir -p out/musicd-server
-          cp -r index.js launcher.js package.json package-lock.json lib public README.md CHANGELOG.md LICENSE out/musicd-server/
+          cp -r index.js launcher.js reset-password.js package.json package-lock.json lib public README.md CHANGELOG.md LICENSE out/musicd-server/
           tar -C out -czf "musicd-server-$v.tar.gz" musicd-server
           # This version's section of the changelog, without its heading.
           awk -v h="## v$v" '$0==h{on=1;next} /^## v/{if(on)exit} on' CHANGELOG.md > notes.md

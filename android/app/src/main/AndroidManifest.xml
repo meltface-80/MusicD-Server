@@ -48,6 +48,14 @@
             android:label="@string/connect_title"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Signing this phone in, or creating the server's account on first run. -->
+        <activity
+            android:name=".SignInActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Random album from the notification shade. -->
         <service
             android:name=".RandomAlbumTile"
